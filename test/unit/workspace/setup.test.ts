@@ -132,15 +132,14 @@ describe("setupWorkspace", () => {
     expect(existsSync(join(pluginDir, "router.ts"))).toBe(true);
   });
 
-  it("should not fail when compliance plugin source does not exist yet", () => {
-    // Compliance plugin will be created in Unit 7; this verifies
-    // that setup doesn't crash when the source dir is missing
-    expect(() =>
-      setupWorkspace(
-        makeConfig({ compliance: { enabled: true } }),
-        testDir,
-      ),
-    ).not.toThrow();
+  it("should copy compliance plugin when compliance is enabled", () => {
+    setupWorkspace(
+      makeConfig({ compliance: { enabled: true } }),
+      testDir,
+    );
+    const pluginDir = join(testDir, "config/extensions/clawforce-compliance");
+    expect(existsSync(pluginDir)).toBe(true);
+    expect(existsSync(join(pluginDir, "index.ts"))).toBe(true);
   });
 
   it("should not copy router plugin when explicitly disabled", () => {
