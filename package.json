@@ -1,0 +1,34 @@
+{
+  "name": "clawforce",
+  "version": "0.1.0",
+  "description": "Deploy AI agents via OpenClaw and Docker Compose",
+  "type": "module",
+  "bin": {
+    "clawforce": "./bin/clawforce.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsdown src/cli.ts src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "yaml": "^2.8.2",
+    "chalk": "^5.6.2",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsdown": "^0.20.3",
+    "tsx": "^4.21.0",
+    "vitest": "^4.0.18",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@types/node": "^22.0.0"
+  }
+}
