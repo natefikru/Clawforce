@@ -1,5 +1,6 @@
 export { getDatabase, closeDatabase, createTestDatabase } from "./database.js";
 export { runMigrations, getCurrentVersion, getMigrations } from "./migrations.js";
+export { StorageWriter } from "./writer.js";
 export type {
   StorageConfig,
   ComplianceEntry,
