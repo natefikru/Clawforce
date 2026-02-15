@@ -321,10 +321,9 @@ function WhatIfView({
 }
 
 function formatTimestamp(ts: string): string {
-  try {
-    const date = new Date(ts);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) {
     return ts.slice(11, 16);
   }
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

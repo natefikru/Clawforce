@@ -113,9 +113,14 @@ export function activate(api: RouterPluginApi): void {
         priority: config.priority,
       });
 
-      // Record spend after routing decision
+      // Record spend after routing decision using the selected model's cost
       if (budgetTracker && !isLocalModel(decision.model)) {
-        budgetTracker.recordSpend(estimatedCost);
+        const actualEstimate = estimateRequestCost(
+          decision.model,
+          ESTIMATED_INPUT_TOKENS,
+          ESTIMATED_OUTPUT_TOKENS,
+        );
+        budgetTracker.recordSpend(actualEstimate);
       }
 
       api.logger.info(
@@ -162,10 +167,18 @@ export function activate(api: RouterPluginApi): void {
   );
 }
 
+interface ResolvedRouterConfig {
+  defaultModel: string;
+  rules: RoutingRule[];
+  sensitivityKeywords: string[];
+  logPath: string;
+  priority?: RoutingDimension[];
+  budget?: BudgetConfig;
+}
+
 function resolveConfig(
   pluginConfig?: Record<string, unknown>,
-): Required<RouterPluginConfig> {
-  const budget = pluginConfig?.budget as BudgetConfig | undefined;
+): ResolvedRouterConfig {
   return {
     defaultModel:
       (pluginConfig?.defaultModel as string) ?? "anthropic/claude-sonnet-4-5",
@@ -175,9 +188,8 @@ function resolveConfig(
     logPath:
       (pluginConfig?.logPath as string) ??
       "/home/node/.openclaw/data/routing.jsonl",
-    priority:
-      (pluginConfig?.priority as RoutingDimension[]) ?? undefined as unknown as RoutingDimension[],
-    budget: budget ?? undefined as unknown as BudgetConfig,
+    priority: pluginConfig?.priority as RoutingDimension[] | undefined,
+    budget: pluginConfig?.budget as BudgetConfig | undefined,
   };
 }
 

@@ -99,7 +99,6 @@ export function calculateWhatIf(
     // What if X% of requests went to local (cost = 0)?
     const percent = Math.max(0, Math.min(100, scenario.percent));
     const localCount = Math.round((usages.length * percent) / 100);
-    const cloudCount = usages.length - localCount;
 
     // Sort by cost descending — route the most expensive ones to local first
     const sorted = [...usages]
@@ -110,11 +109,6 @@ export function calculateWhatIf(
     for (let i = 0; i < sorted.length; i++) {
       if (i < localCount) continue; // This one goes local (free)
       projectedCost += sorted[i].cost;
-    }
-
-    // If there are fewer cloud requests than expected, adjust
-    if (cloudCount > sorted.length) {
-      projectedCost = currentCost;
     }
   }
 

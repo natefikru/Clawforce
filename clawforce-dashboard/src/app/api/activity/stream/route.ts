@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { watch, readFileSync, existsSync, statSync } from "node:fs";
+import { watch, readFileSync, openSync, readSync, closeSync, existsSync, statSync } from "node:fs";
 import { parseJsonl } from "@/lib/log-parser";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
@@ -13,13 +13,13 @@ export async function GET(req: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
-      let lastSize = 0;
+      let lastByteOffset = 0;
 
       // Send initial batch of recent entries
       try {
         if (existsSync(COMPLIANCE_LOG)) {
           const content = readFileSync(COMPLIANCE_LOG, "utf8");
-          lastSize = Buffer.byteLength(content, "utf8");
+          lastByteOffset = Buffer.byteLength(content, "utf8");
           const entries = parseJsonl(content);
           const recent = entries.slice(-INITIAL_ENTRIES);
           if (recent.length > 0) {
@@ -39,15 +39,20 @@ export async function GET(req: NextRequest) {
           try {
             if (!existsSync(COMPLIANCE_LOG)) return;
             const stat = statSync(COMPLIANCE_LOG);
-            if (stat.size <= lastSize) return;
+            if (stat.size <= lastByteOffset) return;
 
-            const content = readFileSync(COMPLIANCE_LOG, "utf8");
-            const currentSize = Buffer.byteLength(content, "utf8");
-            if (currentSize <= lastSize) return;
+            // Read only the new bytes using byte offset
+            const newByteCount = stat.size - lastByteOffset;
+            const buf = Buffer.alloc(newByteCount);
+            const fd = openSync(COMPLIANCE_LOG, "r");
+            try {
+              readSync(fd, buf, 0, newByteCount, lastByteOffset);
+            } finally {
+              closeSync(fd);
+            }
 
-            // Only parse new content
-            const newContent = content.slice(lastSize);
-            lastSize = currentSize;
+            lastByteOffset = stat.size;
+            const newContent = buf.toString("utf8");
 
             const newEntries = parseJsonl(newContent);
             if (newEntries.length > 0) {

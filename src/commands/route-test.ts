@@ -133,10 +133,10 @@ export function formatRouteTestResult(result: RouteTestResult): string {
   return lines.join("\n");
 }
 
-export async function routeTestCommand(
+export function routeTestCommand(
   configPath: string,
   prompt: string,
-): Promise<void> {
+): void {
   const result = routeTest(configPath, prompt);
   console.log(formatRouteTestResult(result));
 }

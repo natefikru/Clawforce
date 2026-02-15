@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const usages = readTimestampedUsages();
-    const timeSeries = buildTimeSeries(usages, bucket as "hour" | "day");
+    const timeSeries = buildTimeSeries(usages, bucket);
 
     return NextResponse.json({ timeSeries, bucket });
   } catch {
