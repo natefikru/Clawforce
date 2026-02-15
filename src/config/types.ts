@@ -98,6 +98,8 @@ export const ClawforceConfigSchema = z.object({
       port: z.number().default(3000),
     })
     .optional(),
+
+  openclaw: z.record(z.unknown()).optional(),
 }).refine(
   (data) => data.slack || data.telegram,
   { message: "At least one channel (slack or telegram) must be configured" },

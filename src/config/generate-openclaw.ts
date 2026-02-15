@@ -198,6 +198,15 @@ export function generateOpenClawConfig(
     },
   };
 
+  // OpenClaw passthrough: deep-merge user-provided OpenClaw config last
+  // This allows users to configure any OpenClaw setting not exposed by Clawforce
+  if (config.openclaw) {
+    mergeInto(
+      result as unknown as Record<string, unknown>,
+      config.openclaw as Record<string, unknown>,
+    );
+  }
+
   return result;
 }
 
