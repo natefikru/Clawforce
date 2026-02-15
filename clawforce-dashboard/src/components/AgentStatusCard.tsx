@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AgentStatusSkeleton } from "./Skeleton";
 
 interface AgentStatus {
   containerName: string;
@@ -34,7 +35,7 @@ export function AgentStatusCard() {
     return (
       <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Agent Status</h2>
-        <div className="text-gray-400">Loading...</div>
+        <AgentStatusSkeleton />
       </div>
     );
   }
@@ -43,7 +44,7 @@ export function AgentStatusCard() {
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
       <h2 className="text-lg font-semibold text-white mb-4">Agent Status</h2>
       {agents.length === 0 ? (
-        <div className="text-gray-400">No agents running</div>
+        <div className="text-gray-500 text-sm text-center py-6">No agents running</div>
       ) : (
         <div className="space-y-3">
           {agents.map((agent) => (

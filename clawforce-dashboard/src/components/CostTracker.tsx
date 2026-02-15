@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CostTrackerSkeleton } from "./Skeleton";
 
 interface CostData {
   totalCost: string;
@@ -74,7 +75,7 @@ export function CostTracker() {
     return (
       <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Cost Tracker</h2>
-        <div className="text-gray-400">Loading...</div>
+        <CostTrackerSkeleton />
       </div>
     );
   }
@@ -83,7 +84,7 @@ export function CostTracker() {
     return (
       <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Cost Tracker</h2>
-        <div className="text-gray-400">No cost data available</div>
+        <div className="text-gray-500 text-sm text-center py-6">No cost data available</div>
       </div>
     );
   }

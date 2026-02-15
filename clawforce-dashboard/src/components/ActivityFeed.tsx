@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { ActivityFeedSkeleton } from "./Skeleton";
 
 interface ActivityEntry {
   ts: string;
@@ -16,6 +17,7 @@ const EVENT_COLORS: Record<string, string> = {
 };
 
 const MAX_ENTRIES = 200;
+const LOADING_TIMEOUT_MS = 4000;
 
 function formatEntry(entry: ActivityEntry): string {
   switch (entry.event) {
@@ -33,12 +35,9 @@ function formatEntry(entry: ActivityEntry): string {
 }
 
 function formatTime(ts: string): string {
-  try {
-    const date = new Date(ts);
-    return date.toLocaleTimeString();
-  } catch {
-    return ts;
-  }
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) return ts;
+  return date.toLocaleTimeString();
 }
 
 export function ActivityFeed() {
@@ -46,6 +45,7 @@ export function ActivityFeed() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchActivity = useCallback(async () => {
@@ -54,8 +54,10 @@ export function ActivityFeed() {
       const data = await res.json();
       setEntries(data.entries ?? []);
       setTotal(data.total ?? 0);
+      setError(false);
     } catch {
       setEntries([]);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -67,8 +69,12 @@ export function ActivityFeed() {
   }, [fetchActivity]);
 
   useEffect(() => {
-    // Try SSE first, fall back to polling
     let eventSource: EventSource | null = null;
+
+    // Timeout: if still loading after LOADING_TIMEOUT_MS, stop showing skeleton
+    const loadingTimeout = setTimeout(() => {
+      setLoading(false);
+    }, LOADING_TIMEOUT_MS);
 
     try {
       eventSource = new EventSource("/api/activity/stream");
@@ -83,41 +89,33 @@ export function ActivityFeed() {
           });
           setTotal((prev) => prev + newEntries.length);
           setLoading(false);
+          setError(false);
+          clearTimeout(loadingTimeout);
         } catch {
           // Ignore parse errors
         }
       };
 
       eventSource.onerror = () => {
-        // SSE failed, fall back to polling
         eventSource?.close();
         setStreaming(false);
+        clearTimeout(loadingTimeout);
         startPolling();
       };
     } catch {
-      // EventSource not supported, fall back to polling
       setStreaming(false);
+      clearTimeout(loadingTimeout);
       startPolling();
     }
 
     return () => {
+      clearTimeout(loadingTimeout);
       eventSource?.close();
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
     };
   }, [startPolling]);
-
-  if (loading) {
-    return (
-      <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">
-          Activity Feed
-        </h2>
-        <div className="text-gray-400">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
@@ -135,8 +133,31 @@ export function ActivityFeed() {
           )}
         </div>
       </div>
-      {entries.length === 0 ? (
-        <div className="text-gray-400">No activity recorded</div>
+
+      {loading ? (
+        <ActivityFeedSkeleton />
+      ) : error ? (
+        <div className="text-center py-6">
+          <p className="text-gray-500 text-sm mb-2">Failed to load activity data</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              setError(false);
+              fetchActivity();
+            }}
+            className="text-sm text-green-400 hover:text-green-300 underline focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:outline-none rounded px-1"
+          >
+            Retry
+          </button>
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="text-center py-6">
+          <svg className="mx-auto h-8 w-8 text-gray-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 12.677a2.25 2.25 0 00-.1.661z" />
+          </svg>
+          <p className="text-gray-500 text-sm">No activity yet</p>
+          <p className="text-gray-600 text-xs mt-1">Events will appear here as the agent processes requests</p>
+        </div>
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {[...entries].reverse().map((entry, i) => (
