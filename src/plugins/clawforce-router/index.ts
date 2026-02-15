@@ -10,6 +10,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { detectPII, detectPIITypes } from "./pii-detector.js";
+import { filterOutput } from "./output-filter.js";
 import { analyzeComplexity } from "./complexity-analyzer.js";
 import { detectDomain } from "./domain-detector.js";
 import {
@@ -46,7 +47,7 @@ export interface RouterPluginApi {
   on: (
     hookName: string,
     handler: (
-      event: { prompt: string; messages?: unknown[] },
+      event: Record<string, unknown>,
       ctx: {
         agentId?: string;
         sessionKey?: string;
@@ -54,11 +55,7 @@ export interface RouterPluginApi {
         userId?: string;
         [key: string]: unknown;
       },
-    ) => {
-      prependContext?: string;
-      modelOverride?: string;
-      providerOverride?: string;
-    } | void,
+    ) => Record<string, unknown> | void,
     opts?: { priority?: number },
   ) => void;
 }
@@ -236,6 +233,32 @@ export function activate(api: RouterPluginApi): void {
         prependContext: contextLines.join("\n"),
         ...parseModelRef(decision.model),
       };
+    },
+    { priority: 10 },
+  );
+
+  // Output filter: scan outbound messages for PII and redact before sending
+  api.on(
+    "message_sending",
+    (event) => {
+      const content = (event.content ?? event.text ?? "") as string;
+      if (!content) return;
+
+      const result = filterOutput(content, {
+        blocklist: config.sensitivityKeywords,
+      });
+      if (result.redacted) {
+        api.logger.warn(
+          `Output filter: redacted ${result.matchCount} PII match(es) [${result.redactedTypes.join(", ")}]`,
+        );
+        writeRoutingLog(config.logPath, {
+          ts: new Date().toISOString(),
+          event: "output_redaction",
+          redactedTypes: result.redactedTypes,
+          matchCount: result.matchCount,
+        });
+        return { content: result.content };
+      }
     },
     { priority: 10 },
   );
