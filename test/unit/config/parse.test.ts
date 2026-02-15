@@ -74,4 +74,26 @@ describe("parseConfig", () => {
       "Config file not found",
     );
   });
+
+  it("should parse Phase 1 config with router, compliance, and dashboard", () => {
+    const config = parseConfig(join(fixturesDir, "full-phase1-config.yaml"));
+
+    expect(config.router?.enabled).toBe(true);
+    expect(config.router?.rules).toHaveLength(3);
+    expect(config.router?.rules?.[0].condition).toBe("pii_detected");
+    expect(config.router?.rules?.[0].model).toBe("ollama/llama3.3:8b");
+    expect(config.router?.sensitivity_keywords).toEqual(["password", "secret"]);
+
+    expect(config.compliance?.enabled).toBe(true);
+
+    expect(config.dashboard?.enabled).toBe(true);
+    expect(config.dashboard?.port).toBe(3001);
+  });
+
+  it("should allow config without Phase 1 fields (backward compatible)", () => {
+    const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
+    expect(config.router).toBeUndefined();
+    expect(config.compliance).toBeUndefined();
+    expect(config.dashboard).toBeUndefined();
+  });
 });

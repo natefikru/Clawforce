@@ -107,4 +107,43 @@ describe("generateCompose", () => {
     );
     expect(parsed.services.ollama.container_name).toBe("clawforce-acme-ollama");
   });
+
+  it("should include dashboard service when enabled", () => {
+    const parsed = parseYaml(
+      generateCompose(makeConfig({ dashboard: { enabled: true, port: 3000 } })),
+    );
+    expect(parsed.services.dashboard).toBeDefined();
+    expect(parsed.services.dashboard.image).toBe("clawforce-dashboard:local");
+    expect(parsed.services.dashboard.container_name).toBe(
+      "clawforce-test-corp-dashboard",
+    );
+    expect(parsed.services.dashboard.ports).toContain("3000:3000");
+  });
+
+  it("should use custom dashboard port", () => {
+    const parsed = parseYaml(
+      generateCompose(makeConfig({ dashboard: { enabled: true, port: 3001 } })),
+    );
+    expect(parsed.services.dashboard.ports).toContain("3001:3000");
+  });
+
+  it("should mount data and config as read-only in dashboard", () => {
+    const parsed = parseYaml(
+      generateCompose(makeConfig({ dashboard: { enabled: true, port: 3000 } })),
+    );
+    expect(parsed.services.dashboard.volumes).toContain("./data:/data:ro");
+    expect(parsed.services.dashboard.volumes).toContain("./config:/config:ro");
+  });
+
+  it("should not include dashboard when not configured", () => {
+    const parsed = parseYaml(generateCompose(makeConfig()));
+    expect(parsed.services.dashboard).toBeUndefined();
+  });
+
+  it("should not include dashboard when explicitly disabled", () => {
+    const parsed = parseYaml(
+      generateCompose(makeConfig({ dashboard: { enabled: false, port: 3000 } })),
+    );
+    expect(parsed.services.dashboard).toBeUndefined();
+  });
 });

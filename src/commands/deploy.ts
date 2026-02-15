@@ -1,5 +1,8 @@
 import { writeFileSync, mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { parseConfig } from "../config/parse.js";
 import { generateOpenClawConfig } from "../config/generate-openclaw.js";
 import { generateCompose } from "../config/generate-compose.js";
@@ -49,7 +52,17 @@ export async function deployCommand(configPath: string): Promise<void> {
   writeFileSync(join(deployDir, ".env"), env, { mode: 0o600, flag: "w" });
   logger.success(".env generated");
 
-  // 7. Pull Ollama model if enabled
+  // 7. Build dashboard image if enabled
+  if (config.dashboard && config.dashboard.enabled !== false) {
+    logger.step("Building dashboard image...");
+    const dashboardDir = join(__dirname, "..", "..", "clawforce-dashboard");
+    await exec("docker", [
+      "build", "-t", "clawforce-dashboard:local", dashboardDir,
+    ]);
+    logger.success("Dashboard image built");
+  }
+
+  // 8. Pull Ollama model if enabled
   if (config.ollama?.enabled && config.ollama.model) {
     logger.step(`Starting Ollama and pulling model: ${config.ollama.model}...`);
     await exec("docker", ["compose", "up", "-d", "ollama"], {
@@ -69,12 +82,12 @@ export async function deployCommand(configPath: string): Promise<void> {
     logger.success("Ollama model ready");
   }
 
-  // 8. Start gateway
+  // 9. Start gateway
   logger.step("Starting OpenClaw gateway...");
   await exec("docker", ["compose", "up", "-d"], { cwd: deployDir });
   logger.success("Containers started");
 
-  // 9. Health check
+  // 10. Health check
   logger.step("Waiting for container to start...");
   const containerName = `clawforce-${config.name}-gateway`;
   const healthy = await waitForHealthy(containerName, deployDir, 30000);
@@ -89,6 +102,10 @@ export async function deployCommand(configPath: string): Promise<void> {
   logger.info(`Gateway:          ws://127.0.0.1:18789`);
   logger.info(`Role:             ${config.role}`);
   logger.info(`Deploy dir:       ${deployDir}`);
+  if (config.dashboard && config.dashboard.enabled !== false) {
+    const port = config.dashboard.port ?? 3000;
+    logger.info(`Dashboard:        http://localhost:${port}`);
+  }
   logger.info("");
   logger.info("Manage with:");
   logger.info("  clawforce status   - Check container status");

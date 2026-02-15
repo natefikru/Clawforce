@@ -1,15 +1,25 @@
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "../utils/logger.js";
 import { findDeployDir } from "./status.js";
 import { exec } from "../docker/exec.js";
 
-export async function auditCommand(tailLines: number): Promise<void> {
+export type AuditSource = "container" | "compliance";
+
+export async function auditCommand(
+  tailLines: number,
+  source: AuditSource = "container",
+): Promise<void> {
   logger.header("Clawforce Audit Log");
 
   const deployDir = findDeployDir();
   if (!deployDir) {
     logger.error("No deployment found in current directory.");
+    return;
+  }
+
+  if (source === "compliance") {
+    readComplianceLog(deployDir, tailLines);
     return;
   }
 
@@ -109,6 +119,63 @@ async function readContainerLogs(
     });
   } catch {
     return [];
+  }
+}
+
+function readComplianceLog(deployDir: string, tailLines: number): void {
+  const compliancePath = join(deployDir, "data", "compliance.jsonl");
+
+  if (!existsSync(compliancePath)) {
+    logger.warn("No compliance log found.");
+    return;
+  }
+
+  const content = readFileSync(compliancePath, "utf8");
+  const lines = content.trim().split("\n").filter(Boolean);
+
+  if (lines.length === 0) {
+    logger.info("Compliance log is empty.");
+    return;
+  }
+
+  const tail = lines.slice(-tailLines);
+
+  for (const line of tail) {
+    formatComplianceEntry(line);
+  }
+
+  logger.info("");
+  logger.info(`Showing last ${tail.length} of ${lines.length} compliance entries`);
+}
+
+function formatComplianceEntry(line: string): void {
+  try {
+    const entry = JSON.parse(line) as {
+      ts: string;
+      event: string;
+      [key: string]: unknown;
+    };
+    const details = formatComplianceDetails(entry);
+    logger.info(`${entry.ts} [${entry.event}] ${details}`);
+  } catch {
+    logger.info(line);
+  }
+}
+
+function formatComplianceDetails(
+  entry: Record<string, unknown>,
+): string {
+  switch (entry.event) {
+    case "tool_call":
+      return `${entry.tool} → ${entry.success ? "success" : "error"}${entry.durationMs ? ` (${entry.durationMs}ms)` : ""}`;
+    case "message_received":
+      return `from ${entry.from} via ${entry.channel} (${entry.contentLength} chars)`;
+    case "message_sent":
+      return `to ${entry.to} via ${entry.channel} (${entry.contentLength} chars, model: ${entry.model ?? "unknown"})`;
+    case "routing_decision":
+      return `→ ${entry.model} (${entry.reason})`;
+    default:
+      return JSON.stringify(entry);
   }
 }
 

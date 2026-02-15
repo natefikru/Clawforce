@@ -89,4 +89,77 @@ describe("auditCommand", () => {
     const allOutput = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
     expect(allOutput).toContain("No audit log found");
   });
+
+  describe("compliance source", () => {
+    it("should read compliance.jsonl when source is compliance", async () => {
+      const entries = [
+        '{"ts":"2026-02-15T00:00:00Z","event":"tool_call","tool":"exec","success":true,"durationMs":150}',
+        '{"ts":"2026-02-15T00:01:00Z","event":"message_sent","to":"user","channel":"telegram","contentLength":42,"model":"claude-sonnet-4-5"}',
+      ];
+      writeFileSync(
+        join(testDeployDir, "data", "compliance.jsonl"),
+        entries.join("\n"),
+        "utf8",
+      );
+
+      await auditCommand(50, "compliance");
+      const allOutput = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(allOutput).toContain("tool_call");
+      expect(allOutput).toContain("exec");
+      expect(allOutput).toContain("message_sent");
+      expect(allOutput).toContain("compliance entries");
+    });
+
+    it("should handle missing compliance log", async () => {
+      await auditCommand(50, "compliance");
+      const allOutput = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(allOutput).toContain("No compliance log found");
+    });
+
+    it("should handle empty compliance log", async () => {
+      writeFileSync(
+        join(testDeployDir, "data", "compliance.jsonl"),
+        "",
+        "utf8",
+      );
+
+      await auditCommand(50, "compliance");
+      const allOutput = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(allOutput).toContain("Compliance log is empty");
+    });
+
+    it("should format routing_decision events", async () => {
+      const entry = '{"ts":"2026-02-15T00:00:00Z","event":"routing_decision","model":"ollama/llama3.3:8b","reason":"PII detected"}';
+      writeFileSync(
+        join(testDeployDir, "data", "compliance.jsonl"),
+        entry,
+        "utf8",
+      );
+
+      await auditCommand(50, "compliance");
+      const allOutput = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(allOutput).toContain("routing_decision");
+      expect(allOutput).toContain("ollama/llama3.3:8b");
+    });
+
+    it("should tail compliance entries", async () => {
+      const entries = Array.from({ length: 50 }, (_, i) =>
+        JSON.stringify({
+          ts: `2026-02-15T${String(i).padStart(2, "0")}:00:00Z`,
+          event: "tool_call",
+          tool: `tool-${i}`,
+          success: true,
+        }),
+      );
+      writeFileSync(
+        join(testDeployDir, "data", "compliance.jsonl"),
+        entries.join("\n"),
+        "utf8",
+      );
+
+      await auditCommand(5, "compliance");
+      const allOutput = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(allOutput).toContain("5 of 50");
+    });
+  });
 });
