@@ -35,8 +35,19 @@ router:
     daily_limit: 10.00
     fallback_model: "ollama/llama3.3:8b"
 
+runtime:
+  engine: "sglang"
+  model: "qwen3-32b"
+  gpu: "nvidia"
+  quantization: "fp16"
+  port: 30000
+
 compliance:
   enabled: true
+
+compliance_frameworks:
+  - "hipaa"
+  - "pci-dss"
 
 dashboard:
   enabled: true

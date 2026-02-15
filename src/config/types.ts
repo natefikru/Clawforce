@@ -52,6 +52,17 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
+  runtime: z
+    .object({
+      engine: z.enum(["ollama", "sglang", "vllm"]).default("sglang"),
+      model: z.string().default("qwen3-32b"),
+      gpu: z.enum(["nvidia", "amd", "none"]).optional(),
+      quantization: z.enum(["fp16", "int8", "int4", "awq", "gptq"]).optional(),
+      port: z.number().default(30000),
+      options: z.record(z.unknown()).optional(),
+    })
+    .optional(),
+
   router: z
     .object({
       enabled: z.boolean().default(true),
