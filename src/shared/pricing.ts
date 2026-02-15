@@ -35,6 +35,8 @@ export function isLocalModel(model: string): boolean {
   return model.startsWith("ollama/") || model.startsWith("local/");
 }
 
+const warnedModels = new Set<string>();
+
 export function estimateRequestCost(
   model: string,
   estimatedInputTokens: number,
@@ -45,7 +47,15 @@ export function estimateRequestCost(
 
   const prices = pricing ?? DEFAULT_PRICING;
   const modelPricing = prices[model];
-  if (!modelPricing) return 0;
+  if (!modelPricing) {
+    if (!warnedModels.has(model)) {
+      warnedModels.add(model);
+      process.stderr.write(
+        `[clawforce] No pricing data for model "${model}" — budget tracking will undercount\n`,
+      );
+    }
+    return 0;
+  }
 
   const inputCost =
     (estimatedInputTokens / 1_000_000) * modelPricing.inputPerMillion;

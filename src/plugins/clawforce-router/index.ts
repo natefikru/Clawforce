@@ -221,7 +221,11 @@ function writeRoutingLog(
   try {
     mkdirSync(dirname(logPath), { recursive: true });
     appendFileSync(logPath, JSON.stringify(entry) + "\n", "utf8");
-  } catch {
+  } catch (err) {
     // Best-effort logging — don't crash the agent on write failure
+    // Log the error so misconfigured paths are discoverable
+    process.stderr.write(
+      `[clawforce-router] Failed to write routing log to ${logPath}: ${String(err)}\n`,
+    );
   }
 }
