@@ -57,8 +57,10 @@ export function createProgram(): Command {
     .command("audit")
     .description("View audit log")
     .option("-n, --tail <lines>", "Number of lines to tail", "50")
-    .action(async (options: { tail: string }) => {
-      await auditCommand(parseInt(options.tail, 10));
+    .option("-s, --source <source>", "Log source: container or compliance", "container")
+    .action(async (options: { tail: string; source: string }) => {
+      const source = options.source === "compliance" ? "compliance" : "container";
+      await auditCommand(parseInt(options.tail, 10), source);
     });
 
   return program;
