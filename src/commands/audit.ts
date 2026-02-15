@@ -1,9 +1,10 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "../utils/logger.js";
 import { findDeployDir } from "./status.js";
+import { exec } from "../docker/exec.js";
 
-export function auditCommand(tailLines: number): void {
+export async function auditCommand(tailLines: number): Promise<void> {
   logger.header("Clawforce Audit Log");
 
   const deployDir = findDeployDir();
@@ -12,6 +13,21 @@ export function auditCommand(tailLines: number): void {
     return;
   }
 
+  // Try reading live logs from the container first
+  const containerName = getContainerName(deployDir);
+  if (containerName) {
+    const lines = await readContainerLogs(containerName, tailLines);
+    if (lines.length > 0) {
+      for (const line of lines) {
+        logger.info(line);
+      }
+      logger.info("");
+      logger.info(`Showing last ${lines.length} entries from container logs`);
+      return;
+    }
+  }
+
+  // Fall back to local audit.jsonl
   const auditPath = join(deployDir, "data", "audit.jsonl");
 
   if (!existsSync(auditPath)) {
@@ -30,21 +46,84 @@ export function auditCommand(tailLines: number): void {
   const tail = lines.slice(-tailLines);
 
   for (const line of tail) {
-    try {
-      const entry = JSON.parse(line) as {
-        ts: string;
-        agent: string;
-        action: string;
-        result: string;
-      };
-      logger.info(
-        `${entry.ts} [${entry.agent}] ${entry.action} → ${entry.result}`,
-      );
-    } catch {
-      logger.info(line);
-    }
+    formatAndLog(line);
   }
 
   logger.info("");
   logger.info(`Showing last ${tail.length} of ${lines.length} entries`);
+}
+
+function getContainerName(deployDir: string): string | null {
+  const composePath = join(deployDir, "docker-compose.yml");
+  if (!existsSync(composePath)) return null;
+  const content = readFileSync(composePath, "utf8");
+  const match = content.match(/container_name:\s*(\S+)/);
+  return match?.[1] ?? null;
+}
+
+async function readContainerLogs(
+  containerName: string,
+  tailLines: number,
+): Promise<string[]> {
+  try {
+    // Read OpenClaw's session log from the container
+    const logFiles = await exec("docker", [
+      "exec", containerName, "sh", "-c",
+      "ls -t /tmp/openclaw/*.log 2>/dev/null | head -1",
+    ]);
+    const logFile = logFiles.trim();
+    if (!logFile) return [];
+
+    const output = await exec("docker", [
+      "exec", containerName, "sh", "-c",
+      `tail -${tailLines * 3} '${logFile}'`,
+    ]);
+
+    // Filter to agent activity lines (tool calls, sessions, errors)
+    const allLines = output.trim().split("\n").filter(Boolean);
+    const relevant = allLines.filter((line) => {
+      const subsystems = [
+        "agent/embedded",
+        "telegram",
+        "slack",
+      ];
+      return subsystems.some((s) => line.includes(s)) &&
+        (line.includes("tool start") ||
+         line.includes("tool end") ||
+         line.includes("run start") ||
+         line.includes("run done") ||
+         line.includes("starting provider") ||
+         line.includes("error") ||
+         line.includes("ERROR"));
+    });
+
+    return relevant.slice(-tailLines).map((line) => {
+      try {
+        const parsed = JSON.parse(line);
+        const ts = parsed._meta?.date ?? parsed.time ?? "";
+        const msg = parsed["1"] ?? "";
+        return `${ts} ${msg}`;
+      } catch {
+        return line;
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+function formatAndLog(line: string): void {
+  try {
+    const entry = JSON.parse(line) as {
+      ts: string;
+      agent: string;
+      action: string;
+      result: string;
+    };
+    logger.info(
+      `${entry.ts} [${entry.agent}] ${entry.action} → ${entry.result}`,
+    );
+  } catch {
+    logger.info(line);
+  }
 }

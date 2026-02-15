@@ -57,8 +57,8 @@ export function createProgram(): Command {
     .command("audit")
     .description("View audit log")
     .option("-n, --tail <lines>", "Number of lines to tail", "50")
-    .action((options: { tail: string }) => {
-      auditCommand(parseInt(options.tail, 10));
+    .action(async (options: { tail: string }) => {
+      await auditCommand(parseInt(options.tail, 10));
     });
 
   return program;
