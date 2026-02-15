@@ -129,11 +129,16 @@ export function generateCompose(config: ClawforceConfig): string {
       environment: [
         "DATA_DIR=/data",
         "CONFIG_DIR=/config",
+        "OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:18789",
+        "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
       ],
       volumes: [
         "./data:/data:ro",
         "./config:/config:ro",
       ],
+      depends_on: {
+        "openclaw-gateway": { condition: "service_started" },
+      },
     };
   }
 

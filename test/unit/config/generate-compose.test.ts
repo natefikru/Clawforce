@@ -135,6 +135,24 @@ describe("generateCompose", () => {
     expect(parsed.services.dashboard.volumes).toContain("./config:/config:ro");
   });
 
+  it("should configure dashboard with gateway URL and token", () => {
+    const parsed = parseYaml(
+      generateCompose(makeConfig({ dashboard: { enabled: true, port: 3000 } })),
+    );
+    const env = parsed.services.dashboard.environment;
+    expect(env).toContain("OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:18789");
+    expect(env).toContain("OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}");
+  });
+
+  it("should have dashboard depend on gateway", () => {
+    const parsed = parseYaml(
+      generateCompose(makeConfig({ dashboard: { enabled: true, port: 3000 } })),
+    );
+    expect(
+      parsed.services.dashboard.depends_on["openclaw-gateway"].condition,
+    ).toBe("service_started");
+  });
+
   it("should not include dashboard when not configured", () => {
     const parsed = parseYaml(generateCompose(makeConfig()));
     expect(parsed.services.dashboard).toBeUndefined();
