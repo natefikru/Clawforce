@@ -74,7 +74,7 @@ export const ClawforceConfigSchema = z.object({
         .optional(),
       sensitivity_keywords: z.array(z.string()).optional(),
       priority: z
-        .array(z.enum(["sensitivity", "cost", "domain", "complexity"]))
+        .array(z.enum(["policy", "sensitivity", "cost", "domain", "complexity"]))
         .optional(),
       budget: z
         .object({
@@ -115,6 +115,10 @@ export const ClawforceConfigSchema = z.object({
     .object({
       enabled: z.boolean().default(true),
     })
+    .optional(),
+
+  compliance_frameworks: z
+    .array(z.enum(["hipaa", "pci-dss", "gdpr", "ccpa", "sox"]))
     .optional(),
 
   dashboard: z
