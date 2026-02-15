@@ -96,4 +96,24 @@ describe("parseConfig", () => {
     expect(config.compliance).toBeUndefined();
     expect(config.dashboard).toBeUndefined();
   });
+
+  it("should parse runtime config with SGLang engine", () => {
+    const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
+    expect(config.runtime?.engine).toBe("sglang");
+    expect(config.runtime?.model).toBe("qwen3-32b");
+    expect(config.runtime?.gpu).toBe("nvidia");
+    expect(config.runtime?.quantization).toBe("fp16");
+    expect(config.runtime?.port).toBe(30000);
+  });
+
+  it("should parse compliance_frameworks array", () => {
+    const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
+    expect(config.compliance_frameworks).toEqual(["hipaa", "pci-dss"]);
+  });
+
+  it("should allow config without runtime (backward compatible)", () => {
+    const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
+    expect(config.runtime).toBeUndefined();
+    expect(config.compliance_frameworks).toBeUndefined();
+  });
 });

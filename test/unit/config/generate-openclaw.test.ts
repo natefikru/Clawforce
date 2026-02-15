@@ -218,4 +218,155 @@ describe("generateOpenClawConfig", () => {
     );
     expect(result.plugins?.entries?.["clawforce-router"]).toBeUndefined();
   });
+
+  describe("OpenClaw passthrough", () => {
+    it("should deep-merge passthrough into generated config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          openclaw: {
+            agents: {
+              defaults: {
+                tools: {
+                  sandbox: { enabled: true },
+                },
+              },
+            },
+          },
+        }),
+      );
+      const agents = result.agents as Record<string, unknown>;
+      const defaults = agents.defaults as Record<string, unknown>;
+      const tools = defaults.tools as Record<string, unknown>;
+      expect(tools.sandbox).toEqual({ enabled: true });
+    });
+
+    it("should override generated values with passthrough", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          openclaw: {
+            agents: {
+              defaults: {
+                model: {
+                  primary: "openai/gpt-4o",
+                },
+              },
+            },
+          },
+        }),
+      );
+      expect(result.agents.defaults.model.primary).toBe("openai/gpt-4o");
+    });
+
+    it("should deep-merge nested objects", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          openclaw: {
+            agents: {
+              defaults: {
+                tools: {
+                  browser: { enabled: true, headless: true },
+                  memory: { enabled: true },
+                },
+              },
+            },
+          },
+        }),
+      );
+      const defaults = result.agents.defaults as Record<string, unknown>;
+      const tools = defaults.tools as Record<string, unknown>;
+      expect(tools.browser).toEqual({ enabled: true, headless: true });
+      expect(tools.memory).toEqual({ enabled: true });
+    });
+
+    it("should not affect config when passthrough is absent", () => {
+      const result = generateOpenClawConfig(makeConfig());
+      expect(result.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
+    });
+
+    it("should not break channel config with passthrough", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          openclaw: {
+            cron: { enabled: true, store: "sqlite" },
+          },
+        }),
+      );
+      expect(result.channels.slack).toBeDefined();
+      const cron = result.cron as Record<string, unknown>;
+      expect(cron.enabled).toBe(true);
+      expect(cron.store).toBe("sqlite");
+    });
+
+    it("should allow array values in passthrough", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          openclaw: {
+            agents: {
+              defaults: {
+                model: {
+                  fallbacks: ["openai/gpt-4o", "openai/gpt-4o-mini"],
+                },
+              },
+            },
+          },
+        }),
+      );
+      expect(result.agents.defaults.model.fallbacks).toEqual([
+        "openai/gpt-4o",
+        "openai/gpt-4o-mini",
+      ]);
+    });
+
+    it("should not break plugin config with passthrough", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          openclaw: {
+            agents: {
+              defaults: {
+                tools: { exec: { enabled: true } },
+              },
+            },
+          },
+        }),
+      );
+      expect(result.plugins?.entries?.["clawforce-router"]).toBeDefined();
+      const defaults = result.agents.defaults as Record<string, unknown>;
+      const tools = defaults.tools as Record<string, unknown>;
+      expect(tools.exec).toEqual({ enabled: true });
+    });
+
+    it("should pass router priority through to plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: {
+            enabled: true,
+            priority: ["domain", "sensitivity", "complexity"],
+          },
+        }),
+      );
+      expect(
+        result.plugins?.entries?.["clawforce-router"].config?.priority,
+      ).toEqual(["domain", "sensitivity", "complexity"]);
+    });
+
+    it("should pass router budget through to plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: {
+            enabled: true,
+            budget: {
+              daily_limit: 10,
+              per_request_cap: 0.5,
+              fallback_model: "ollama/llama3.3:8b",
+            },
+          },
+        }),
+      );
+      const budget = result.plugins?.entries?.["clawforce-router"].config?.budget as Record<string, unknown>;
+      expect(budget.dailyLimit).toBe(10);
+      expect(budget.perRequestCap).toBe(0.5);
+      expect(budget.fallbackModel).toBe("ollama/llama3.3:8b");
+    });
+  });
 });

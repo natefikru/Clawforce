@@ -48,6 +48,18 @@ export const ClawforceConfigSchema = z.object({
     .object({
       enabled: z.boolean(),
       model: z.string().optional(),
+      gpu: z.enum(["nvidia", "amd", "none"]).optional(),
+    })
+    .optional(),
+
+  runtime: z
+    .object({
+      engine: z.enum(["ollama", "sglang", "vllm"]).default("sglang"),
+      model: z.string().default("qwen3-32b"),
+      gpu: z.enum(["nvidia", "amd", "none"]).optional(),
+      quantization: z.enum(["fp16", "int8", "int4", "awq", "gptq"]).optional(),
+      port: z.number().default(30000),
+      options: z.record(z.unknown()).optional(),
     })
     .optional(),
 
@@ -61,12 +73,52 @@ export const ClawforceConfigSchema = z.object({
               "pii_detected",
               "low_complexity",
               "high_complexity",
+              "domain_code",
+              "domain_writing",
+              "domain_analysis",
+              "domain_data",
+              "over_budget",
             ]),
             model: z.string(),
           }),
         )
         .optional(),
       sensitivity_keywords: z.array(z.string()).optional(),
+      priority: z
+        .array(z.enum(["policy", "sensitivity", "cost", "domain", "complexity"]))
+        .optional(),
+      budget: z
+        .object({
+          daily_limit: z.number().positive(),
+          per_request_cap: z.number().positive().optional(),
+          fallback_model: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
+
+  policy: z
+    .object({
+      default_tier: z
+        .enum(["restricted", "confidential", "internal", "public"])
+        .default("internal"),
+      channels: z
+        .array(
+          z.object({
+            channel_id: z.string(),
+            tier: z.enum(["restricted", "confidential", "internal", "public"]),
+            description: z.string().optional(),
+          }),
+        )
+        .optional(),
+      users: z
+        .array(
+          z.object({
+            user_id: z.string(),
+            tier: z.enum(["restricted", "confidential", "internal", "public"]),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 
@@ -76,12 +128,20 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
+  compliance_frameworks: z
+    .array(z.enum(["hipaa", "pci-dss", "gdpr", "ccpa", "sox"]))
+    .optional(),
+
   dashboard: z
     .object({
       enabled: z.boolean().default(true),
       port: z.number().default(3000),
     })
     .optional(),
+
+  capabilities: z.enum(["minimal", "standard", "full"]).optional(),
+
+  openclaw: z.record(z.unknown()).optional(),
 }).refine(
   (data) => data.slack || data.telegram,
   { message: "At least one channel (slack or telegram) must be configured" },

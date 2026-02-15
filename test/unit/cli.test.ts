@@ -53,4 +53,19 @@ describe("CLI", () => {
     expect(tailOption).toBeDefined();
     expect(tailOption!.defaultValue).toBe("50");
   });
+
+  it("should register route-test command", () => {
+    const program = createProgram();
+    const routeTest = program.commands.find((c) => c.name() === "route-test");
+    expect(routeTest).toBeDefined();
+    expect(routeTest!.description()).toContain("routing");
+  });
+
+  it("route-test command should have --config option defaulting to ./clawforce.yaml", () => {
+    const program = createProgram();
+    const routeTest = program.commands.find((c) => c.name() === "route-test")!;
+    const configOption = routeTest.options.find((o) => o.long === "--config");
+    expect(configOption).toBeDefined();
+    expect(configOption!.defaultValue).toBe("./clawforce.yaml");
+  });
 });

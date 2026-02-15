@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClawforceConfig } from "./types.js";
+import { resolveProfile } from "./capability-profiles.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatesDir = join(__dirname, "..", "..", "templates");
@@ -141,6 +142,15 @@ export function generateOpenClawConfig(
     );
   }
 
+  // Apply capability profile (after role partial, before passthrough)
+  if (config.capabilities) {
+    const profileConfig = resolveProfile(config.capabilities);
+    mergeInto(
+      result as unknown as Record<string, unknown>,
+      profileConfig as Record<string, unknown>,
+    );
+  }
+
   // Enable plugins (router, compliance) if configured
   const pluginEntries: Record<
     string,
@@ -156,6 +166,16 @@ export function generateOpenClawConfig(
     }
     if (config.router.sensitivity_keywords) {
       routerConfig.sensitivityKeywords = config.router.sensitivity_keywords;
+    }
+    if (config.router.priority) {
+      routerConfig.priority = config.router.priority;
+    }
+    if (config.router.budget) {
+      routerConfig.budget = {
+        dailyLimit: config.router.budget.daily_limit,
+        perRequestCap: config.router.budget.per_request_cap,
+        fallbackModel: config.router.budget.fallback_model,
+      };
     }
     pluginEntries["clawforce-router"] = {
       enabled: true,
@@ -187,6 +207,15 @@ export function generateOpenClawConfig(
       "command-logger": { enabled: true },
     },
   };
+
+  // OpenClaw passthrough: deep-merge user-provided OpenClaw config last
+  // This allows users to configure any OpenClaw setting not exposed by Clawforce
+  if (config.openclaw) {
+    mergeInto(
+      result as unknown as Record<string, unknown>,
+      config.openclaw as Record<string, unknown>,
+    );
+  }
 
   return result;
 }

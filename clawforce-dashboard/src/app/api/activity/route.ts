@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { readFileSync, existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { parseJsonl, getLatestEntries, type ComplianceEntry } from "@/lib/log-parser";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ entries: [], total: 0 });
     }
 
-    const content = readFileSync(COMPLIANCE_LOG, "utf8");
+    const content = await readFile(COMPLIANCE_LOG, "utf8");
     let entries = parseJsonl(content);
 
     if (eventFilter) {

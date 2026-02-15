@@ -21,31 +21,72 @@ models:
 approval:
   mode: "autonomous"
 
-# --- Phase 1: Model Router ---
-# Routes prompts to the right model based on PII detection + complexity.
-# PII-containing prompts always go to the local model for data safety.
+# --- 5-Dimensional Model Router ---
+# Routes prompts based on PII, complexity, domain, budget, and priority.
 router:
   enabled: true
   rules:
+    # Sensitivity: PII always goes to local model
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"
+    # Domain: Code prompts to specialized model
+    - condition: "domain_code"
+      model: "openai/gpt-4o"
+    # Domain: Writing prompts to best prose model
+    - condition: "domain_writing"
+      model: "anthropic/claude-sonnet-4-5"
+    # Budget: Over budget falls back to local
+    - condition: "over_budget"
+      model: "ollama/llama3.3:8b"
+    # Complexity: Simple stuff is cheap
     - condition: "low_complexity"
       model: "ollama/llama3.3:8b"
+    # Complexity: Hard stuff needs the big model
     - condition: "high_complexity"
       model: "anthropic/claude-sonnet-4-5"
   sensitivity_keywords:
     - "password"
     - "secret"
     - "confidential"
+  # Evaluation order (first match wins)
+  priority: ["sensitivity", "cost", "domain", "complexity"]
+  # Daily budget with fallback
+  budget:
+    daily_limit: 10.00
+    fallback_model: "ollama/llama3.3:8b"
 
-# --- Phase 1: Compliance Logger ---
-# Structured JSONL logging of all tool calls, messages, and routing decisions.
-# View with: clawforce audit --source compliance
+# --- Ollama (local model sidecar) ---
+ollama:
+  enabled: true
+  model: "llama3.3:8b"
+  # gpu: nvidia  # Uncomment for GPU acceleration (nvidia or amd)
+
+# --- Compliance Logger ---
 compliance:
   enabled: true
 
-# --- Phase 1: Activity Dashboard ---
-# Next.js dashboard showing agent status, activity feed, and cost tracking.
-# dashboard:
-#   enabled: true
-#   port: 3000
+# --- Activity Dashboard ---
+dashboard:
+  enabled: true
+  port: 3000
+
+# --- Capability Profile ---
+# "minimal": web_search only
+# "standard": + browser + memory
+# "full": + sandbox + exec + skills + cron
+# capabilities: standard
+
+# --- OpenClaw Passthrough ---
+# Direct access to all OpenClaw config options (overrides profile):
+# openclaw:
+#   agents:
+#     defaults:
+#       tools:
+#         sandbox: { enabled: true }
+#         browser: { enabled: true, headless: true }
+#         memory: { enabled: true }
+
+# --- Test routing without deploying ---
+# clawforce route-test "fix this TypeScript bug" -c smoke-test.example.yaml
+# clawforce route-test "my SSN is 123-45-6789" -c smoke-test.example.yaml
+# clawforce route-test "write a blog post about AI" -c smoke-test.example.yaml

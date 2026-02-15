@@ -12,6 +12,7 @@
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { parseJsonl } from "../../shared/jsonl.js";
 
 export interface ComplianceEntry {
   ts: string;
@@ -35,9 +36,9 @@ export interface CompliancePluginApi {
 }
 
 export function activate(api: CompliancePluginApi): void {
-  const logPath =
-    (api.pluginConfig?.logPath as string) ??
-    "/home/node/.openclaw/data/compliance.jsonl";
+  const logPath = typeof api.pluginConfig?.logPath === "string"
+    ? api.pluginConfig.logPath
+    : "/home/node/.openclaw/data/compliance.jsonl";
 
   api.logger.info(`Compliance logger activated (log: ${logPath})`);
 
@@ -79,30 +80,35 @@ export function activate(api: CompliancePluginApi): void {
   });
 }
 
+let complianceLogDirEnsured = false;
+
+function ensureComplianceLogDir(logPath: string): void {
+  if (!complianceLogDirEnsured) {
+    mkdirSync(dirname(logPath), { recursive: true });
+    complianceLogDirEnsured = true;
+  }
+}
+
+/** Reset the directory-ensured flag. Exported for testing only. */
+export function resetLogDirCache(): void {
+  complianceLogDirEnsured = false;
+}
+
 export function writeEntry(
   logPath: string,
   entry: ComplianceEntry,
 ): void {
   try {
-    mkdirSync(dirname(logPath), { recursive: true });
+    ensureComplianceLogDir(logPath);
     appendFileSync(logPath, JSON.stringify(entry) + "\n", "utf8");
-  } catch {
+  } catch (err) {
     // Best-effort logging — don't crash the agent
+    process.stderr.write(
+      `[clawforce-compliance] Failed to write log to ${logPath}: ${String(err)}\n`,
+    );
   }
 }
 
 export function parseComplianceLog(content: string): ComplianceEntry[] {
-  if (!content.trim()) return [];
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line) as ComplianceEntry;
-      } catch {
-        return null;
-      }
-    })
-    .filter((entry): entry is ComplianceEntry => entry !== null);
+  return parseJsonl<ComplianceEntry>(content);
 }
