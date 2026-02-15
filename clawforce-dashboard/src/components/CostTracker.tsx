@@ -134,15 +134,17 @@ export function CostTracker() {
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold text-white">Cost Tracker</h2>
-        <div className="flex gap-1">
+        <div className="flex gap-1" role="tablist">
           {(["summary", "timeline", "whatif"] as Tab[]).map((tab) => (
             <button
               key={tab}
+              role="tab"
+              aria-selected={activeTab === tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-2 py-1 text-xs rounded ${
+              className={`px-3 py-1.5 text-sm rounded transition-colors focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:outline-none ${
                 activeTab === tab
-                  ? "bg-gray-600 text-white"
-                  : "text-gray-400 hover:text-gray-200"
+                  ? "bg-gray-600 text-white font-medium"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
               }`}
             >
               {tab === "whatif" ? "What If" : tab.charAt(0).toUpperCase() + tab.slice(1)}
