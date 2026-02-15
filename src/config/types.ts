@@ -86,6 +86,31 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
+  policy: z
+    .object({
+      default_tier: z
+        .enum(["restricted", "confidential", "internal", "public"])
+        .default("internal"),
+      channels: z
+        .array(
+          z.object({
+            channel_id: z.string(),
+            tier: z.enum(["restricted", "confidential", "internal", "public"]),
+            description: z.string().optional(),
+          }),
+        )
+        .optional(),
+      users: z
+        .array(
+          z.object({
+            user_id: z.string(),
+            tier: z.enum(["restricted", "confidential", "internal", "public"]),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+
   compliance: z
     .object({
       enabled: z.boolean().default(true),
