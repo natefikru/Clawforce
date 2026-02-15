@@ -13,6 +13,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseJsonl } from "../../shared/jsonl.js";
+import type { StorageWriter } from "../../storage/writer.js";
 
 export interface ComplianceEntry {
   ts: string;
@@ -40,11 +41,21 @@ export function activate(api: CompliancePluginApi): void {
     ? api.pluginConfig.logPath
     : "/home/node/.openclaw/data/compliance.jsonl";
 
+  const writer = api.pluginConfig?.storageWriter as StorageWriter | undefined;
+
   api.logger.info(`Compliance logger activated (log: ${logPath})`);
+
+  function write(entry: ComplianceEntry): void {
+    if (writer) {
+      writer.writeComplianceEvent(entry);
+    } else {
+      writeEntry(logPath, entry);
+    }
+  }
 
   // Log tool calls
   api.on("after_tool_call", (event, ctx) => {
-    writeEntry(logPath, {
+    write({
       ts: new Date().toISOString(),
       event: "tool_call",
       agentId: ctx.agentId as string | undefined,
@@ -57,7 +68,7 @@ export function activate(api: CompliancePluginApi): void {
   // Log received messages
   api.on("message_received", (event, ctx) => {
     const content = event.content ?? event.text ?? "";
-    writeEntry(logPath, {
+    write({
       ts: new Date().toISOString(),
       event: "message_received",
       channel: ctx.messageProvider as string | undefined,
@@ -69,7 +80,7 @@ export function activate(api: CompliancePluginApi): void {
   // Log sent messages
   api.on("message_sent", (event, ctx) => {
     const content = event.content ?? event.text ?? "";
-    writeEntry(logPath, {
+    write({
       ts: new Date().toISOString(),
       event: "message_sent",
       channel: ctx.messageProvider as string | undefined,

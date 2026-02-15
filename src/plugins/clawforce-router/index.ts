@@ -9,6 +9,8 @@
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import type { StorageWriter } from "../../storage/writer.js";
+import type { RoutingLogEntry } from "../../storage/types.js";
 import { detectPII, detectPIITypes } from "./pii-detector.js";
 import { filterOutput } from "./output-filter.js";
 import { analyzeComplexity } from "./complexity-analyzer.js";
@@ -118,10 +120,19 @@ export function parseModelRef(ref: string): {
 
 export function activate(api: RouterPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
+  const writer = api.pluginConfig?.storageWriter as StorageWriter | undefined;
 
   const budgetTracker = config.budget
     ? new BudgetTracker(config.budget)
     : null;
+
+  function writeLog(entry: RoutingLogEntry): void {
+    if (writer) {
+      writer.writeRoutingDecision(entry);
+    } else {
+      writeRoutingLog(config.logPath, entry);
+    }
+  }
 
   api.logger.info(
     `Router plugin activated (${config.rules.length} rules, default: ${config.defaultModel})` +
@@ -201,7 +212,7 @@ export function activate(api: RouterPluginApi): void {
       );
 
       // Write routing decision to log
-      writeRoutingLog(config.logPath, {
+      writeLog({
         ts: new Date().toISOString(),
         event: "routing_decision",
         agentId: ctx.agentId,
@@ -254,7 +265,7 @@ export function activate(api: RouterPluginApi): void {
         api.logger.warn(
           `Output filter: redacted ${result.matchCount} PII match(es) [${result.redactedTypes.join(", ")}]`,
         );
-        writeRoutingLog(config.logPath, {
+        writeLog({
           ts: new Date().toISOString(),
           event: "output_redaction",
           redactedTypes: result.redactedTypes,
@@ -280,7 +291,7 @@ export function activate(api: RouterPluginApi): void {
         api.logger.warn(
           `Tool result filter: redacted ${result.matchCount} PII match(es) from ${event.toolName ?? "unknown"}`,
         );
-        writeRoutingLog(config.logPath, {
+        writeLog({
           ts: new Date().toISOString(),
           event: "tool_result_redaction",
           toolName: event.toolName,
@@ -294,7 +305,7 @@ export function activate(api: RouterPluginApi): void {
 
   // Audit: log session end events for compliance trail
   api.on("agent_end", (event, ctx) => {
-    writeRoutingLog(config.logPath, {
+    writeLog({
       ts: new Date().toISOString(),
       event: "agent_session_end",
       agentId: ctx.agentId,
@@ -356,7 +367,7 @@ export function resetRoutingLogDirCache(): void {
 
 function writeRoutingLog(
   logPath: string,
-  entry: Record<string, unknown>,
+  entry: RoutingLogEntry,
 ): void {
   try {
     ensureRoutingLogDir(logPath);

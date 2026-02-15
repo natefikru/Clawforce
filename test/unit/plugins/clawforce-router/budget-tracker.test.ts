@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { DatabaseSync } from "node:sqlite";
 import { BudgetTracker } from "../../../../src/plugins/clawforce-router/budget-tracker.js";
+import { createTestDatabase } from "../../../../src/storage/database.js";
 
 const TEST_DIR = join(tmpdir(), "clawforce-budget-test");
 const STATE_PATH = join(TEST_DIR, "budget-state.json");
 
-function makeTracker(overrides?: Partial<{ dailyLimit: number; perRequestCap: number; fallbackModel: string }>) {
+function makeTracker(overrides?: Partial<{ dailyLimit: number; perRequestCap: number; fallbackModel: string; db: DatabaseSync }>) {
   return new BudgetTracker(
     {
       dailyLimit: overrides?.dailyLimit ?? 10,
@@ -15,6 +17,7 @@ function makeTracker(overrides?: Partial<{ dailyLimit: number; perRequestCap: nu
       fallbackModel: overrides?.fallbackModel ?? "ollama/llama3.3:8b",
     },
     STATE_PATH,
+    overrides?.db,
   );
 }
 
@@ -189,6 +192,96 @@ describe("BudgetTracker", () => {
       const state2 = tracker.getState();
       expect(state1.spent).toBe(1.0);
       expect(state2.spent).toBe(3.0);
+    });
+  });
+
+  describe("SQLite backend", () => {
+    let db: DatabaseSync;
+
+    beforeEach(() => {
+      db = createTestDatabase();
+    });
+
+    afterEach(() => {
+      db.close();
+    });
+
+    it("should persist budget state to SQLite", () => {
+      const tracker = makeTracker({ db });
+      tracker.recordSpend(2.5);
+      tracker.recordSpend(1.0);
+
+      const row = db.prepare(
+        "SELECT spent, request_count FROM budget_state WHERE agent_id = '_global'",
+      ).get() as { spent: number; request_count: number } | undefined;
+
+      expect(row).toBeDefined();
+      expect(row!.spent).toBe(3.5);
+      expect(row!.request_count).toBe(2);
+    });
+
+    it("should load state from SQLite on construction", () => {
+      const today = new Date().toISOString().slice(0, 10);
+      db.prepare(
+        "INSERT INTO budget_state (agent_id, date, spent, request_count, updated_at) VALUES ('_global', ?, ?, ?, datetime('now'))",
+      ).run(today, 4.0, 8);
+
+      const tracker = makeTracker({ db });
+      const state = tracker.getState();
+      expect(state.spent).toBe(4.0);
+      expect(state.requestCount).toBe(8);
+    });
+
+    it("should upsert (update) existing SQLite row on subsequent writes", () => {
+      const tracker = makeTracker({ db });
+      tracker.recordSpend(1.0);
+      tracker.recordSpend(2.0);
+
+      const rows = db.prepare(
+        "SELECT * FROM budget_state WHERE agent_id = '_global'",
+      ).all() as unknown[];
+      expect(rows).toHaveLength(1); // Single row, upserted
+
+      const row = rows[0] as { spent: number; request_count: number };
+      expect(row.spent).toBe(3.0);
+      expect(row.request_count).toBe(2);
+    });
+
+    it("should fall back to JSON when no DB provided", () => {
+      // This is the existing behavior — no DB = JSON only
+      const tracker = makeTracker();
+      tracker.recordSpend(1.0);
+      const state = tracker.getState();
+      expect(state.spent).toBe(1.0);
+    });
+
+    it("should also write to JSON file when DB is provided (dual-write)", () => {
+      const tracker = makeTracker({ db });
+      tracker.recordSpend(5.0);
+
+      // Verify JSON file was also written
+      expect(existsSync(STATE_PATH)).toBe(true);
+      const json = JSON.parse(
+        require("node:fs").readFileSync(STATE_PATH, "utf8"),
+      );
+      expect(json.spent).toBe(5.0);
+    });
+
+    it("should reset state in both SQLite and JSON", () => {
+      const tracker = makeTracker({ db });
+      tracker.recordSpend(3.0);
+      tracker.reset();
+
+      const row = db.prepare(
+        "SELECT spent, request_count FROM budget_state WHERE agent_id = '_global'",
+      ).get() as { spent: number; request_count: number } | undefined;
+
+      expect(row).toBeDefined();
+      expect(row!.spent).toBe(0);
+      expect(row!.request_count).toBe(0);
+
+      const state = tracker.getState();
+      expect(state.spent).toBe(0);
     });
   });
 });
