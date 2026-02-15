@@ -50,6 +50,13 @@ export interface OpenClawConfig {
       entries?: Record<string, { enabled: boolean }>;
     };
   };
+  plugins?: {
+    enabled: boolean;
+    entries?: Record<
+      string,
+      { enabled: boolean; config?: Record<string, unknown> }
+    >;
+  };
   session: {
     dmScope: string;
   };
@@ -132,6 +139,39 @@ export function generateOpenClawConfig(
       result as unknown as Record<string, unknown>,
       roleConfig as unknown as Record<string, unknown>,
     );
+  }
+
+  // Enable plugins (router, compliance) if configured
+  const pluginEntries: Record<
+    string,
+    { enabled: boolean; config?: Record<string, unknown> }
+  > = {};
+
+  if (config.router && config.router.enabled !== false) {
+    const routerConfig: Record<string, unknown> = {
+      defaultModel: config.models.primary,
+    };
+    if (config.router.rules) {
+      routerConfig.rules = config.router.rules;
+    }
+    if (config.router.sensitivity_keywords) {
+      routerConfig.sensitivityKeywords = config.router.sensitivity_keywords;
+    }
+    pluginEntries["clawforce-router"] = {
+      enabled: true,
+      config: routerConfig,
+    };
+  }
+
+  if (config.compliance && config.compliance.enabled !== false) {
+    pluginEntries["clawforce-compliance"] = { enabled: true };
+  }
+
+  if (Object.keys(pluginEntries).length > 0) {
+    result.plugins = {
+      enabled: true,
+      entries: pluginEntries,
+    };
   }
 
   // Enable command-logger hook for audit trail

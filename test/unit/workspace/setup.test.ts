@@ -119,4 +119,42 @@ describe("setupWorkspace", () => {
     );
     expect(existsSync(skillPath)).toBe(true);
   });
+
+  it("should copy router plugin when router is enabled", () => {
+    setupWorkspace(
+      makeConfig({ router: { enabled: true } }),
+      testDir,
+    );
+    const pluginDir = join(testDir, "config/extensions/clawforce-router");
+    expect(existsSync(pluginDir)).toBe(true);
+    expect(existsSync(join(pluginDir, "index.ts"))).toBe(true);
+    expect(existsSync(join(pluginDir, "pii-detector.ts"))).toBe(true);
+    expect(existsSync(join(pluginDir, "router.ts"))).toBe(true);
+  });
+
+  it("should not fail when compliance plugin source does not exist yet", () => {
+    // Compliance plugin will be created in Unit 7; this verifies
+    // that setup doesn't crash when the source dir is missing
+    expect(() =>
+      setupWorkspace(
+        makeConfig({ compliance: { enabled: true } }),
+        testDir,
+      ),
+    ).not.toThrow();
+  });
+
+  it("should not copy router plugin when explicitly disabled", () => {
+    setupWorkspace(
+      makeConfig({ router: { enabled: false } }),
+      testDir,
+    );
+    const pluginDir = join(testDir, "config/extensions/clawforce-router");
+    expect(existsSync(pluginDir)).toBe(false);
+  });
+
+  it("should not copy plugins when not configured", () => {
+    setupWorkspace(makeConfig(), testDir);
+    const extensionsDir = join(testDir, "config/extensions");
+    expect(existsSync(extensionsDir)).toBe(false);
+  });
 });

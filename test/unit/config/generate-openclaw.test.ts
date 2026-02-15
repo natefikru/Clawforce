@@ -160,4 +160,62 @@ describe("generateOpenClawConfig", () => {
     expect(result.channels.slack).toBeUndefined();
     expect(result.channels.telegram).toBeDefined();
   });
+
+  it("should enable router plugin when router config present", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        router: {
+          enabled: true,
+          rules: [
+            { condition: "pii_detected", model: "ollama/llama3.3:8b" },
+          ],
+          sensitivity_keywords: ["password"],
+        },
+      }),
+    );
+    expect(result.plugins?.enabled).toBe(true);
+    expect(result.plugins?.entries?.["clawforce-router"]).toBeDefined();
+    expect(result.plugins?.entries?.["clawforce-router"].enabled).toBe(true);
+    expect(result.plugins?.entries?.["clawforce-router"].config?.rules).toEqual([
+      { condition: "pii_detected", model: "ollama/llama3.3:8b" },
+    ]);
+    expect(
+      result.plugins?.entries?.["clawforce-router"].config?.sensitivityKeywords,
+    ).toEqual(["password"]);
+  });
+
+  it("should set defaultModel from primary model in router config", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        router: { enabled: true },
+      }),
+    );
+    expect(
+      result.plugins?.entries?.["clawforce-router"].config?.defaultModel,
+    ).toBe("anthropic/claude-sonnet-4-5");
+  });
+
+  it("should enable compliance plugin when compliance config present", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        compliance: { enabled: true },
+      }),
+    );
+    expect(result.plugins?.entries?.["clawforce-compliance"]).toBeDefined();
+    expect(result.plugins?.entries?.["clawforce-compliance"].enabled).toBe(true);
+  });
+
+  it("should not include plugins section when no plugins configured", () => {
+    const result = generateOpenClawConfig(makeConfig());
+    expect(result.plugins).toBeUndefined();
+  });
+
+  it("should not enable router plugin when explicitly disabled", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        router: { enabled: false },
+      }),
+    );
+    expect(result.plugins?.entries?.["clawforce-router"]).toBeUndefined();
+  });
 });
