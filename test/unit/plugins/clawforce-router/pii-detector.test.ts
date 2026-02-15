@@ -488,4 +488,22 @@ describe("scanForPII", () => {
     const emailCount = types.filter((t) => t === "email").length;
     expect(emailCount).toBe(1);
   });
+
+  it("should find all occurrences of blocklist keyword", () => {
+    const matches = scanForPII("secret data and more secret stuff with secret info", {
+      blocklist: ["secret"],
+    });
+    const blocklistMatches = matches.filter((m) => m.type === "blocklist");
+    expect(blocklistMatches.length).toBe(3);
+  });
+
+  it("should return all blocklist positions correctly", () => {
+    const matches = scanForPII("aa secret bb secret cc", {
+      blocklist: ["secret"],
+    });
+    const blocklistMatches = matches.filter((m) => m.type === "blocklist");
+    expect(blocklistMatches.length).toBe(2);
+    expect(blocklistMatches[0].position.start).toBe(3);
+    expect(blocklistMatches[1].position.start).toBe(13);
+  });
 });

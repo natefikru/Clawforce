@@ -131,11 +131,12 @@ export function activate(api: RouterPluginApi): void {
   api.on(
     "before_agent_start",
     (event, ctx) => {
-      const prompt = event.prompt ?? "";
+      const prompt = typeof event.prompt === "string" ? event.prompt : "";
       if (!prompt.trim()) return;
 
       // Dimension 1: PII detection (scan prompt + recent conversation history)
-      const textToScan = buildScanText(prompt, event.messages);
+      const messages = Array.isArray(event.messages) ? event.messages : undefined;
+      const textToScan = buildScanText(prompt, messages);
       const hasPII = detectPII(textToScan, {
         blocklist: config.sensitivityKeywords,
       });
@@ -241,7 +242,8 @@ export function activate(api: RouterPluginApi): void {
   api.on(
     "message_sending",
     (event) => {
-      const content = (event.content ?? event.text ?? "") as string;
+      const rawContent = event.content ?? event.text;
+      const content = typeof rawContent === "string" ? rawContent : "";
       if (!content) return;
 
       const result = filterOutput(content, {

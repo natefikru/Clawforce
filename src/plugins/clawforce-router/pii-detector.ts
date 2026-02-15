@@ -134,14 +134,17 @@ export function scanForPII(
   if (options?.blocklist) {
     const lower = normalized.toLowerCase();
     for (const keyword of options.blocklist) {
-      const idx = lower.indexOf(keyword.toLowerCase());
-      if (idx !== -1) {
+      const keyLower = keyword.toLowerCase();
+      let searchFrom = 0;
+      let idx: number;
+      while ((idx = lower.indexOf(keyLower, searchFrom)) !== -1) {
         matches.push({
           type: "blocklist",
           confidence: 0.70,
           position: { start: idx, end: idx + keyword.length },
           matchedText: normalized.slice(idx, idx + keyword.length),
         });
+        searchFrom = idx + keyword.length;
       }
     }
   }
