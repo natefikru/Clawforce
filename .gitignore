@@ -4,7 +4,10 @@ coverage/
 *.log
 .env
 .DS_Store
-clawforce-*/
+# Deployment directories (clawforce-{name}/) but not source plugin dirs
+/clawforce-*/
+!src/**/clawforce-*/
+!test/**/clawforce-*/
 test-deployment/
 test/tmp/
 smoke-test.yaml
