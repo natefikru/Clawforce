@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deployCommand } from "./commands/deploy.js";
+import { statusCommand } from "./commands/status.js";
+import { stopCommand } from "./commands/stop.js";
+import { auditCommand } from "./commands/audit.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,23 +42,23 @@ export function createProgram(): Command {
   program
     .command("status")
     .description("Check deployment status")
-    .action(() => {
-      // Implementation in Unit 9
+    .action(async () => {
+      await statusCommand();
     });
 
   program
     .command("stop")
     .description("Stop deployment")
-    .action(() => {
-      // Implementation in Unit 9
+    .action(async () => {
+      await stopCommand();
     });
 
   program
     .command("audit")
     .description("View audit log")
     .option("-n, --tail <lines>", "Number of lines to tail", "50")
-    .action((_options) => {
-      // Implementation in Unit 9
+    .action((options: { tail: string }) => {
+      auditCommand(parseInt(options.tail, 10));
     });
 
   return program;
