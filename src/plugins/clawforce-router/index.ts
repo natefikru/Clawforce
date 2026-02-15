@@ -262,6 +262,45 @@ export function activate(api: RouterPluginApi): void {
     },
     { priority: 10 },
   );
+
+  // Tool result filter: scan tool outputs for PII before they persist in conversation
+  api.on(
+    "tool_result_persist",
+    (event) => {
+      const message = event.message as { content?: string } | undefined;
+      if (!message?.content) return;
+
+      const result = filterOutput(message.content, {
+        blocklist: config.sensitivityKeywords,
+      });
+      if (result.redacted) {
+        api.logger.warn(
+          `Tool result filter: redacted ${result.matchCount} PII match(es) from ${event.toolName ?? "unknown"}`,
+        );
+        writeRoutingLog(config.logPath, {
+          ts: new Date().toISOString(),
+          event: "tool_result_redaction",
+          toolName: event.toolName,
+          redactedTypes: result.redactedTypes,
+          matchCount: result.matchCount,
+        });
+        return { message: { ...message, content: result.content } };
+      }
+    },
+  );
+
+  // Audit: log session end events for compliance trail
+  api.on("agent_end", (event, ctx) => {
+    writeRoutingLog(config.logPath, {
+      ts: new Date().toISOString(),
+      event: "agent_session_end",
+      agentId: ctx.agentId,
+      sessionKey: ctx.sessionKey,
+      success: event.success,
+      durationMs: event.durationMs,
+      messageCount: Array.isArray(event.messages) ? event.messages.length : 0,
+    });
+  });
 }
 
 interface ResolvedRouterConfig {

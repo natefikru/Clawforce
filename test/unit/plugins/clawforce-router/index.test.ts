@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { appendFileSync } from "node:fs";
 import { activate, parseModelRef, buildScanText, type RouterPluginApi } from "../../../../src/plugins/clawforce-router/index.js";
 
 vi.mock("node:fs", () => ({
   appendFileSync: vi.fn(),
   mkdirSync: vi.fn(),
 }));
+
+type HookHandler = (
+  event: Record<string, unknown>,
+  ctx: { agentId?: string; sessionKey?: string; channelId?: string; userId?: string; [key: string]: unknown },
+) => Record<string, unknown> | void;
 
 type HookResult = {
   prependContext?: string;
@@ -15,26 +21,11 @@ type HookResult = {
 function createMockApi(
   pluginConfig?: Record<string, unknown>,
 ): RouterPluginApi & {
-  hooks: Map<
-    string,
-    {
-      handler: (
-        event: { prompt: string; messages?: unknown[] },
-        ctx: { agentId?: string; sessionKey?: string; channelId?: string; userId?: string; [key: string]: unknown },
-      ) => HookResult;
-      opts?: { priority?: number };
-    }
-  >;
+  hooks: Map<string, { handler: HookHandler; opts?: { priority?: number } }>;
 } {
   const hooks = new Map<
     string,
-    {
-      handler: (
-        event: { prompt: string; messages?: unknown[] },
-        ctx: { agentId?: string; sessionKey?: string; channelId?: string; userId?: string; [key: string]: unknown },
-      ) => HookResult;
-      opts?: { priority?: number };
-    }
+    { handler: HookHandler; opts?: { priority?: number } }
   >();
 
   return {
@@ -47,10 +38,7 @@ function createMockApi(
     },
     on: vi.fn((hookName: string, handler: unknown, opts?: { priority?: number }) => {
       hooks.set(hookName, {
-        handler: handler as (
-          event: { prompt: string; messages?: unknown[] },
-          ctx: { agentId?: string; sessionKey?: string; channelId?: string; userId?: string; [key: string]: unknown },
-        ) => HookResult,
+        handler: handler as HookHandler,
         opts,
       });
     }),
@@ -696,5 +684,146 @@ describe("Policy-Based Routing", () => {
     );
 
     expect(result?.providerOverride).toBe("ollama");
+  });
+});
+
+describe("message_sending hook", () => {
+  it("should register a message_sending hook", () => {
+    const api = createMockApi();
+    activate(api);
+    expect(api.hooks.has("message_sending")).toBe(true);
+  });
+
+  it("should redact SSN in outbound message", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("message_sending")!;
+    const result = hook.handler(
+      { content: "The SSN is 123-45-6789 on file." },
+      { agentId: "main" },
+    );
+    expect(result).toBeDefined();
+    expect((result as { content: string }).content).toContain("[SSN_REDACTED]");
+    expect((result as { content: string }).content).not.toContain("123-45-6789");
+  });
+
+  it("should return void for clean message", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("message_sending")!;
+    const result = hook.handler(
+      { content: "Hello, this is a normal response." },
+      { agentId: "main" },
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("should redact email in outbound message", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("message_sending")!;
+    const result = hook.handler(
+      { content: "Contact john@example.com for help." },
+      { agentId: "main" },
+    );
+    expect(result).toBeDefined();
+    expect((result as { content: string }).content).toContain("[EMAIL_REDACTED]");
+  });
+
+  it("should redact blocklist keywords from output", () => {
+    const api = createMockApi({
+      sensitivityKeywords: ["classified"],
+    });
+    activate(api);
+    const hook = api.hooks.get("message_sending")!;
+    const result = hook.handler(
+      { content: "This is classified information." },
+      { agentId: "main" },
+    );
+    expect(result).toBeDefined();
+    expect((result as { content: string }).content).toContain("[BLOCKLIST_REDACTED]");
+  });
+
+  it("should handle empty content gracefully", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("message_sending")!;
+    const result = hook.handler({ content: "" }, { agentId: "main" });
+    expect(result).toBeUndefined();
+  });
+});
+
+describe("tool_result_persist hook", () => {
+  it("should register a tool_result_persist hook", () => {
+    const api = createMockApi();
+    activate(api);
+    expect(api.hooks.has("tool_result_persist")).toBe(true);
+  });
+
+  it("should redact PII in tool result content", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("tool_result_persist")!;
+    const result = hook.handler(
+      {
+        message: { content: "DB returned email john@example.com" },
+        toolName: "database_query",
+      },
+      { agentId: "main" },
+    );
+    expect(result).toBeDefined();
+    const msg = (result as { message: { content: string } }).message;
+    expect(msg.content).toContain("[EMAIL_REDACTED]");
+    expect(msg.content).not.toContain("john@example.com");
+  });
+
+  it("should return void for clean tool result", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("tool_result_persist")!;
+    const result = hook.handler(
+      { message: { content: "Query returned 42 rows" }, toolName: "db" },
+      { agentId: "main" },
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("should handle missing message gracefully", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("tool_result_persist")!;
+    const result = hook.handler(
+      { toolName: "db" },
+      { agentId: "main" },
+    );
+    expect(result).toBeUndefined();
+  });
+});
+
+describe("agent_end hook", () => {
+  it("should register an agent_end hook", () => {
+    const api = createMockApi();
+    activate(api);
+    expect(api.hooks.has("agent_end")).toBe(true);
+  });
+
+  it("should log agent end event", () => {
+    const api = createMockApi();
+    activate(api);
+    const hook = api.hooks.get("agent_end")!;
+    hook.handler(
+      { success: true, durationMs: 1500, messages: [1, 2, 3] },
+      { agentId: "main", sessionKey: "sess-1" },
+    );
+    // Verify writeRoutingLog was called (via appendFileSync mock)
+    const mockedAppend = vi.mocked(appendFileSync);
+    const lastCall = mockedAppend.mock.calls.at(-1);
+    expect(lastCall).toBeDefined();
+    const logEntry = JSON.parse(lastCall[1].trim());
+    expect(logEntry.event).toBe("agent_session_end");
+    expect(logEntry.agentId).toBe("main");
+    expect(logEntry.success).toBe(true);
+    expect(logEntry.durationMs).toBe(1500);
+    expect(logEntry.messageCount).toBe(3);
   });
 });
