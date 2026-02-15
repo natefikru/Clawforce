@@ -95,5 +95,24 @@ export function generateCompose(config: ClawforceConfig): string {
     compose.volumes = { [volumeName]: {} };
   }
 
+  if (config.dashboard && config.dashboard.enabled !== false) {
+    const port = config.dashboard.port ?? 3000;
+
+    compose.services.dashboard = {
+      image: "clawforce-dashboard:local",
+      container_name: `${containerPrefix}-dashboard`,
+      restart: "unless-stopped",
+      ports: [`${port}:3000`],
+      environment: [
+        "DATA_DIR=/data",
+        "CONFIG_DIR=/config",
+      ],
+      volumes: [
+        "./data:/data:ro",
+        "./config:/config:ro",
+      ],
+    };
+  }
+
   return stringifyYaml(compose, { lineWidth: 0 });
 }
