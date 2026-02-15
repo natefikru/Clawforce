@@ -6,6 +6,7 @@ import { deployCommand } from "./commands/deploy.js";
 import { statusCommand } from "./commands/status.js";
 import { stopCommand } from "./commands/stop.js";
 import { auditCommand } from "./commands/audit.js";
+import { migrateCommand } from "./commands/migrate.js";
 import { routeTestCommand } from "./commands/route-test.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,26 @@ export function createProgram(): Command {
         agent: options.agent,
         piiOnly: options.piiOnly,
       });
+    });
+
+  program
+    .command("migrate")
+    .description("Migrate existing JSONL logs into SQLite database")
+    .option("-d, --data-dir <dir>", "Data directory containing JSONL files", "./data")
+    .option("--dry-run", "Report counts without inserting data")
+    .action(async (options: { dataDir: string; dryRun?: boolean }) => {
+      try {
+        await migrateCommand({
+          dataDir: options.dataDir,
+          dryRun: options.dryRun,
+        });
+      } catch (error) {
+        console.error(
+          "Migration failed:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
     });
 
   program
