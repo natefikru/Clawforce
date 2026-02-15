@@ -1,63 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import { buildTimeSeries, type TimestampedUsage } from "@/lib/cost-explorer";
+import { formatCost } from "@/lib/cost-explorer";
+import { gatewayRequest } from "@/lib/gateway-client";
 
-const CONFIG_DIR = process.env.CONFIG_DIR ?? "/config";
+type CostUsageTotals = {
+  totalTokens: number;
+  totalCost: number;
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  cacheWriteCost: number;
+  missingCostEntries: number;
+};
+
+type GatewayCostSummary = {
+  updatedAt: number;
+  days: number;
+  daily: Array<CostUsageTotals & { date: string }>;
+  totals: CostUsageTotals;
+};
 
 export async function GET(req: NextRequest) {
+  if (!process.env.OPENCLAW_GATEWAY_URL) {
+    return NextResponse.json(
+      { error: "OPENCLAW_GATEWAY_URL not configured" },
+      { status: 503 },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
-  const bucket = searchParams.get("bucket") === "day" ? "day" : "hour";
+  const days = Math.min(90, Math.max(1, parseInt(searchParams.get("days") ?? "30") || 30));
 
   try {
-    const usages = readTimestampedUsages();
-    const timeSeries = buildTimeSeries(usages, bucket);
+    const summary = await gatewayRequest<GatewayCostSummary>("usage.cost", {
+      days,
+    });
 
-    return NextResponse.json({ timeSeries, bucket });
+    const timeSeries = summary.daily.map((day) => ({
+      timestamp: day.date,
+      cloudCost: formatCost(
+        day.inputCost + day.outputCost + day.cacheReadCost + day.cacheWriteCost,
+      ),
+      totalRequests: day.totalTokens > 0 ? 1 : 0,
+    }));
+
+    return NextResponse.json({ timeSeries, bucket: "day" });
   } catch {
     return NextResponse.json(
-      { error: "Failed to build time series" },
-      { status: 500 },
+      { error: "Gateway unavailable" },
+      { status: 503 },
     );
   }
-}
-
-function readTimestampedUsages(): TimestampedUsage[] {
-  const sessionsDir = join(CONFIG_DIR, "agents", "main", "sessions");
-  if (!existsSync(sessionsDir)) return [];
-
-  const usages: TimestampedUsage[] = [];
-
-  try {
-    const files = readdirSync(sessionsDir).filter((f) =>
-      f.endsWith(".jsonl"),
-    );
-
-    for (const file of files) {
-      const content = readFileSync(join(sessionsDir, file), "utf8");
-      const lines = content.trim().split("\n").filter(Boolean);
-
-      for (const line of lines) {
-        try {
-          const entry = JSON.parse(line);
-          if (entry.usage && entry.model && entry.timestamp) {
-            usages.push({
-              model: entry.model,
-              inputTokens:
-                entry.usage.input_tokens ?? entry.usage.inputTokens ?? 0,
-              outputTokens:
-                entry.usage.output_tokens ?? entry.usage.outputTokens ?? 0,
-              timestamp: entry.timestamp,
-            });
-          }
-        } catch {
-          // Skip malformed lines
-        }
-      }
-    }
-  } catch {
-    // Sessions dir might not be accessible
-  }
-
-  return usages;
 }
