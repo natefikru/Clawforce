@@ -193,6 +193,7 @@ Intelligent per-request routing across 5 dimensions with configurable priority o
 - **Domain Detection**: Classifies prompts into code, writing, analysis, data, or conversation for specialized model routing
 - **Budget Tracking**: Daily spend limits with persistent state, automatic fallback to cheaper models when over budget
 - **Configurable Priority**: Choose evaluation order (e.g., sensitivity > cost > domain > complexity)
+- **Model Enforcement**: Routes are enforced via `modelOverride`/`providerOverride` in the OpenClaw hook system (not just recommendations)
 - Deployed as an OpenClaw plugin via `before_agent_start` hook
 
 ```yaml
@@ -247,9 +248,10 @@ compliance:
 4-panel Next.js dashboard with real-time streaming and interactive cost analysis.
 - **Agent Status**: Container health, uptime, running state
 - **Activity Feed**: Real-time SSE streaming from compliance log (with polling fallback)
-- **Cost Tracker**: Tabbed interface with Summary, Timeline (hourly bar chart), and What-If analysis
+- **Cost Tracker**: Gateway-sourced cost data (no hardcoded pricing); tabbed interface with Summary, Timeline, and What-If analysis
 - **Task Log**: Recent agent runs with duration and outcome
-- Runs as a separate Docker container, reads from shared volumes (read-only)
+- Connected to OpenClaw gateway via WebSocket for authoritative cost data
+- Runs as a separate Docker container with gateway URL/token injected via Docker Compose
 
 ```yaml
 dashboard:
@@ -300,7 +302,25 @@ clawforce audit -n 100               # Last 100 entries
 
 ---
 
-### Phase 2: Design Partner Pilot (Weeks 6-12)
+### Phase 2: Router Enforcement + Cost Deduplication -- IMPLEMENTED
+**Goal**: Router actually enforces model decisions; dashboard uses authoritative cost data
+
+**What's Built**:
+
+#### Router Model Enforcement
+The router's `before_agent_start` hook now returns `modelOverride`/`providerOverride` fields that are applied *before* model resolution in the OpenClaw agent pipeline. PII detected → model **actually switches** to local Ollama, not just a text recommendation.
+- Requires [natefikru/openclaw](https://github.com/natefikru/openclaw) fork (`feat/plugin-model-override` branch)
+- 5-layer test strategy: hook merger (10), pipeline wiring (9), plugin unit (27), integration (18), smoke
+
+#### Gateway-Based Cost Tracking
+Dashboard cost data now comes exclusively from the OpenClaw gateway via WebSocket JSON-RPC — no hardcoded pricing tables that go stale.
+- `cost-calculator.ts` (122 lines, 5-model hardcoded pricing) deleted
+- Cost API returns 503 if gateway is unavailable (no silent fallback to wrong data)
+- What-if analysis uses `CostEntry` (model + pre-computed cost from gateway)
+
+---
+
+### Phase 3: Design Partner Pilot (Weeks 6-12)
 **Goal**: 2-3 companies running it for real
 
 **Build**:
@@ -314,7 +334,7 @@ clawforce audit -n 100               # Last 100 entries
 
 ---
 
-### Phase 3: Monetize (Weeks 13-20)
+### Phase 4: Monetize (Weeks 13-20)
 **Goal**: First paying customers, $10K+ MRR
 
 **Build**:
@@ -324,7 +344,7 @@ clawforce audit -n 100               # Last 100 entries
 
 ---
 
-### Phase 4: Scale Prep (Weeks 21-30)
+### Phase 5: Scale Prep (Weeks 21-30)
 **Goal**: Seed fundraise ready
 
 - Kubernetes deployment (Helm chart)
@@ -341,9 +361,10 @@ clawforce audit -n 100               # Last 100 entries
 |---|---|---|---|
 | Phase 0: Foundation | 2 weeks | $0 (your time) | Deployable system + approval workflow |
 | Phase 1: Demo | 3 weeks | ~$500/month (API costs) | Live investor/partner demo |
-| Phase 2: Pilot | 6 weeks | ~$2K/month (infra) | 2-3 design partners |
-| Phase 3: Monetize | 8 weeks | ~$30K (SOC 2) + $2K/month | $10K+ MRR |
-| Phase 4: Scale | 10 weeks | Variable | Seed fundraise |
+| Phase 2: Enforcement | 1 week | $0 | Router enforces model decisions; gateway cost data |
+| Phase 3: Pilot | 6 weeks | ~$2K/month (infra) | 2-3 design partners |
+| Phase 4: Monetize | 8 weeks | ~$30K (SOC 2) + $2K/month | $10K+ MRR |
+| Phase 5: Scale | 10 weeks | Variable | Seed fundraise |
 
 **Total to first revenue**: ~4-5 months, ~$35-40K (mostly SOC 2).
 
