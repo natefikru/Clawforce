@@ -186,11 +186,13 @@ See: **[phase-0-implementation.md](./phase-0-implementation.md)** for full techn
 
 **What's Built**:
 
-#### Model Router Plugin
-Intelligent per-request routing based on data sensitivity and prompt complexity.
+#### 5-Dimensional Model Router
+Intelligent per-request routing across 5 dimensions with configurable priority ordering.
 - **PII Detection**: Regex-based scanning for SSN, credit cards, emails, phone numbers + configurable keyword blocklist
 - **Complexity Analysis**: Heuristic scoring (word count, code blocks, multi-step markers, domain keywords)
-- **Routing Rules**: PII always routes to local model, complexity determines cloud vs local for non-sensitive requests
+- **Domain Detection**: Classifies prompts into code, writing, analysis, data, or conversation for specialized model routing
+- **Budget Tracking**: Daily spend limits with persistent state, automatic fallback to cheaper models when over budget
+- **Configurable Priority**: Choose evaluation order (e.g., sensitivity > cost > domain > complexity)
 - Deployed as an OpenClaw plugin via `before_agent_start` hook
 
 ```yaml
@@ -204,7 +206,30 @@ router:
       model: "ollama/llama3.3:8b"
     - condition: "high_complexity"
       model: "anthropic/claude-sonnet-4-5"
+    - condition: "domain_code"
+      model: "openai/gpt-4o"
+    - condition: "domain_writing"
+      model: "anthropic/claude-sonnet-4-5"
+    - condition: "over_budget"
+      model: "ollama/llama3.3:8b"
   sensitivity_keywords: ["password", "secret"]
+  priority: ["sensitivity", "cost", "domain", "complexity"]
+  budget:
+    daily_limit: 10.00
+    fallback_model: "ollama/llama3.3:8b"
+```
+
+#### Route Test CLI
+Test routing decisions before deploying:
+```bash
+clawforce route-test "fix this TypeScript bug" -c clawforce.yaml
+# Model: openai/gpt-4o
+# Reason: Domain "code" — routing to specialized model
+# Dimensions:
+#   PII: no
+#   Complexity: low
+#   Domain: code (confidence: 0.14)
+#   Budget: $0.00/$10.00 remaining
 ```
 
 #### Compliance Logger Plugin
@@ -219,10 +244,10 @@ compliance:
 ```
 
 #### Activity Dashboard
-4-panel Next.js dashboard for agent monitoring and cost visualization.
+4-panel Next.js dashboard with real-time streaming and interactive cost analysis.
 - **Agent Status**: Container health, uptime, running state
-- **Activity Feed**: Real-time event stream from compliance log
-- **Cost Tracker**: Cloud vs local model split, savings percentage, per-model breakdown
+- **Activity Feed**: Real-time SSE streaming from compliance log (with polling fallback)
+- **Cost Tracker**: Tabbed interface with Summary, Timeline (hourly bar chart), and What-If analysis
 - **Task Log**: Recent agent runs with duration and outcome
 - Runs as a separate Docker container, reads from shared volumes (read-only)
 
@@ -230,6 +255,28 @@ compliance:
 dashboard:
   enabled: true
   port: 3000
+```
+
+#### GPU Support for Ollama
+```yaml
+ollama:
+  enabled: true
+  model: "llama3.3:8b"
+  gpu: nvidia  # or "amd" or "none"
+```
+
+#### Capability Profiles & OpenClaw Passthrough
+Preset tool configurations and direct access to all OpenClaw capabilities:
+```yaml
+capabilities: full  # "minimal" | "standard" | "full"
+
+# Or fine-tune with direct passthrough:
+openclaw:
+  agents:
+    defaults:
+      tools:
+        sandbox: { enabled: true }
+        browser: { enabled: true, headless: true }
 ```
 
 #### Audit Command
@@ -242,12 +289,14 @@ clawforce audit -n 100               # Last 100 entries
 
 **Demo script (5 min)**:
 1. `clawforce deploy -c demo.yaml` -> gateway + dashboard containers start
-2. Open `http://localhost:3000` -> 4-panel dashboard
+2. Open `http://localhost:3000` -> 4-panel dashboard with SSE streaming
 3. Send "what's the weather?" -> routed to local model (low complexity, cost-efficient)
 4. Send "my SSN is 123-45-6789" -> routed to local model (PII detected)
-5. Show dashboard: cost savings %, model breakdown, activity feed
-6. Show compliance log: every action captured as structured JSONL
-7. "All data stayed on this machine. 60%+ of requests used a free local model."
+5. Send "fix this TypeScript bug" -> routed to code-specialized model (domain detection)
+6. Show dashboard: cost timeline, what-if analysis, real-time activity stream
+7. Show compliance log: every action captured as structured JSONL
+8. `clawforce route-test "analyze quarterly revenue trends"` -> shows all 5 routing dimensions
+9. "All data stayed on this machine. 60%+ of requests used a free local model."
 
 ---
 
