@@ -157,6 +157,16 @@ export function generateOpenClawConfig(
     if (config.router.sensitivity_keywords) {
       routerConfig.sensitivityKeywords = config.router.sensitivity_keywords;
     }
+    if (config.router.priority) {
+      routerConfig.priority = config.router.priority;
+    }
+    if (config.router.budget) {
+      routerConfig.budget = {
+        dailyLimit: config.router.budget.daily_limit,
+        perRequestCap: config.router.budget.per_request_cap,
+        fallbackModel: config.router.budget.fallback_model,
+      };
+    }
     pluginEntries["clawforce-router"] = {
       enabled: true,
       config: routerConfig,

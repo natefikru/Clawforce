@@ -1,28 +1,42 @@
 /**
  * Clawforce Model Router Plugin for OpenClaw.
  *
- * Analyzes incoming prompts for PII and complexity, then logs a routing
- * decision. Uses `prependContext` to inject routing metadata into the
- * agent context and writes decisions to the compliance log for dashboard
- * consumption.
+ * Analyzes incoming prompts across 5 dimensions (PII, complexity, domain,
+ * budget, latency) and logs a routing decision. Uses `prependContext` to
+ * inject routing metadata into the agent context and writes decisions to
+ * the compliance log for dashboard consumption.
  *
  * Note: OpenClaw's plugin API does not currently expose a model override
  * mechanism. This plugin records what model *should* be used and prepends
  * routing context. Actual model enforcement requires OpenClaw-side changes
- * (tracked for Phase 2).
+ * (tracked for Tier 2).
  */
 
 import { appendFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { detectPII, detectPIITypes } from "./pii-detector.js";
 import { analyzeComplexity } from "./complexity-analyzer.js";
-import { selectModel, getDefaultRules, type RoutingRule } from "./router.js";
+import { detectDomain } from "./domain-detector.js";
+import {
+  selectModel,
+  getDefaultRules,
+  type RoutingRule,
+  type RoutingDimension,
+} from "./router.js";
+import {
+  BudgetTracker,
+  type BudgetConfig,
+  isLocalModel,
+  estimateRequestCost,
+} from "./budget-tracker.js";
 
 export interface RouterPluginConfig {
   defaultModel?: string;
   rules?: RoutingRule[];
   sensitivityKeywords?: string[];
   logPath?: string;
+  priority?: RoutingDimension[];
+  budget?: BudgetConfig;
 }
 
 export interface RouterPluginApi {
@@ -43,11 +57,20 @@ export interface RouterPluginApi {
   ) => void;
 }
 
+// Default token estimates for cost estimation before routing
+const ESTIMATED_INPUT_TOKENS = 500;
+const ESTIMATED_OUTPUT_TOKENS = 1000;
+
 export function activate(api: RouterPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
 
+  const budgetTracker = config.budget
+    ? new BudgetTracker(config.budget)
+    : null;
+
   api.logger.info(
-    `Router plugin activated (${config.rules.length} rules, default: ${config.defaultModel})`,
+    `Router plugin activated (${config.rules.length} rules, default: ${config.defaultModel})` +
+      (budgetTracker ? `, budget: $${config.budget!.dailyLimit}/day` : ""),
   );
 
   api.on(
@@ -56,25 +79,51 @@ export function activate(api: RouterPluginApi): void {
       const prompt = event.prompt ?? "";
       if (!prompt.trim()) return;
 
+      // Dimension 1: PII detection
       const hasPII = detectPII(prompt, {
         blocklist: config.sensitivityKeywords,
       });
       const piiTypes = hasPII
         ? detectPIITypes(prompt, { blocklist: config.sensitivityKeywords })
         : [];
+
+      // Dimension 2: Complexity analysis
       const complexity = analyzeComplexity(prompt);
+
+      // Dimension 3: Domain detection
+      const domainSignals = detectDomain(prompt);
+
+      // Dimension 4: Budget check
+      const estimatedCost = estimateRequestCost(
+        config.defaultModel,
+        ESTIMATED_INPUT_TOKENS,
+        ESTIMATED_OUTPUT_TOKENS,
+      );
+      const budgetCheck = budgetTracker
+        ? budgetTracker.checkBudget(estimatedCost)
+        : { withinBudget: true, remainingBudget: Infinity, dailySpent: 0 };
 
       const decision = selectModel({
         hasPII,
         complexity,
+        domain: domainSignals.domain,
+        budgetCheck,
         rules: config.rules,
         defaultModel: config.defaultModel,
+        priority: config.priority,
       });
+
+      // Record spend after routing decision
+      if (budgetTracker && !isLocalModel(decision.model)) {
+        budgetTracker.recordSpend(estimatedCost);
+      }
 
       api.logger.info(
         `Route: ${decision.model} (${decision.reason})` +
           (hasPII ? ` [PII: ${piiTypes.join(", ")}]` : "") +
-          ` [complexity: ${complexity}]`,
+          ` [complexity: ${complexity}]` +
+          ` [domain: ${domainSignals.domain}]` +
+          (decision.dimension ? ` [dimension: ${decision.dimension}]` : ""),
       );
 
       // Write routing decision to log
@@ -88,7 +137,12 @@ export function activate(api: RouterPluginApi): void {
         hasPII,
         piiTypes,
         complexity,
+        domain: domainSignals.domain,
+        domainConfidence: domainSignals.confidence,
+        dimension: decision.dimension,
         matchedCondition: decision.matchedRule?.condition,
+        budgetSpent: budgetCheck.dailySpent,
+        budgetRemaining: budgetCheck.remainingBudget,
       });
 
       // Prepend routing context for the agent
@@ -111,6 +165,7 @@ export function activate(api: RouterPluginApi): void {
 function resolveConfig(
   pluginConfig?: Record<string, unknown>,
 ): Required<RouterPluginConfig> {
+  const budget = pluginConfig?.budget as BudgetConfig | undefined;
   return {
     defaultModel:
       (pluginConfig?.defaultModel as string) ?? "anthropic/claude-sonnet-4-5",
@@ -120,6 +175,9 @@ function resolveConfig(
     logPath:
       (pluginConfig?.logPath as string) ??
       "/home/node/.openclaw/data/routing.jsonl",
+    priority:
+      (pluginConfig?.priority as RoutingDimension[]) ?? undefined as unknown as RoutingDimension[],
+    budget: budget ?? undefined as unknown as BudgetConfig,
   };
 }
 

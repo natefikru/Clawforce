@@ -61,12 +61,27 @@ export const ClawforceConfigSchema = z.object({
               "pii_detected",
               "low_complexity",
               "high_complexity",
+              "domain_code",
+              "domain_writing",
+              "domain_analysis",
+              "domain_data",
+              "over_budget",
             ]),
             model: z.string(),
           }),
         )
         .optional(),
       sensitivity_keywords: z.array(z.string()).optional(),
+      priority: z
+        .array(z.enum(["sensitivity", "cost", "domain", "complexity"]))
+        .optional(),
+      budget: z
+        .object({
+          daily_limit: z.number().positive(),
+          per_request_cap: z.number().positive().optional(),
+          fallback_model: z.string(),
+        })
+        .optional(),
     })
     .optional(),
 
