@@ -1,0 +1,21 @@
+[
+  {
+    "name": "daily-briefing",
+    "schedule": {
+      "kind": "cron",
+      "expr": "0 8 * * 1-5",
+      "tz": "America/New_York"
+    },
+    "sessionTarget": "isolated",
+    "wakeMode": "next-heartbeat",
+    "payload": {
+      "kind": "agentTurn",
+      "message": "Compile and deliver the daily briefing. Read recent messages from all monitored channels, identify key updates, and post the briefing summary."
+    },
+    "delivery": {
+      "mode": "announce",
+      "channel": "slack",
+      "bestEffort": true
+    }
+  }
+]
