@@ -8,68 +8,151 @@ import {
 } from "@/lib/cost-calculator";
 import { parseJsonl, getModelUsage } from "@/lib/log-parser";
 import { calculateWhatIf } from "@/lib/cost-explorer";
+import { gatewayRequest } from "@/lib/gateway-client";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const CONFIG_DIR = process.env.CONFIG_DIR ?? "/config";
 const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
+
+type CostUsageTotals = {
+  totalTokens: number;
+  totalCost: number;
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  cacheWriteCost: number;
+  missingCostEntries: number;
+};
+
+type GatewayCostSummary = {
+  updatedAt: number;
+  days: number;
+  daily: Array<CostUsageTotals & { date: string }>;
+  totals: CostUsageTotals;
+};
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const localPercentParam = searchParams.get("localPercent");
 
   try {
-    // Try to read token usage from session transcripts
-    const usages = readSessionUsages();
+    // Try gateway first (authoritative cost data, no hardcoded pricing)
+    const gatewayResult = await tryGateway(localPercentParam);
+    if (gatewayResult) return gatewayResult;
 
-    // If no session data, fall back to compliance log model usage
-    if (usages.length === 0) {
-      const modelCounts = readModelUsageFromCompliance();
-      return NextResponse.json({
-        totalCost: formatCost(0),
-        cloudCost: formatCost(0),
-        localCost: formatCost(0),
-        savingsPercent: 0,
-        modelUsage: modelCounts,
-        source: "compliance",
-      });
-    }
-
-    const breakdown = calculateCostBreakdown(usages);
-
-    const response: Record<string, unknown> = {
-      totalCost: formatCost(breakdown.totalCost),
-      cloudCost: formatCost(breakdown.cloudCost),
-      localCost: formatCost(breakdown.localCost),
-      savingsPercent: breakdown.savingsPercent,
-      cloudRequests: breakdown.cloudRequests,
-      localRequests: breakdown.localRequests,
-      perModel: Object.fromEntries(
-        Object.entries(breakdown.perModel).map(([model, data]) => [
-          model,
-          { cost: formatCost(data.cost), requests: data.requests },
-        ]),
-      ),
-      source: "sessions",
-    };
-
-    // Include what-if projection when localPercent is requested
-    if (localPercentParam !== null) {
-      const percent = Math.max(0, Math.min(100, parseInt(localPercentParam) || 0));
-      const whatIf = calculateWhatIf(usages, { type: "localPercent", percent });
-      response.whatIf = {
-        projectedCost: formatCost(whatIf.projectedCost),
-        projectedSavings: whatIf.savingsPercent,
-        currentCost: formatCost(whatIf.currentCost),
-      };
-    }
-
-    return NextResponse.json(response);
+    // Fallback: read from local files with hardcoded pricing
+    return fallbackToFiles(localPercentParam);
   } catch {
     return NextResponse.json(
       { error: "Failed to calculate costs" },
       { status: 500 },
     );
   }
+}
+
+async function tryGateway(
+  localPercentParam: string | null,
+): Promise<NextResponse | null> {
+  if (!process.env.OPENCLAW_GATEWAY_URL) return null;
+
+  try {
+    const summary = await gatewayRequest<GatewayCostSummary>("usage.cost", {
+      days: 30,
+    });
+
+    const response: Record<string, unknown> = {
+      totalCost: formatCost(summary.totals.totalCost),
+      cloudCost: formatCost(
+        summary.totals.inputCost +
+          summary.totals.outputCost +
+          summary.totals.cacheReadCost +
+          summary.totals.cacheWriteCost,
+      ),
+      localCost: formatCost(0),
+      savingsPercent: 0,
+      perModel: {},
+      source: "gateway",
+    };
+
+    // What-if projections still use local file data (gateway doesn't support this)
+    if (localPercentParam !== null) {
+      const usages = readSessionUsages();
+      if (usages.length > 0) {
+        const percent = Math.max(
+          0,
+          Math.min(100, parseInt(localPercentParam) || 0),
+        );
+        const whatIf = calculateWhatIf(usages, {
+          type: "localPercent",
+          percent,
+        });
+        response.whatIf = {
+          projectedCost: formatCost(whatIf.projectedCost),
+          projectedSavings: whatIf.savingsPercent,
+          currentCost: formatCost(whatIf.currentCost),
+        };
+      }
+    }
+
+    return NextResponse.json(response);
+  } catch {
+    // Gateway unavailable, fall through to file-based
+    return null;
+  }
+}
+
+function fallbackToFiles(
+  localPercentParam: string | null,
+): NextResponse {
+  const usages = readSessionUsages();
+
+  if (usages.length === 0) {
+    const modelCounts = readModelUsageFromCompliance();
+    return NextResponse.json({
+      totalCost: formatCost(0),
+      cloudCost: formatCost(0),
+      localCost: formatCost(0),
+      savingsPercent: 0,
+      modelUsage: modelCounts,
+      source: "compliance",
+    });
+  }
+
+  const breakdown = calculateCostBreakdown(usages);
+
+  const response: Record<string, unknown> = {
+    totalCost: formatCost(breakdown.totalCost),
+    cloudCost: formatCost(breakdown.cloudCost),
+    localCost: formatCost(breakdown.localCost),
+    savingsPercent: breakdown.savingsPercent,
+    cloudRequests: breakdown.cloudRequests,
+    localRequests: breakdown.localRequests,
+    perModel: Object.fromEntries(
+      Object.entries(breakdown.perModel).map(([model, data]) => [
+        model,
+        { cost: formatCost(data.cost), requests: data.requests },
+      ]),
+    ),
+    source: "sessions",
+  };
+
+  if (localPercentParam !== null) {
+    const percent = Math.max(
+      0,
+      Math.min(100, parseInt(localPercentParam) || 0),
+    );
+    const whatIf = calculateWhatIf(usages, {
+      type: "localPercent",
+      percent,
+    });
+    response.whatIf = {
+      projectedCost: formatCost(whatIf.projectedCost),
+      projectedSavings: whatIf.savingsPercent,
+      currentCost: formatCost(whatIf.currentCost),
+    };
+  }
+
+  return NextResponse.json(response);
 }
 
 function readSessionUsages(): TokenUsage[] {
