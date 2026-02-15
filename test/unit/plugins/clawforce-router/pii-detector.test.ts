@@ -3,6 +3,7 @@ import {
   detectPII,
   detectPIITypes,
   normalizeText,
+  scanForPII,
 } from "../../../../src/plugins/clawforce-router/pii-detector.js";
 
 describe("detectPII", () => {
@@ -360,5 +361,131 @@ describe("adversarial PII evasion", () => {
     expect(detectPII("こんにちは世界")).toBe(false);
     expect(detectPII("Привет мир")).toBe(false);
     expect(detectPII("café résumé naïve")).toBe(false);
+  });
+});
+
+describe("scanForPII", () => {
+  it("should return empty array for clean text", () => {
+    expect(scanForPII("Hello, this is normal text")).toEqual([]);
+  });
+
+  it("should return empty array for empty string", () => {
+    expect(scanForPII("")).toEqual([]);
+  });
+
+  it("should return match with correct type and confidence for SSN", () => {
+    const matches = scanForPII("my ssn is 123-45-6789");
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    const ssnMatch = matches.find((m) => m.type === "ssn");
+    expect(ssnMatch).toBeDefined();
+    expect(ssnMatch!.confidence).toBe(0.95);
+    expect(ssnMatch!.matchedText).toBe("123-45-6789");
+  });
+
+  it("should return correct position for SSN", () => {
+    const matches = scanForPII("my ssn is 123-45-6789");
+    const ssnMatch = matches.find((m) => m.type === "ssn");
+    expect(ssnMatch).toBeDefined();
+    expect(ssnMatch!.position.start).toBe(10);
+    expect(ssnMatch!.position.end).toBe(21);
+  });
+
+  it("should return correct confidence for email", () => {
+    const matches = scanForPII("contact john@example.com please");
+    const emailMatch = matches.find((m) => m.type === "email");
+    expect(emailMatch).toBeDefined();
+    expect(emailMatch!.confidence).toBe(0.85);
+    expect(emailMatch!.matchedText).toBe("john@example.com");
+  });
+
+  it("should return correct confidence for phone", () => {
+    const matches = scanForPII("call 555-123-4567 today");
+    const phoneMatch = matches.find((m) => m.type === "phone");
+    expect(phoneMatch).toBeDefined();
+    expect(phoneMatch!.confidence).toBe(0.85);
+  });
+
+  it("should return correct confidence for credit card", () => {
+    const matches = scanForPII("card 4111-1111-1111-1111");
+    const ccMatch = matches.find((m) => m.type === "credit_card");
+    expect(ccMatch).toBeDefined();
+    expect(ccMatch!.confidence).toBe(0.95);
+  });
+
+  it("should return correct confidence for IBAN", () => {
+    const matches = scanForPII("iban: GB29NWBK60161331926819");
+    const ibanMatch = matches.find((m) => m.type === "iban");
+    expect(ibanMatch).toBeDefined();
+    expect(ibanMatch!.confidence).toBe(0.90);
+  });
+
+  it("should return correct confidence for DOB", () => {
+    const matches = scanForPII("date of birth: 1990-01-15");
+    const dobMatch = matches.find((m) => m.type === "dob");
+    expect(dobMatch).toBeDefined();
+    expect(dobMatch!.confidence).toBe(0.75);
+  });
+
+  it("should return correct confidence for IP address", () => {
+    const matches = scanForPII("server at 192.168.1.100 is down");
+    const ipMatch = matches.find((m) => m.type === "ip_address");
+    expect(ipMatch).toBeDefined();
+    expect(ipMatch!.confidence).toBe(0.75);
+  });
+
+  it("should return multiple matches from a single string", () => {
+    const matches = scanForPII(
+      "SSN 123-45-6789 email john@example.com call 555-123-4567",
+    );
+    const types = matches.map((m) => m.type);
+    expect(types).toContain("ssn");
+    expect(types).toContain("email");
+    expect(types).toContain("phone");
+    expect(matches.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("should return blocklist matches with 0.70 confidence", () => {
+    const matches = scanForPII("this contains a secret keyword", {
+      blocklist: ["secret"],
+    });
+    const blocklistMatch = matches.find((m) => m.type === "blocklist");
+    expect(blocklistMatch).toBeDefined();
+    expect(blocklistMatch!.confidence).toBe(0.70);
+    expect(blocklistMatch!.matchedText).toBe("secret");
+  });
+
+  it("should return correct positions for blocklist matches", () => {
+    const matches = scanForPII("before secret after", {
+      blocklist: ["secret"],
+    });
+    const blocklistMatch = matches.find((m) => m.type === "blocklist");
+    expect(blocklistMatch).toBeDefined();
+    expect(blocklistMatch!.position.start).toBe(7);
+    expect(blocklistMatch!.position.end).toBe(13);
+  });
+
+  it("should find all occurrences of the same pattern", () => {
+    const matches = scanForPII("john@example.com and jane@example.com");
+    const emailMatches = matches.filter((m) => m.type === "email");
+    expect(emailMatches.length).toBe(2);
+    expect(emailMatches[0].matchedText).toBe("john@example.com");
+    expect(emailMatches[1].matchedText).toBe("jane@example.com");
+  });
+
+  it("should work with backward-compat detectPII wrapper", () => {
+    expect(detectPII("ssn 123-45-6789")).toBe(true);
+    expect(detectPII("clean text")).toBe(false);
+  });
+
+  it("should work with backward-compat detectPIITypes wrapper", () => {
+    const types = detectPIITypes("ssn 123-45-6789 email john@example.com");
+    expect(types).toContain("ssn");
+    expect(types).toContain("email");
+  });
+
+  it("should deduplicate types in detectPIITypes", () => {
+    const types = detectPIITypes("john@example.com and jane@example.com");
+    const emailCount = types.filter((t) => t === "email").length;
+    expect(emailCount).toBe(1);
   });
 });

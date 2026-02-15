@@ -6,11 +6,22 @@
  * Includes adversarial defense: unicode normalization strips zero-width
  * characters, decomposes ligatures, and folds common homoglyphs before
  * pattern matching.
+ *
+ * The primary API is scanForPII() which returns PIIMatch objects with
+ * type, confidence, position, and matchedText. The legacy detectPII()
+ * and detectPIITypes() functions are backward-compatible wrappers.
  */
 
 export interface PIIDetectorOptions {
   /** Additional keywords that indicate sensitive content */
   blocklist?: string[];
+}
+
+export interface PIIMatch {
+  type: string;
+  confidence: number;
+  position: { start: number; end: number };
+  matchedText: string;
 }
 
 /**
@@ -71,70 +82,83 @@ function foldHomoglyphs(text: string): string {
   return result;
 }
 
-const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
+const PII_PATTERNS: Array<{ name: string; pattern: RegExp; confidence: number }> = [
   // SSN: 123-45-6789, 123 45 6789, or 123456789 (with optional separators)
-  { name: "ssn", pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/ },
+  { name: "ssn", pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/, confidence: 0.95 },
   // Credit card: 16 digits with optional separators (Visa, Mastercard, Discover)
-  { name: "credit_card", pattern: /\b(?:\d{4}[-\s]?){3}\d{4}\b/ },
+  { name: "credit_card", pattern: /\b(?:\d{4}[-\s]?){3}\d{4}\b/, confidence: 0.95 },
   // Credit card: Amex — starts with 34 or 37, 15 digits
-  { name: "credit_card_amex", pattern: /\b3[47]\d{2}[-\s]?\d{6}[-\s]?\d{5}\b/ },
+  { name: "credit_card_amex", pattern: /\b3[47]\d{2}[-\s]?\d{6}[-\s]?\d{5}\b/, confidence: 0.95 },
   // Email address
-  { name: "email", pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/ },
+  { name: "email", pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, confidence: 0.85 },
   // US phone: (123) 456-7890, 123-456-7890, +1-123-456-7890
-  { name: "phone", pattern: /\b(?:\+?1[-\s]?)?\(?\d{3}\)?[-\s.]\d{3}[-\s.]\d{4}\b/ },
+  { name: "phone", pattern: /\b(?:\+?1[-\s]?)?\(?\d{3}\)?[-\s.]\d{3}[-\s.]\d{4}\b/, confidence: 0.85 },
   // IBAN: 2 letter country code + 2 check digits + up to 30 alphanumeric
-  { name: "iban", pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b/ },
+  { name: "iban", pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b/, confidence: 0.90 },
   // Date of birth: keyword + date pattern
-  { name: "dob", pattern: /\b(?:date\s*(?:of\s*)?birth|dob|born\s*(?:on)?)\s*:?\s*\d{1,4}[-/]\d{1,2}[-/]\d{1,4}\b/i },
+  { name: "dob", pattern: /\b(?:date\s*(?:of\s*)?birth|dob|born\s*(?:on)?)\s*:?\s*\d{1,4}[-/]\d{1,2}[-/]\d{1,4}\b/i, confidence: 0.75 },
   // IPv4 address
-  { name: "ip_address", pattern: /\b(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/ },
+  { name: "ip_address", pattern: /\b(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/, confidence: 0.75 },
   // US Passport number (keyword + 9 digits)
-  { name: "passport", pattern: /(?:passport\s*(?:number|no|#)?\s*:?\s*)\d{9}\b/i },
+  { name: "passport", pattern: /(?:passport\s*(?:number|no|#)?\s*:?\s*)\d{9}\b/i, confidence: 0.95 },
   // US Driver's License (keyword + state format)
-  { name: "drivers_license", pattern: /(?:driver'?s?\s*(?:license|licence)\s*(?:number|no|#)?\s*:?\s*)[A-Z]?\d{4,12}\b/i },
+  { name: "drivers_license", pattern: /(?:driver'?s?\s*(?:license|licence)\s*(?:number|no|#)?\s*:?\s*)[A-Z]?\d{4,12}\b/i, confidence: 0.85 },
 ];
 
-export function detectPII(text: string, options?: PIIDetectorOptions): boolean {
-  if (!text) return false;
-
-  const normalized = normalizeText(text);
-
-  for (const { pattern } of PII_PATTERNS) {
-    if (pattern.test(normalized)) return true;
-  }
-
-  if (options?.blocklist) {
-    const lower = normalized.toLowerCase();
-    for (const keyword of options.blocklist) {
-      if (lower.includes(keyword.toLowerCase())) return true;
-    }
-  }
-
-  return false;
-}
-
-export function detectPIITypes(
+/**
+ * Scan text for PII matches with confidence scoring and positions.
+ * This is the primary API — use this for detailed match information.
+ */
+export function scanForPII(
   text: string,
   options?: PIIDetectorOptions,
-): string[] {
+): PIIMatch[] {
   if (!text) return [];
 
   const normalized = normalizeText(text);
-  const found: string[] = [];
+  const matches: PIIMatch[] = [];
 
-  for (const { name, pattern } of PII_PATTERNS) {
-    if (pattern.test(normalized)) found.push(name);
+  for (const { name, pattern, confidence } of PII_PATTERNS) {
+    const globalPattern = new RegExp(pattern.source, pattern.flags.replace("g", "") + "g");
+    let match: RegExpExecArray | null;
+    while ((match = globalPattern.exec(normalized)) !== null) {
+      matches.push({
+        type: name,
+        confidence,
+        position: { start: match.index, end: match.index + match[0].length },
+        matchedText: match[0],
+      });
+    }
   }
 
   if (options?.blocklist) {
     const lower = normalized.toLowerCase();
     for (const keyword of options.blocklist) {
-      if (lower.includes(keyword.toLowerCase())) {
-        found.push("blocklist");
-        break;
+      const idx = lower.indexOf(keyword.toLowerCase());
+      if (idx !== -1) {
+        matches.push({
+          type: "blocklist",
+          confidence: 0.70,
+          position: { start: idx, end: idx + keyword.length },
+          matchedText: normalized.slice(idx, idx + keyword.length),
+        });
       }
     }
   }
 
-  return found;
+  return matches;
+}
+
+/** Backward-compatible boolean PII check. */
+export function detectPII(text: string, options?: PIIDetectorOptions): boolean {
+  return scanForPII(text, options).length > 0;
+}
+
+/** Backward-compatible PII type list. */
+export function detectPIITypes(
+  text: string,
+  options?: PIIDetectorOptions,
+): string[] {
+  const matches = scanForPII(text, options);
+  return [...new Set(matches.map((m) => m.type))];
 }
