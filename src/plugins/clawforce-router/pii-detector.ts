@@ -72,14 +72,26 @@ function foldHomoglyphs(text: string): string {
 }
 
 const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
-  // SSN: 123-45-6789 or 123 45 6789
-  { name: "ssn", pattern: /\b\d{3}[-\s]\d{2}[-\s]\d{4}\b/ },
-  // Credit card: 16 digits with optional separators
+  // SSN: 123-45-6789, 123 45 6789, or 123456789 (with optional separators)
+  { name: "ssn", pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/ },
+  // Credit card: 16 digits with optional separators (Visa, Mastercard, Discover)
   { name: "credit_card", pattern: /\b(?:\d{4}[-\s]?){3}\d{4}\b/ },
+  // Credit card: Amex — starts with 34 or 37, 15 digits
+  { name: "credit_card_amex", pattern: /\b3[47]\d{2}[-\s]?\d{6}[-\s]?\d{5}\b/ },
   // Email address
   { name: "email", pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/ },
   // US phone: (123) 456-7890, 123-456-7890, +1-123-456-7890
   { name: "phone", pattern: /\b(?:\+?1[-\s]?)?\(?\d{3}\)?[-\s.]\d{3}[-\s.]\d{4}\b/ },
+  // IBAN: 2 letter country code + 2 check digits + up to 30 alphanumeric
+  { name: "iban", pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b/ },
+  // Date of birth: keyword + date pattern
+  { name: "dob", pattern: /\b(?:date\s*(?:of\s*)?birth|dob|born\s*(?:on)?)\s*:?\s*\d{1,4}[-/]\d{1,2}[-/]\d{1,4}\b/i },
+  // IPv4 address
+  { name: "ip_address", pattern: /\b(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/ },
+  // US Passport number (keyword + 9 digits)
+  { name: "passport", pattern: /(?:passport\s*(?:number|no|#)?\s*:?\s*)\d{9}\b/i },
+  // US Driver's License (keyword + state format)
+  { name: "drivers_license", pattern: /(?:driver'?s?\s*(?:license|licence)\s*(?:number|no|#)?\s*:?\s*)[A-Z]?\d{4,12}\b/i },
 ];
 
 export function detectPII(text: string, options?: PIIDetectorOptions): boolean {

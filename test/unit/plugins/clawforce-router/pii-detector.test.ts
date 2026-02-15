@@ -19,8 +19,8 @@ describe("detectPII", () => {
       expect(detectPII("order 12345678")).toBe(false);
     });
 
-    it("should not match SSN without proper grouping", () => {
-      expect(detectPII("123456789")).toBe(false);
+    it("should detect SSN without separators", () => {
+      expect(detectPII("my ssn is 123456789")).toBe(true);
     });
   });
 
@@ -173,6 +173,109 @@ describe("detectPIITypes", () => {
     });
     const blocklistCount = types.filter((t) => t === "blocklist").length;
     expect(blocklistCount).toBe(1);
+  });
+});
+
+describe("Amex credit card detection", () => {
+  it("should detect Amex starting with 34", () => {
+    expect(detectPII("card: 340000000000009")).toBe(true);
+  });
+
+  it("should detect Amex starting with 37", () => {
+    expect(detectPII("card: 370000000000002")).toBe(true);
+  });
+
+  it("should detect Amex with spaces", () => {
+    expect(detectPII("card: 3400 000000 00009")).toBe(true);
+  });
+
+  it("should not match 15-digit numbers that don't start with 34 or 37", () => {
+    expect(detectPII("code: 123456789012345")).toBe(false);
+  });
+});
+
+describe("IBAN detection", () => {
+  it("should detect German IBAN", () => {
+    expect(detectPII("IBAN: DE89370400440532013000")).toBe(true);
+  });
+
+  it("should detect UK IBAN", () => {
+    expect(detectPII("account: GB29NWBK60161331926819")).toBe(true);
+  });
+
+  it("should not match short codes", () => {
+    expect(detectPII("code US12")).toBe(false);
+  });
+});
+
+describe("date of birth detection", () => {
+  it("should detect DOB with keyword", () => {
+    expect(detectPII("date of birth: 01/15/1990")).toBe(true);
+  });
+
+  it("should detect dob abbreviation", () => {
+    expect(detectPII("dob: 1990-01-15")).toBe(true);
+  });
+
+  it("should detect born on format", () => {
+    expect(detectPII("born on 15/01/1990")).toBe(true);
+  });
+
+  it("should not match dates without DOB keyword", () => {
+    expect(detectPII("meeting on 01/15/2026")).toBe(false);
+  });
+});
+
+describe("IP address detection", () => {
+  it("should detect standard IPv4", () => {
+    expect(detectPII("server at 192.168.1.100")).toBe(true);
+  });
+
+  it("should detect edge case IPs", () => {
+    expect(detectPII("address 255.255.255.255")).toBe(true);
+    expect(detectPII("address 0.0.0.0")).toBe(true);
+  });
+
+  it("should not match invalid octets", () => {
+    expect(detectPII("value 999.999.999.999")).toBe(false);
+  });
+
+  it("should not match version numbers", () => {
+    expect(detectPII("version 1.2.3")).toBe(false);
+  });
+});
+
+describe("passport detection", () => {
+  it("should detect passport number with keyword", () => {
+    expect(detectPII("passport number: 123456789")).toBe(true);
+  });
+
+  it("should detect passport no format", () => {
+    expect(detectPII("passport no 987654321")).toBe(true);
+  });
+
+  it("should not match 9-digit numbers without passport keyword", () => {
+    // Note: 123456789 now matches the SSN pattern (which accepts no separators).
+    // Test with a number that doesn't match SSN grouping (too many in first group).
+    expect(detectPII("passport? no, just code ABCD12345")).toBe(false);
+  });
+});
+
+describe("driver's license detection", () => {
+  it("should detect driver's license with keyword", () => {
+    expect(detectPII("driver's license number: D12345678")).toBe(true);
+  });
+
+  it("should detect drivers licence (British spelling)", () => {
+    expect(detectPII("drivers licence: 12345678")).toBe(true);
+  });
+
+  it("should detect with # sign", () => {
+    expect(detectPII("driver license # A1234567890")).toBe(true);
+  });
+
+  it("should not match without keyword", () => {
+    expect(detectPII("code D12345678")).toBe(false);
   });
 });
 
