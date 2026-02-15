@@ -30,6 +30,13 @@ export interface OpenClawConfig {
       dm?: { policy: string };
       channels: Record<string, { requireMention: boolean }>;
     };
+    telegram?: {
+      enabled: boolean;
+      botToken: string;
+      dmPolicy: string;
+      groupPolicy: string;
+      allowFrom?: Array<string | number>;
+    };
   };
   cron?: {
     enabled: boolean;
@@ -72,28 +79,43 @@ export function generateOpenClawConfig(
     },
   };
 
-  // Slack channel config
-  const slackChannels: Record<string, { requireMention: boolean }> = {};
+  // Channel config — at least one of slack or telegram is required
+  if (config.slack) {
+    const slackChannels: Record<string, { requireMention: boolean }> = {};
 
-  // Approval channel: bot responds without being mentioned
-  slackChannels[config.slack.approval_channel] = { requireMention: false };
+    // Approval channel: bot responds without being mentioned
+    slackChannels[config.slack.approval_channel] = { requireMention: false };
 
-  // Allowed channels: require @mention
-  for (const channelId of config.slack.allowed_channels) {
-    slackChannels[channelId] = { requireMention: true };
+    // Allowed channels: require @mention
+    for (const channelId of config.slack.allowed_channels) {
+      slackChannels[channelId] = { requireMention: true };
+    }
+
+    result.channels.slack = {
+      enabled: true,
+      mode: "socket",
+      appToken: config.slack.app_token,
+      botToken: config.slack.bot_token,
+      groupPolicy: "allowlist",
+      dm: {
+        policy: "pairing",
+      },
+      channels: slackChannels,
+    };
   }
 
-  result.channels.slack = {
-    enabled: true,
-    mode: "socket",
-    appToken: config.slack.app_token,
-    botToken: config.slack.bot_token,
-    groupPolicy: "allowlist",
-    dm: {
-      policy: "pairing",
-    },
-    channels: slackChannels,
-  };
+  if (config.telegram) {
+    const dmPolicy = config.telegram.dm_policy ?? "open";
+    const allowFrom = config.telegram.allow_from
+      ?? (dmPolicy === "open" ? ["*"] : undefined);
+    result.channels.telegram = {
+      enabled: true,
+      botToken: config.telegram.bot_token,
+      dmPolicy,
+      groupPolicy: "disabled",
+      ...(allowFrom ? { allowFrom } : {}),
+    };
+  }
 
   // Load and merge role-specific config partial
   const rolePartialPath = join(

@@ -116,4 +116,48 @@ describe("generateOpenClawConfig", () => {
     expect(Object.keys(channels)).toHaveLength(1);
     expect(channels["C0123456789"]).toBeDefined();
   });
+
+  it("should configure Telegram channel correctly", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        slack: undefined,
+        telegram: {
+          bot_token: "123456:ABCdef",
+          dm_policy: "open",
+        },
+      }),
+    );
+    expect(result.channels.slack).toBeUndefined();
+    expect(result.channels.telegram).toBeDefined();
+    expect(result.channels.telegram!.enabled).toBe(true);
+    expect(result.channels.telegram!.botToken).toBe("123456:ABCdef");
+    expect(result.channels.telegram!.dmPolicy).toBe("open");
+    expect(result.channels.telegram!.groupPolicy).toBe("disabled");
+    expect(result.channels.telegram!.allowFrom).toEqual(["*"]);
+  });
+
+  it("should default Telegram dmPolicy to open", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        slack: undefined,
+        telegram: {
+          bot_token: "123456:ABCdef",
+        },
+      }),
+    );
+    expect(result.channels.telegram!.dmPolicy).toBe("open");
+  });
+
+  it("should not include Slack when only Telegram is configured", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        slack: undefined,
+        telegram: {
+          bot_token: "123456:ABCdef",
+        },
+      }),
+    );
+    expect(result.channels.slack).toBeUndefined();
+    expect(result.channels.telegram).toBeDefined();
+  });
 });

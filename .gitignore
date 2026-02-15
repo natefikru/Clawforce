@@ -7,3 +7,4 @@ coverage/
 clawforce-*/
 test-deployment/
 test/tmp/
+smoke-test.yaml
