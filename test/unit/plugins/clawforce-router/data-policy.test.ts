@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveDataTier,
-  tierAllowsCloud,
   tierRequiresLocal,
   type DataPolicy,
 } from "../../../../src/plugins/clawforce-router/data-policy.js";
@@ -66,24 +65,6 @@ describe("resolveDataTier", () => {
     };
     expect(resolveDataTier(userOnly, "C1")).toBe("public");
     expect(resolveDataTier(userOnly, undefined, "U1")).toBe("restricted");
-  });
-});
-
-describe("tierAllowsCloud", () => {
-  it("should allow cloud for public tier only", () => {
-    expect(tierAllowsCloud("public")).toBe(true);
-  });
-
-  it("should not allow cloud for restricted", () => {
-    expect(tierAllowsCloud("restricted")).toBe(false);
-  });
-
-  it("should not allow cloud for confidential", () => {
-    expect(tierAllowsCloud("confidential")).toBe(false);
-  });
-
-  it("should not allow cloud for internal", () => {
-    expect(tierAllowsCloud("internal")).toBe(false);
   });
 });
 

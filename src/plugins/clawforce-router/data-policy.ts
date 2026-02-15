@@ -51,12 +51,18 @@ export function resolveDataTier(
   return policy.defaultTier;
 }
 
-/** Only "public" tier is eligible for cloud routing by default. */
-export function tierAllowsCloud(tier: DataTier): boolean {
-  return tier === "public";
-}
-
-/** "restricted" and "confidential" tiers require local-only routing. */
+/**
+ * Check if a tier requires local-only routing.
+ *
+ * Tier routing behavior:
+ * - "restricted" → forces local model (highest security)
+ * - "confidential" → forces local model
+ * - "internal" → falls through to other routing dimensions (PII, domain, complexity)
+ * - "public" → no routing restrictions
+ *
+ * The "internal" tier intentionally does NOT force local routing on its own.
+ * It relies on PII detection and other dimensions to make the routing decision.
+ */
 export function tierRequiresLocal(tier: DataTier): boolean {
   return tier === "restricted" || tier === "confidential";
 }

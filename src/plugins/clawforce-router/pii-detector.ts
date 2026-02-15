@@ -83,8 +83,8 @@ function foldHomoglyphs(text: string): string {
 }
 
 const PII_PATTERNS: Array<{ name: string; pattern: RegExp; confidence: number }> = [
-  // SSN: 123-45-6789, 123 45 6789, or 123456789 (with optional separators)
-  { name: "ssn", pattern: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/, confidence: 0.95 },
+  // SSN: 123-45-6789 or 123 45 6789 (separators required to avoid false positives on bare 9-digit numbers)
+  { name: "ssn", pattern: /\b\d{3}[-\s]\d{2}[-\s]\d{4}\b/, confidence: 0.95 },
   // Credit card: 16 digits with optional separators (Visa, Mastercard, Discover)
   { name: "credit_card", pattern: /\b(?:\d{4}[-\s]?){3}\d{4}\b/, confidence: 0.95 },
   // Credit card: Amex — starts with 34 or 37, 15 digits
@@ -93,8 +93,8 @@ const PII_PATTERNS: Array<{ name: string; pattern: RegExp; confidence: number }>
   { name: "email", pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, confidence: 0.85 },
   // US phone: (123) 456-7890, 123-456-7890, +1-123-456-7890
   { name: "phone", pattern: /\b(?:\+?1[-\s]?)?\(?\d{3}\)?[-\s.]\d{3}[-\s.]\d{4}\b/, confidence: 0.85 },
-  // IBAN: 2 letter country code + 2 check digits + up to 30 alphanumeric
-  { name: "iban", pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b/, confidence: 0.90 },
+  // IBAN: 2 letter country code + 2 check digits + 11-30 alphanumeric (minimum 15 chars total)
+  { name: "iban", pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/, confidence: 0.90 },
   // Date of birth: keyword + date pattern
   { name: "dob", pattern: /\b(?:date\s*(?:of\s*)?birth|dob|born\s*(?:on)?)\s*:?\s*\d{1,4}[-/]\d{1,2}[-/]\d{1,4}\b/i, confidence: 0.75 },
   // IPv4 address

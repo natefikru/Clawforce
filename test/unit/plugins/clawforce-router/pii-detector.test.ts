@@ -20,8 +20,8 @@ describe("detectPII", () => {
       expect(detectPII("order 12345678")).toBe(false);
     });
 
-    it("should detect SSN without separators", () => {
-      expect(detectPII("my ssn is 123456789")).toBe(true);
+    it("should not match bare 9-digit numbers (requires separators)", () => {
+      expect(detectPII("my ssn is 123456789")).toBe(false);
     });
   });
 
@@ -256,8 +256,6 @@ describe("passport detection", () => {
   });
 
   it("should not match 9-digit numbers without passport keyword", () => {
-    // Note: 123456789 now matches the SSN pattern (which accepts no separators).
-    // Test with a number that doesn't match SSN grouping (too many in first group).
     expect(detectPII("passport? no, just code ABCD12345")).toBe(false);
   });
 });
