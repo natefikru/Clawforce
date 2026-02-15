@@ -428,7 +428,7 @@ Calacanis investment thesis alignment:
 
 ### Completed (Phases 0-1 + Phase 3 Tier 1 Expansion)
 
-All work shipped on `feat/tier-1-expansion` branch (PR #2), 530 tests passing.
+All work shipped on `feat/tier-1-expansion` branch (PR #2), 545 tests passing.
 
 **Phase 0: Foundation** — Complete
 - Deployment CLI (`clawforce deploy`, `clawforce generate`)
@@ -460,63 +460,69 @@ All work shipped on `feat/tier-1-expansion` branch (PR #2), 530 tests passing.
 
 ---
 
-## Open Items (Pre-Phase 2)
+## Open Items — Resolved
 
-### Security — Must Fix Before Design Partner Pilots
+All 23 open items from the code review have been addressed. Items were either fixed, verified as already fixed, or explicitly deferred with documented rationale.
 
-| # | Severity | Issue | File(s) | Description |
-|---|----------|-------|---------|-------------|
-| 1 | CRITICAL | Output filter redaction position mismatch | `output-filter.ts`, `pii-detector.ts` | `scanForPII()` returns match positions relative to normalized text, but `filterOutput()` applies those positions to the original text. If input contains zero-width chars, homoglyphs, or fullwidth digits, redaction slices at wrong positions — partially leaking PII or corrupting surrounding text. Fix: maintain a position map during normalization, or redact on normalized text. |
-| 2 | CRITICAL | Custom priority ordering bypasses PII hard invariant | `router.ts` | If an operator sets priority to `["domain", "sensitivity", ...]`, domain is evaluated before sensitivity. When PII is present AND domain matches, PII routes to a cloud model — violating the stated hard invariant. Fix: enforce PII check as a post-routing invariant regardless of dimension ordering. |
-| 3 | HIGH | `defaultLocalModel` not wired through plugin config | `index.ts`, `router.ts` | `selectModel()` is never passed `defaultLocalModel` from the plugin's `activate()` function. Even if a user configures a custom local model, the PII invariant fallback always uses hardcoded `sglang/qwen3-32b`. Fix: add `defaultLocalModel` to `ResolvedRouterConfig` and pass it through. |
-| 4 | HIGH | SSN regex false positives on 9-digit numbers | `pii-detector.ts:87` | Pattern `\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b` matches any 9-digit number (zip+4, order numbers, tracking IDs). High false-positive rate in production. Fix: require at least one separator, or add context-aware check (keyword proximity). |
-| 5 | HIGH | IBAN regex false positives | `pii-detector.ts:97` | Pattern `\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b` matches many non-IBAN strings (ISO country codes + numbers like `US2024BUDGET`). Fix: add minimum total length (15+ chars) or check-digit validation. |
-| 6 | HIGH | Phone regex false positives | `pii-detector.ts:95` | Pattern matches any 10-digit number including random numeric sequences in code/data. Fix: require at least one separator character (`[-\s.]` instead of `[-\s.]?`). Already fixed in current code. |
-| 7 | MEDIUM | "internal" tier cloud routing ambiguity | `data-policy.ts` | `tierAllowsCloud("internal")` returns `false` but `tierRequiresLocal("internal")` also returns `false`. "Internal" tier data can route to cloud models. `tierAllowsCloud()` is exported but never called — dead code. Needs explicit documentation on intent. |
+### Fixed in This Cycle (Commits `433307d`–`fb79537`)
 
-### Dashboard — Fix Before Design Partner Pilots
+| # | Issue | Resolution | Commit |
+|---|-------|------------|--------|
+| 1 | Output filter position mismatch (CRITICAL) | Normalize content before scanning so positions align | `4a22253` |
+| 2 | Custom priority bypasses PII invariant (CRITICAL) | Post-routing PII safety invariant after dimension loop | `433307d` |
+| 3 | `defaultLocalModel` not wired (HIGH) | Added to `ResolvedRouterConfig`, `resolveConfig()`, and `selectModel()` call | `433307d` |
+| 4 | SSN regex false positives (HIGH) | Separators now mandatory: `[-\s]` instead of `[-\s]?` | `7cc801d` |
+| 5 | IBAN regex false positives (HIGH) | Minimum length raised: `{11,30}` instead of `{4,30}` (15+ char total) | `7cc801d` |
+| 7 | `tierAllowsCloud()` dead code (MEDIUM) | Removed function, added doc comment explaining tier behavior | `7cc801d` |
+| 10 | Dashboard `readFileSync` (HIGH) | Replaced with async `readFile` from `fs/promises` | `4f17a6f` |
+| 13 | No overlapping PII output filter tests | Added test for multiple SSN redaction without corruption | `ac2bad8` |
+| 14 | No adversarial evasion output filter tests | Added zero-width char SSN, Cyrillic homoglyph email, and normalization tests | `4a22253` |
+| 15 | Passport regex edge cases untested | Added hash separator and bare keyword tests | `ac2bad8` |
+| 16 | Integration test doesn't pass messages | `simulateAgentRun` now accepts `messages`, tests verify history PII routing | `ac2bad8` |
+| 19 | `resolveConfig` unsafe casts | Added `typeof`/`Array.isArray` guards for all fields | `3a70fac` |
+| 20 | `mkdirSync` on every write | Module-level caching flag, only calls once per activation | `4f17a6f` |
+| 21 | `pricing.ts` mutable state | Exported `clearWarningCache()` for test isolation | `3a70fac` |
+| 22 | Duplicate JSONL parsing | Extracted `src/shared/jsonl.ts`, compliance plugin delegates | `3a70fac` |
+| — | Compliance error logging | Silent catch → stderr write with context | `4f17a6f` |
+| — | Compliance logPath type guard | Added `typeof` guard matching router pattern | `fb79537` |
+| — | Router `resetRoutingLogDirCache` | Exported for test parity with compliance plugin | `fb79537` |
 
-| # | Severity | Issue | File(s) | Description |
-|---|----------|-------|---------|-------------|
-| 8 | HIGH | `execSync` blocks event loop in status API | `dashboard/api/status/route.ts` | `execSync('docker ps ...')` blocks ALL request handling for up to 5s on every status poll. Fix: use `execFile` (async) with argument array instead of shell string. |
-| 9 | HIGH | No input validation on `limit` query param | `dashboard/api/activity/route.ts` | `parseInt` returns `NaN` for non-numeric input; `?limit=999999999` forces full log serialization. Fix: clamp to `Math.min(Math.max(parsed \|\| 50, 1), 1000)`. |
-| 10 | HIGH | Dashboard reads entire log synchronously on every request | `dashboard/api/activity/route.ts`, `dashboard/api/cost/route.ts` | `readFileSync` reads full compliance log into memory on every 5s poll. Becomes a performance issue as log grows. Fix: use `readFile` (async) + tail-based reading. |
-| 11 | MEDIUM | No authentication on dashboard API routes | `dashboard/src/app/api/` | Anyone who can reach port 3000 can read the full compliance log, cost data, and container status. Acceptable for Phase 1 local-only deployment, but must be addressed before multi-tenant pilots. |
-| 12 | LOW | Complexity analyzer regex statefulness bug | `complexity-analyzer.ts:18-19` | `CODE_BLOCK_PATTERN` and `INLINE_CODE_PATTERN` use `g` flag, making `.test()` stateful — produces incorrect results on every other invocation. Fix: remove `g` flag. |
+### Verified Already Fixed (No Changes Needed)
 
-### Test Coverage Gaps
+| # | Issue | Verification |
+|---|-------|--------------|
+| 6 | Phone regex false positives | Already requires separator `[-\s.]` (mandatory) |
+| 8 | `execSync` in status API | Already uses async `execFileAsync` with `promisify(execFile)` |
+| 9 | No `limit` validation | Already has `Math.min(Math.max(...))` clamping |
+| 12 | Complexity regex statefulness | Already has NO `g` flag on patterns |
 
-| # | Issue | Description |
-|---|-------|-------------|
-| 13 | No overlapping PII match tests for output filter | If two patterns match overlapping ranges, the second replacement corrupts the first marker. |
-| 14 | No adversarial evasion tests for output filter path | Output filter tests only use clean ASCII; given position mismatch bug #1, adversarial input would fail. |
-| 15 | Passport regex edge cases untested | Spacing variations like `passport # 123456789` and non-US alphanumeric formats not tested. |
-| 16 | Integration test doesn't exercise history scanning | `simulateAgentRun` only passes `{ prompt }`, never `messages`. History PII scanning untested at integration level. |
-| 17 | No dashboard API route tests | Status, activity, and cost routes lack unit tests (use fs + docker APIs). |
-| 18 | No dashboard React component tests | No `@testing-library/react` tests for CostTracker, ActivityFeed, etc. |
+### Deferred (Not Fixed in This Cycle)
 
-### Code Quality (Low Priority)
+| # | Issue | Reason for Deferral |
+|---|-------|---------------------|
+| 11 | Dashboard authentication | Too large for this fix cycle. Required before multi-tenant pilots (Phase 2). |
+| 17 | Dashboard API route tests | Separate Next.js project, minimal value relative to effort. |
+| 18 | Dashboard React component tests | No `@testing-library/react` setup. Separate project concern. |
+| 23 | Plugin copies `.ts` instead of `.js` | No build step exists yet. Filter would break plugin copying in development. Deferred until TypeScript compilation pipeline is added. |
 
-| # | Issue | Description |
-|---|-------|-------------|
-| 19 | `resolveConfig` uses unsafe `as` casts | Plugin config values cast without validation; invalid config crashes on first use. |
-| 20 | `writeRoutingLog` calls `mkdirSync` on every write | Synchronous syscall on every routing decision. Move to one-time check at activation. |
-| 21 | Module-level mutable state in `pricing.ts` | `warnedModels` Set persists across test runs; makes tests potentially order-dependent. |
-| 22 | Duplicate JSONL parsing in 3 places | Same split/filter/JSON.parse logic in compliance plugin, dashboard log-parser, and audit command. |
-| 23 | Plugin copies `.ts` source instead of compiled `.js` | `workspace/setup.ts` copies raw TypeScript; OpenClaw plugin system may expect JavaScript. |
+---
 
-### Deferred to Future Phases
+## Deferred to Future Phases
 
 | Item | Phase | Notes |
 |------|-------|-------|
-| Dashboard authentication (JWT/API key) | Phase 2 | Required before multi-tenant deployment |
-| NLP/ML-based content classification | Phase 3+ | Regex catches ~5% of enterprise-sensitive data. Financial projections, HR data, trade secrets, M&A materials, legal communications need ML. |
-| Enterprise DLP integration (Nightfall, Lakera) | Phase 3+ | For customers with existing DLP infrastructure |
-| Real-time model health monitoring / failover | Phase 2 | Local model down can cascade PII to cloud |
-| Multi-language PII patterns | Phase 3+ | English/US patterns only for now |
-| Kubernetes Helm chart deployment | Phase 4 | Currently Docker Compose only |
-| Multi-tenant control plane | Phase 4 | Single dashboard per deployment currently |
-| Agent marketplace | Phase 4 | Create and share custom role templates |
+| Dashboard authentication (JWT/API key) | Phase 2 | Required before multi-tenant deployment. Currently anyone reaching port 3000 can read compliance data. |
+| Real-time model health monitoring / failover | Phase 2 | If local model goes down, PII could cascade to cloud. Need health checks + circuit breaker. |
+| Plugin TypeScript compilation pipeline | Phase 2 | Build `.ts` → `.js` before copying to extensions dir. Currently copies source. |
+| Dashboard API route tests | Phase 2 | Unit tests for status, activity, cost Next.js routes. |
+| Dashboard React component tests | Phase 2 | Add `@testing-library/react`, test CostTracker, ActivityFeed, etc. |
+| NLP/ML-based content classification | Phase 3+ | Regex catches ~5% of enterprise-sensitive data. Financial projections, HR data, trade secrets, M&A materials, legal communications need ML classification. |
+| Enterprise DLP integration (Nightfall, Lakera) | Phase 3+ | For customers with existing DLP infrastructure. |
+| Multi-language PII patterns | Phase 3+ | English/US patterns only. Need patterns for EU (German, French), APAC, etc. |
+| Output filter double-normalization optimization | Phase 3+ | `filterOutput` normalizes then `scanForPII` normalizes again (idempotent but wasteful). Add `scanForPIIPreNormalized()` variant. |
+| Kubernetes Helm chart deployment | Phase 4 | Currently Docker Compose only. |
+| Multi-tenant control plane | Phase 4 | Single dashboard per deployment currently. |
+| Agent marketplace | Phase 4 | Create and share custom role templates. |
 
 ---
 
