@@ -1,0 +1,9 @@
+{
+  "cron": {
+    "enabled": true,
+    "store": "/home/node/.openclaw/data/cron/jobs.json"
+  },
+  "hooks": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,140 @@
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { ClawforceConfig } from "./types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const templatesDir = join(__dirname, "..", "..", "templates");
+
+export interface OpenClawConfig {
+  agents: {
+    defaults: {
+      workspace: string;
+      model: {
+        primary: string;
+        fallbacks?: string[];
+      };
+    };
+  };
+  channels: {
+    slack?: {
+      enabled: boolean;
+      mode: string;
+      appToken: string;
+      botToken: string;
+      dmPolicy: string;
+      groupPolicy: string;
+      channels: Record<string, { requireMention: boolean }>;
+    };
+  };
+  cron?: {
+    enabled: boolean;
+    store?: string;
+  };
+  hooks?: {
+    enabled: boolean;
+    internal?: {
+      enabled: boolean;
+      entries?: Record<string, { enabled: boolean }>;
+    };
+  };
+  session: {
+    dmScope: string;
+  };
+}
+
+export function generateOpenClawConfig(
+  config: ClawforceConfig,
+): OpenClawConfig {
+  const result: OpenClawConfig = {
+    agents: {
+      defaults: {
+        workspace: "/home/node/.openclaw/workspace",
+        model: {
+          primary: config.models.primary,
+          ...(config.models.local
+            ? { fallbacks: [config.models.local] }
+            : {}),
+        },
+      },
+    },
+    channels: {},
+    session: {
+      dmScope: "per-channel-peer",
+    },
+  };
+
+  // Slack channel config
+  const slackChannels: Record<string, { requireMention: boolean }> = {};
+
+  // Approval channel: bot responds without being mentioned
+  slackChannels[config.slack.approval_channel] = { requireMention: false };
+
+  // Allowed channels: require @mention
+  for (const channelId of config.slack.allowed_channels) {
+    slackChannels[channelId] = { requireMention: true };
+  }
+
+  result.channels.slack = {
+    enabled: true,
+    mode: "socket",
+    appToken: config.slack.app_token,
+    botToken: config.slack.bot_token,
+    dmPolicy: "allowlist",
+    groupPolicy: "allowlist",
+    channels: slackChannels,
+  };
+
+  // Load and merge role-specific config partial
+  const rolePartialPath = join(
+    templatesDir,
+    "roles",
+    config.role,
+    "config.partial.json",
+  );
+  if (existsSync(rolePartialPath)) {
+    const roleConfig = JSON.parse(
+      readFileSync(rolePartialPath, "utf8"),
+    ) as Partial<OpenClawConfig>;
+    mergeInto(
+      result as unknown as Record<string, unknown>,
+      roleConfig as unknown as Record<string, unknown>,
+    );
+  }
+
+  // Enable command-logger hook for audit trail
+  if (!result.hooks) {
+    result.hooks = { enabled: true };
+  }
+  result.hooks.internal = {
+    enabled: true,
+    entries: {
+      "command-logger": { enabled: true },
+    },
+  };
+
+  return result;
+}
+
+function mergeInto(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      target[key] !== null &&
+      typeof target[key] === "object" &&
+      !Array.isArray(target[key])
+    ) {
+      mergeInto(
+        target[key] as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+    } else {
+      target[key] = value;
+    }
+  }
+}
