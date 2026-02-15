@@ -9,6 +9,7 @@ import type { ComplexityLevel } from "./complexity-analyzer.js";
 import type { TaskDomain } from "./domain-detector.js";
 import type { BudgetCheck } from "./budget-tracker.js";
 import { isLocalModel } from "../../shared/pricing.js";
+import { tierRequiresLocal, type DataTier } from "./data-policy.js";
 
 export type RoutingCondition =
   | "pii_detected"
@@ -20,7 +21,7 @@ export type RoutingCondition =
   | "domain_data"
   | "over_budget";
 
-export type RoutingDimension = "sensitivity" | "cost" | "domain" | "complexity";
+export type RoutingDimension = "policy" | "sensitivity" | "cost" | "domain" | "complexity";
 
 export interface RoutingRule {
   condition: RoutingCondition;
@@ -32,6 +33,7 @@ export interface SelectModelInput {
   complexity: ComplexityLevel;
   domain?: TaskDomain;
   budgetCheck?: BudgetCheck;
+  dataTier?: DataTier;
   rules: RoutingRule[];
   defaultModel: string;
   defaultLocalModel?: string;
@@ -46,6 +48,7 @@ export interface RoutingDecision {
 }
 
 const DEFAULT_PRIORITY: RoutingDimension[] = [
+  "policy",
   "sensitivity",
   "cost",
   "domain",
@@ -71,6 +74,7 @@ export function selectModel(input: SelectModelInput): RoutingDecision {
     complexity,
     domain,
     budgetCheck,
+    dataTier,
     rules,
     defaultModel,
     defaultLocalModel,
@@ -83,6 +87,7 @@ export function selectModel(input: SelectModelInput): RoutingDecision {
       complexity,
       domain,
       budgetCheck,
+      dataTier,
       rules,
       defaultLocalModel,
     });
@@ -102,6 +107,7 @@ interface DimensionContext {
   complexity: ComplexityLevel;
   domain?: TaskDomain;
   budgetCheck?: BudgetCheck;
+  dataTier?: DataTier;
   rules: RoutingRule[];
   defaultLocalModel?: string;
 }
@@ -111,6 +117,8 @@ function evaluateDimension(
   ctx: DimensionContext,
 ): { model: string; reason: string; matchedRule?: RoutingRule } | null {
   switch (dimension) {
+    case "policy":
+      return evaluatePolicy(ctx);
     case "sensitivity":
       return evaluateSensitivity(ctx);
     case "cost":
@@ -122,6 +130,21 @@ function evaluateDimension(
     default:
       return null;
   }
+}
+
+function evaluatePolicy(ctx: DimensionContext) {
+  if (!ctx.dataTier) return null;
+
+  if (tierRequiresLocal(ctx.dataTier)) {
+    return {
+      model: ctx.defaultLocalModel ?? DEFAULT_LOCAL_MODEL,
+      reason: `Data tier "${ctx.dataTier}" — local model required by policy`,
+    };
+  }
+
+  // "internal" and "public" tiers don't force a specific model.
+  // Let other dimensions (sensitivity, cost, domain, complexity) decide.
+  return null;
 }
 
 const DEFAULT_LOCAL_MODEL = "ollama/llama3.3:8b";

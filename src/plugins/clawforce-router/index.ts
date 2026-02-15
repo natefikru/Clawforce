@@ -18,6 +18,7 @@ import {
   type RoutingRule,
   type RoutingDimension,
 } from "./router.js";
+import { resolveDataTier, type DataPolicy } from "./data-policy.js";
 import {
   BudgetTracker,
   type BudgetConfig,
@@ -46,7 +47,13 @@ export interface RouterPluginApi {
     hookName: string,
     handler: (
       event: { prompt: string; messages?: unknown[] },
-      ctx: { agentId?: string; sessionKey?: string },
+      ctx: {
+        agentId?: string;
+        sessionKey?: string;
+        channelId?: string;
+        userId?: string;
+        [key: string]: unknown;
+      },
     ) => {
       prependContext?: string;
       modelOverride?: string;
@@ -145,6 +152,15 @@ export function activate(api: RouterPluginApi): void {
       // Dimension 3: Domain detection
       const domainSignals = detectDomain(prompt);
 
+      // Dimension 0: Policy check (channel/user data tier)
+      const dataTier = config.policy
+        ? resolveDataTier(
+            config.policy,
+            ctx.channelId as string | undefined,
+            ctx.userId as string | undefined,
+          )
+        : undefined;
+
       // Dimension 4: Budget check
       const estimatedCost = estimateRequestCost(
         config.defaultModel,
@@ -160,6 +176,7 @@ export function activate(api: RouterPluginApi): void {
         complexity,
         domain: domainSignals.domain,
         budgetCheck,
+        dataTier,
         rules: config.rules,
         defaultModel: config.defaultModel,
         priority: config.priority,
@@ -177,6 +194,7 @@ export function activate(api: RouterPluginApi): void {
 
       api.logger.info(
         `Route: ${decision.model} (${decision.reason})` +
+          (dataTier ? ` [tier: ${dataTier}]` : "") +
           (hasPII ? ` [PII: ${piiTypes.join(", ")}]` : "") +
           ` [complexity: ${complexity}]` +
           ` [domain: ${domainSignals.domain}]` +
@@ -198,6 +216,7 @@ export function activate(api: RouterPluginApi): void {
         domainConfidence: domainSignals.confidence,
         dimension: decision.dimension,
         matchedCondition: decision.matchedRule?.condition,
+        dataTier,
         budgetSpent: budgetCheck.dailySpent,
         budgetRemaining: budgetCheck.remainingBudget,
       });
@@ -229,6 +248,7 @@ interface ResolvedRouterConfig {
   logPath: string;
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
+  policy?: DataPolicy;
 }
 
 function resolveConfig(
@@ -245,6 +265,7 @@ function resolveConfig(
       "/home/node/.openclaw/data/routing.jsonl",
     priority: pluginConfig?.priority as RoutingDimension[] | undefined,
     budget: pluginConfig?.budget as BudgetConfig | undefined,
+    policy: pluginConfig?.policy as DataPolicy | undefined,
   };
 }
 

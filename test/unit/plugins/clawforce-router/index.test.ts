@@ -20,7 +20,7 @@ function createMockApi(
     {
       handler: (
         event: { prompt: string; messages?: unknown[] },
-        ctx: { agentId?: string; sessionKey?: string },
+        ctx: { agentId?: string; sessionKey?: string; channelId?: string; userId?: string; [key: string]: unknown },
       ) => HookResult;
       opts?: { priority?: number };
     }
@@ -31,7 +31,7 @@ function createMockApi(
     {
       handler: (
         event: { prompt: string; messages?: unknown[] },
-        ctx: { agentId?: string; sessionKey?: string },
+        ctx: { agentId?: string; sessionKey?: string; channelId?: string; userId?: string; [key: string]: unknown },
       ) => HookResult;
       opts?: { priority?: number };
     }
@@ -49,7 +49,7 @@ function createMockApi(
       hooks.set(hookName, {
         handler: handler as (
           event: { prompt: string; messages?: unknown[] },
-          ctx: { agentId?: string; sessionKey?: string },
+          ctx: { agentId?: string; sessionKey?: string; channelId?: string; userId?: string; [key: string]: unknown },
         ) => HookResult,
         opts,
       });
@@ -607,5 +607,94 @@ describe("Conversation History PII Scanning", () => {
     );
 
     expect(result).toBeDefined();
+  });
+});
+
+describe("Policy-Based Routing", () => {
+  it("restricted channel routes to local regardless of content", () => {
+    const api = createMockApi({
+      policy: {
+        defaultTier: "public",
+        channels: [{ channelId: "C_HR", tier: "restricted" }],
+      },
+    });
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "What is the weather today?" },
+      { agentId: "main", channelId: "C_HR" },
+    );
+
+    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.prependContext).toContain("policy");
+  });
+
+  it("confidential user routes to local", () => {
+    const api = createMockApi({
+      policy: {
+        defaultTier: "public",
+        users: [{ userId: "U_EXEC", tier: "confidential" }],
+      },
+    });
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "Analyze the quarterly results" },
+      { agentId: "main", userId: "U_EXEC" },
+    );
+
+    expect(result?.providerOverride).toBe("ollama");
+  });
+
+  it("public channel with no PII allows normal routing", () => {
+    const api = createMockApi({
+      policy: {
+        defaultTier: "internal",
+        channels: [{ channelId: "C_PUBLIC", tier: "public" }],
+      },
+    });
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "Write a complex distributed systems architecture document with microservices" },
+      { agentId: "main", channelId: "C_PUBLIC" },
+    );
+
+    // Public tier doesn't force local — complexity/domain decides
+    expect(result).toBeDefined();
+  });
+
+  it("no policy configured behaves as before (regression)", () => {
+    const api = createMockApi(); // No policy in config
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "Hello there" },
+      { agentId: "main", channelId: "C_ANYTHING" },
+    );
+
+    // Should still work — low complexity routes to ollama
+    expect(result?.providerOverride).toBe("ollama");
+  });
+
+  it("internal channel with PII routes local (policy + PII agree)", () => {
+    const api = createMockApi({
+      policy: {
+        defaultTier: "internal",
+      },
+    });
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "My SSN is 123-45-6789" },
+      { agentId: "main" },
+    );
+
+    expect(result?.providerOverride).toBe("ollama");
   });
 });
