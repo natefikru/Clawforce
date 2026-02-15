@@ -1,0 +1,11 @@
+name: "minimal"
+role: "research-agent"
+
+slack:
+  app_token: "xapp-1-MINIMAL"
+  bot_token: "xoxb-MINIMAL"
+  approval_channel: "C0000000000"
+  allowed_channels: []
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"

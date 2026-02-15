@@ -1,0 +1,11 @@
+name: "test"
+role: "nonexistent-role"
+
+slack:
+  app_token: "xapp-1-TEST"
+  bot_token: "xoxb-TEST"
+  approval_channel: "C0123456789"
+  allowed_channels: []
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
