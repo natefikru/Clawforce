@@ -316,7 +316,7 @@ describe("generateCompose", () => {
   describe("runtime: ollama (via runtime section)", () => {
     it("should fall back to ollama service when engine is ollama", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "ollama", model: "llama3.3:8b" } })),
+        generateCompose(makeConfig({ runtime: { engine: "ollama", model: "llama3.3:8b", port: 11434 } })),
       );
       expect(parsed.services.ollama).toBeDefined();
       expect(parsed.services.ollama.image).toBe("ollama/ollama:latest");
