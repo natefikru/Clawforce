@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deployCommand } from "./commands/deploy.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -23,8 +24,16 @@ export function createProgram(): Command {
     .command("deploy")
     .description("Deploy an AI agent from config")
     .option("-c, --config <path>", "Path to clawforce.yaml", "./clawforce.yaml")
-    .action((_options) => {
-      // Implementation in Unit 8
+    .action(async (options: { config: string }) => {
+      try {
+        await deployCommand(options.config);
+      } catch (error) {
+        console.error(
+          "Deploy failed:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
     });
 
   program

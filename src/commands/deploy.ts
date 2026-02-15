@@ -1,0 +1,97 @@
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { parseConfig } from "../config/parse.js";
+import { generateOpenClawConfig } from "../config/generate-openclaw.js";
+import { generateCompose } from "../config/generate-compose.js";
+import { generateEnv } from "../config/generate-env.js";
+import { setupWorkspace } from "../workspace/setup.js";
+import { exec } from "../docker/exec.js";
+import { waitForHealthy } from "../docker/health.js";
+import { logger } from "../utils/logger.js";
+
+export async function deployCommand(configPath: string): Promise<void> {
+  logger.header("Clawforce Deploy");
+
+  // 1. Parse and validate config
+  logger.step("Parsing config...");
+  const config = parseConfig(configPath);
+  logger.success(`Config valid: ${config.name} (${config.role})`);
+
+  // 2. Create deployment directory
+  const deployDir = resolve(`./clawforce-${config.name}`);
+  mkdirSync(deployDir, { recursive: true });
+  logger.info(`Deploy directory: ${deployDir}`);
+
+  // 3. Setup workspace (creates dirs, copies templates)
+  logger.step("Setting up workspace...");
+  setupWorkspace(config, deployDir);
+  logger.success("Workspace ready");
+
+  // 4. Generate openclaw.json
+  logger.step("Generating openclaw.json...");
+  const openclawConfig = generateOpenClawConfig(config);
+  writeFileSync(
+    join(deployDir, "config", "openclaw.json"),
+    JSON.stringify(openclawConfig, null, 2),
+    "utf8",
+  );
+  logger.success("openclaw.json generated");
+
+  // 5. Generate docker-compose.yml
+  logger.step("Generating docker-compose.yml...");
+  const composeYaml = generateCompose(config);
+  writeFileSync(join(deployDir, "docker-compose.yml"), composeYaml, "utf8");
+  logger.success("docker-compose.yml generated");
+
+  // 6. Generate .env
+  logger.step("Generating .env...");
+  const env = generateEnv(config);
+  writeFileSync(join(deployDir, ".env"), env, { mode: 0o600, flag: "w" });
+  logger.success(".env generated");
+
+  // 7. Pull Ollama model if enabled
+  if (config.ollama?.enabled && config.ollama.model) {
+    logger.step(`Starting Ollama and pulling model: ${config.ollama.model}...`);
+    await exec("docker", ["compose", "up", "-d", "ollama"], {
+      cwd: deployDir,
+    });
+    await exec(
+      "docker",
+      [
+        "exec",
+        `clawforce-${config.name}-ollama`,
+        "ollama",
+        "pull",
+        config.ollama.model,
+      ],
+      { cwd: deployDir },
+    );
+    logger.success("Ollama model ready");
+  }
+
+  // 8. Start gateway
+  logger.step("Starting OpenClaw gateway...");
+  await exec("docker", ["compose", "up", "-d"], { cwd: deployDir });
+  logger.success("Containers started");
+
+  // 9. Health check
+  logger.step("Waiting for health check...");
+  const healthy = await waitForHealthy("http://127.0.0.1:18789/health", 30000);
+
+  if (!healthy) {
+    throw new Error(
+      "Health check failed after 30s. Check logs with: docker compose logs",
+    );
+  }
+
+  logger.header("Deployment successful!");
+  logger.info(`Gateway:          http://127.0.0.1:18789`);
+  logger.info(`Role:             ${config.role}`);
+  logger.info(`Approval channel: ${config.slack.approval_channel}`);
+  logger.info(`Deploy dir:       ${deployDir}`);
+  logger.info("");
+  logger.info("Manage with:");
+  logger.info("  clawforce status   - Check container status");
+  logger.info("  clawforce audit    - View audit log");
+  logger.info("  clawforce stop     - Stop deployment");
+}

@@ -1,0 +1,144 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { existsSync, rmSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
+
+// Mock docker exec and health check before importing deploy
+vi.mock("../../../src/docker/exec.js", () => ({
+  exec: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../../../src/docker/health.js", () => ({
+  waitForHealthy: vi.fn().mockResolvedValue(true),
+}));
+
+// Suppress console output during tests
+vi.spyOn(console, "log").mockImplementation(() => {});
+vi.spyOn(console, "error").mockImplementation(() => {});
+
+import { deployCommand } from "../../../src/commands/deploy.js";
+import { exec } from "../../../src/docker/exec.js";
+import { waitForHealthy } from "../../../src/docker/health.js";
+
+const fixturesDir = join(import.meta.dirname, "../../fixtures");
+const deployDir = join(process.cwd(), "clawforce-test-corp");
+
+describe("deployCommand", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test123";
+    if (existsSync(deployDir)) {
+      rmSync(deployDir, { recursive: true });
+    }
+  });
+
+  afterEach(() => {
+    delete process.env.ANTHROPIC_API_KEY;
+    if (existsSync(deployDir)) {
+      rmSync(deployDir, { recursive: true });
+    }
+  });
+
+  it("should create deployment directory", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    expect(existsSync(deployDir)).toBe(true);
+  });
+
+  it("should generate openclaw.json", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    const configPath = join(deployDir, "config", "openclaw.json");
+    expect(existsSync(configPath)).toBe(true);
+
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    expect(config.agents.defaults.model.primary).toBe(
+      "anthropic/claude-sonnet-4-5",
+    );
+    expect(config.channels.slack.enabled).toBe(true);
+  });
+
+  it("should generate docker-compose.yml", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    const composePath = join(deployDir, "docker-compose.yml");
+    expect(existsSync(composePath)).toBe(true);
+
+    const compose = parseYaml(readFileSync(composePath, "utf8"));
+    expect(compose.services["openclaw-gateway"]).toBeDefined();
+  });
+
+  it("should generate .env", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    const envPath = join(deployDir, ".env");
+    expect(existsSync(envPath)).toBe(true);
+
+    const env = readFileSync(envPath, "utf8");
+    expect(env).toContain("GATEWAY_TOKEN=");
+    expect(env).toContain("ANTHROPIC_API_KEY=sk-ant-test123");
+  });
+
+  it("should setup workspace with SKILL.md and AGENTS.md", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    expect(
+      existsSync(join(deployDir, "workspace/skills/inbox-analyst/SKILL.md")),
+    ).toBe(true);
+    expect(existsSync(join(deployDir, "workspace/AGENTS.md"))).toBe(true);
+  });
+
+  it("should call docker compose up", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    expect(exec).toHaveBeenCalledWith(
+      "docker",
+      ["compose", "up", "-d"],
+      expect.objectContaining({ cwd: deployDir }),
+    );
+  });
+
+  it("should check health", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    expect(waitForHealthy).toHaveBeenCalledWith(
+      "http://127.0.0.1:18789/health",
+      30000,
+    );
+  });
+
+  it("should throw if health check fails", async () => {
+    vi.mocked(waitForHealthy).mockResolvedValueOnce(false);
+    await expect(
+      deployCommand(join(fixturesDir, "valid-config.yaml")),
+    ).rejects.toThrow("Health check failed");
+  });
+
+  it("should pull ollama model when enabled", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    // valid-config.yaml has ollama enabled with llama3.3:8b
+    expect(exec).toHaveBeenCalledWith(
+      "docker",
+      ["compose", "up", "-d", "ollama"],
+      expect.objectContaining({ cwd: deployDir }),
+    );
+    expect(exec).toHaveBeenCalledWith(
+      "docker",
+      [
+        "exec",
+        "clawforce-test-corp-ollama",
+        "ollama",
+        "pull",
+        "llama3.3:8b",
+      ],
+      expect.objectContaining({ cwd: deployDir }),
+    );
+  });
+
+  it("should not pull ollama when disabled", async () => {
+    const minimalDeployDir = join(process.cwd(), "clawforce-minimal");
+    await deployCommand(join(fixturesDir, "minimal-config.yaml"));
+    // minimal config doesn't have ollama
+    expect(exec).not.toHaveBeenCalledWith(
+      "docker",
+      expect.arrayContaining(["ollama", "pull"]),
+      expect.anything(),
+    );
+    if (existsSync(minimalDeployDir)) {
+      rmSync(minimalDeployDir, { recursive: true });
+    }
+  });
+});
