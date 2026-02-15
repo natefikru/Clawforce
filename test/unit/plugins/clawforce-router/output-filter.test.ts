@@ -106,4 +106,13 @@ describe("filterOutput", () => {
     expect(result.content).not.toContain("\u200B");
     expect(result.content).toBe("Clean text with zero-width chars");
   });
+
+  it("should handle multiple PII instances without corruption", () => {
+    const result = filterOutput("SSN 123-45-6789 and another 987-65-4321");
+    expect(result.redacted).toBe(true);
+    expect(result.content).toContain("[SSN_REDACTED]");
+    expect(result.content).not.toContain("6789");
+    expect(result.content).not.toContain("4321");
+    expect(result.matchCount).toBe(2);
+  });
 });

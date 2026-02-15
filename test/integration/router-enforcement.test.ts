@@ -68,6 +68,7 @@ function createPluginPipeline(pluginConfig?: Record<string, unknown>) {
   function simulateAgentRun(
     prompt: string,
     ctx: { agentId?: string; sessionKey?: string } = { agentId: "main" },
+    messages?: unknown[],
   ): {
     hookResult: HookResult | void;
     effectiveProvider: string;
@@ -82,7 +83,7 @@ function createPluginPipeline(pluginConfig?: Record<string, unknown>) {
 
     let hookResult: HookResult | void;
     for (const hook of hooks) {
-      const result = hook.handler({ prompt }, ctx);
+      const result = hook.handler({ prompt, messages }, ctx);
       if (result) {
         hookResult = result;
       }
@@ -250,6 +251,30 @@ describe("Router Enforcement Integration (Layer 4)", () => {
         }
       });
     }
+  });
+
+  describe("conversation history PII scanning (full chain)", () => {
+    it("PII in conversation history routes to local model", () => {
+      const pipeline = createPluginPipeline();
+      const { effectiveProvider } = pipeline.simulateAgentRun(
+        "summarize the conversation",
+        { agentId: "main" },
+        [{ content: "My SSN is 123-45-6789" }],
+      );
+
+      expect(effectiveProvider).not.toBe("anthropic");
+    });
+
+    it("clean history with clean prompt routes to cloud", () => {
+      const pipeline = createPluginPipeline();
+      const { effectiveProvider } = pipeline.simulateAgentRun(
+        "Analyze the architectural trade-offs between microservices and monoliths considering CAP theorem implications, event sourcing patterns, and CQRS for a distributed system handling 10M requests/second with strict consistency requirements.",
+        { agentId: "main" },
+        [{ content: "Let's discuss system architecture" }],
+      );
+
+      expect(effectiveProvider).toBe("anthropic");
+    });
   });
 
   describe("context injection consistency", () => {

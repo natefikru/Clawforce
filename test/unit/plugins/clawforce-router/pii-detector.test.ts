@@ -258,6 +258,14 @@ describe("passport detection", () => {
   it("should not match 9-digit numbers without passport keyword", () => {
     expect(detectPII("passport? no, just code ABCD12345")).toBe(false);
   });
+
+  it("should detect passport with hash separator", () => {
+    expect(detectPII("passport # 123456789")).toBe(true);
+  });
+
+  it("should not match 'passport' without a number", () => {
+    expect(detectPII("I need a passport photo")).toBe(false);
+  });
 });
 
 describe("driver's license detection", () => {
