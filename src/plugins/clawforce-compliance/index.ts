@@ -36,9 +36,9 @@ export interface CompliancePluginApi {
 }
 
 export function activate(api: CompliancePluginApi): void {
-  const logPath =
-    (api.pluginConfig?.logPath as string) ??
-    "/home/node/.openclaw/data/compliance.jsonl";
+  const logPath = typeof api.pluginConfig?.logPath === "string"
+    ? api.pluginConfig.logPath
+    : "/home/node/.openclaw/data/compliance.jsonl";
 
   api.logger.info(`Compliance logger activated (log: ${logPath})`);
 

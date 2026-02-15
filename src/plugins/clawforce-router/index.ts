@@ -349,6 +349,11 @@ function ensureRoutingLogDir(logPath: string): void {
   }
 }
 
+/** Reset the directory-ensured flag. Exported for testing only. */
+export function resetRoutingLogDirCache(): void {
+  routingLogDirEnsured = false;
+}
+
 function writeRoutingLog(
   logPath: string,
   entry: Record<string, unknown>,
