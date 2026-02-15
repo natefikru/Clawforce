@@ -1,1 +1,12 @@
 export { createProgram } from "./cli.js";
+export { parseConfig } from "./config/parse.js";
+export { generateOpenClawConfig } from "./config/generate-openclaw.js";
+export { generateCompose } from "./config/generate-compose.js";
+export { generateEnv } from "./config/generate-env.js";
+export { setupWorkspace } from "./workspace/setup.js";
+export { deployCommand } from "./commands/deploy.js";
+export { statusCommand } from "./commands/status.js";
+export { stopCommand } from "./commands/stop.js";
+export { auditCommand } from "./commands/audit.js";
+export type { ClawforceConfig } from "./config/types.js";
+export type { OpenClawConfig } from "./config/generate-openclaw.js";

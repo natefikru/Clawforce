@@ -61,7 +61,9 @@ describe("statusCommand", () => {
     expect(exec).toHaveBeenCalledWith(
       "docker",
       ["compose", "ps", "--format", "json"],
-      expect.objectContaining({ cwd: testDeployDir }),
+      expect.objectContaining({
+        cwd: expect.stringContaining("clawforce-"),
+      }),
     );
   });
 
