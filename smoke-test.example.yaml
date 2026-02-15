@@ -20,3 +20,32 @@ models:
 
 approval:
   mode: "autonomous"
+
+# --- Phase 1: Model Router ---
+# Routes prompts to the right model based on PII detection + complexity.
+# PII-containing prompts always go to the local model for data safety.
+router:
+  enabled: true
+  rules:
+    - condition: "pii_detected"
+      model: "ollama/llama3.3:8b"
+    - condition: "low_complexity"
+      model: "ollama/llama3.3:8b"
+    - condition: "high_complexity"
+      model: "anthropic/claude-sonnet-4-5"
+  sensitivity_keywords:
+    - "password"
+    - "secret"
+    - "confidential"
+
+# --- Phase 1: Compliance Logger ---
+# Structured JSONL logging of all tool calls, messages, and routing decisions.
+# View with: clawforce audit --source compliance
+compliance:
+  enabled: true
+
+# --- Phase 1: Activity Dashboard ---
+# Next.js dashboard showing agent status, activity feed, and cost tracking.
+# dashboard:
+#   enabled: true
+#   port: 3000
