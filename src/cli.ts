@@ -58,10 +58,22 @@ export function createProgram(): Command {
     .command("audit")
     .description("View audit log")
     .option("-n, --tail <lines>", "Number of lines to tail", "50")
-    .option("-s, --source <source>", "Log source: container or compliance", "container")
-    .action(async (options: { tail: string; source: string }) => {
-      const source = options.source === "compliance" ? "compliance" : "container";
-      await auditCommand(parseInt(options.tail, 10), source);
+    .option("-s, --source <source>", "Log source: container, compliance, or database", "container")
+    .option("--since <timestamp>", "Filter events since ISO timestamp (database source)")
+    .option("--event <type>", "Filter by event type (database source)")
+    .option("--agent <id>", "Filter by agent ID (database source)")
+    .option("--pii-only", "Show only PII-related routing decisions (database source)")
+    .action(async (options: { tail: string; source: string; since?: string; event?: string; agent?: string; piiOnly?: boolean }) => {
+      const validSources = ["container", "compliance", "database"] as const;
+      const source = validSources.includes(options.source as typeof validSources[number])
+        ? (options.source as typeof validSources[number])
+        : "container";
+      await auditCommand(parseInt(options.tail, 10), source, {
+        since: options.since,
+        event: options.event,
+        agent: options.agent,
+        piiOnly: options.piiOnly,
+      });
     });
 
   program
