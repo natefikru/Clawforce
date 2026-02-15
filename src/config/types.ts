@@ -50,6 +50,38 @@ export const ClawforceConfigSchema = z.object({
       model: z.string().optional(),
     })
     .optional(),
+
+  router: z
+    .object({
+      enabled: z.boolean().default(true),
+      rules: z
+        .array(
+          z.object({
+            condition: z.enum([
+              "pii_detected",
+              "low_complexity",
+              "high_complexity",
+            ]),
+            model: z.string(),
+          }),
+        )
+        .optional(),
+      sensitivity_keywords: z.array(z.string()).optional(),
+    })
+    .optional(),
+
+  compliance: z
+    .object({
+      enabled: z.boolean().default(true),
+    })
+    .optional(),
+
+  dashboard: z
+    .object({
+      enabled: z.boolean().default(true),
+      port: z.number().default(3000),
+    })
+    .optional(),
 }).refine(
   (data) => data.slack || data.telegram,
   { message: "At least one channel (slack or telegram) must be configured" },
