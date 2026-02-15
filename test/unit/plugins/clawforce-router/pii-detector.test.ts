@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   detectPII,
   detectPIITypes,
+  normalizeText,
 } from "../../../../src/plugins/clawforce-router/pii-detector.js";
 
 describe("detectPII", () => {
@@ -172,5 +173,89 @@ describe("detectPIITypes", () => {
     });
     const blocklistCount = types.filter((t) => t === "blocklist").length;
     expect(blocklistCount).toBe(1);
+  });
+});
+
+describe("normalizeText", () => {
+  it("should strip zero-width characters", () => {
+    // Zero-width space between digits
+    const result = normalizeText("123\u200B-\u200B45\u200B-\u200B6789");
+    expect(result).toBe("123-45-6789");
+  });
+
+  it("should strip soft hyphens", () => {
+    const result = normalizeText("4111\u00AD1111\u00AD1111\u00AD1111");
+    expect(result).toBe("4111111111111111");
+  });
+
+  it("should strip zero-width joiners and non-joiners", () => {
+    const result = normalizeText("test\u200C\u200Dvalue");
+    expect(result).toBe("testvalue");
+  });
+
+  it("should fold Cyrillic homoglyphs to Latin", () => {
+    // Cyrillic а, е, о look identical to Latin a, e, o
+    const result = normalizeText("j\u043Ehn@\u0435x\u0430mple.com");
+    expect(result).toBe("john@example.com");
+  });
+
+  it("should normalize fullwidth digits via NFKD", () => {
+    // Fullwidth digits ０１２ → 012
+    const result = normalizeText("\uFF11\uFF12\uFF13-\uFF14\uFF15-\uFF16\uFF17\uFF18\uFF19");
+    expect(result).toBe("123-45-6789");
+  });
+
+  it("should strip combining marks after NFKD", () => {
+    // é (U+00E9) → e + combining acute (U+0301) via NFKD → e after strip
+    const result = normalizeText("caf\u00E9");
+    expect(result).toBe("cafe");
+  });
+
+  it("should leave normal ASCII text unchanged", () => {
+    const result = normalizeText("Hello World 123");
+    expect(result).toBe("Hello World 123");
+  });
+});
+
+describe("adversarial PII evasion", () => {
+  it("should detect SSN with zero-width characters between digits", () => {
+    expect(detectPII("my ssn is 123\u200B-\u200B45\u200B-\u200B6789")).toBe(true);
+  });
+
+  it("should detect email with Cyrillic homoglyphs", () => {
+    // Replace 'o' with Cyrillic 'о' and 'e' with Cyrillic 'е'
+    expect(detectPII("c\u043Entact j\u043Ehn@\u0435xample.c\u043Em")).toBe(true);
+  });
+
+  it("should detect credit card with soft hyphens", () => {
+    expect(detectPII("card: 4111\u00AD1111\u00AD1111\u00AD1111")).toBe(true);
+  });
+
+  it("should detect SSN with fullwidth digits", () => {
+    // Fullwidth: １２３-４５-６７８９
+    expect(detectPII("ssn \uFF11\uFF12\uFF13-\uFF14\uFF15-\uFF16\uFF17\uFF18\uFF19")).toBe(true);
+  });
+
+  it("should detect phone with zero-width spaces", () => {
+    expect(detectPII("call 555\u200B-\u200B123\u200B-\u200B4567")).toBe(true);
+  });
+
+  it("should detect blocklist keywords with homoglyphs", () => {
+    // "password" with Cyrillic а and о
+    expect(
+      detectPII("p\u0430ssw\u043Erd", { blocklist: ["password"] }),
+    ).toBe(true);
+  });
+
+  it("should still return correct PII types after normalization", () => {
+    const types = detectPIITypes("ssn: 123\u200B-\u200B45\u200B-\u200B6789 email: j\u043Ehn@example.com");
+    expect(types).toContain("ssn");
+    expect(types).toContain("email");
+  });
+
+  it("should not false-positive on legitimate unicode text", () => {
+    expect(detectPII("こんにちは世界")).toBe(false);
+    expect(detectPII("Привет мир")).toBe(false);
+    expect(detectPII("café résumé naïve")).toBe(false);
   });
 });

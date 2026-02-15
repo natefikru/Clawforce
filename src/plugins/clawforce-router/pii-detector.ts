@@ -2,11 +2,73 @@
  * Regex-based PII detection for model routing decisions.
  * Scans text for SSN, credit card numbers, emails, phone numbers,
  * and configurable keyword blocklists.
+ *
+ * Includes adversarial defense: unicode normalization strips zero-width
+ * characters, decomposes ligatures, and folds common homoglyphs before
+ * pattern matching.
  */
 
 export interface PIIDetectorOptions {
   /** Additional keywords that indicate sensitive content */
   blocklist?: string[];
+}
+
+/**
+ * Common Cyrillic-to-Latin homoglyph mappings.
+ * Attackers use visually identical Cyrillic characters to bypass regex.
+ */
+const HOMOGLYPH_MAP: Record<string, string> = {
+  "\u0410": "A", "\u0430": "a", // А/а → A/a
+  "\u0412": "B", "\u0432": "v", // В/в (note: lowercase в maps to v in Cyrillic)
+  "\u0421": "C", "\u0441": "c", // С/с → C/c
+  "\u0415": "E", "\u0435": "e", // Е/е → E/e
+  "\u041D": "H", "\u043D": "h", // Н/н → H/h (visual match)
+  "\u041A": "K", "\u043A": "k", // К/к → K/k
+  "\u041C": "M", "\u043C": "m", // М/м → M/m
+  "\u041E": "O", "\u043E": "o", // О/о → O/o
+  "\u0420": "P", "\u0440": "p", // Р/р → P/p
+  "\u0422": "T", "\u0442": "t", // Т/т → T/t
+  "\u0425": "X", "\u0445": "x", // Х/х → X/x
+  "\u0423": "Y", "\u0443": "y", // У/у → Y/y (visual approximation)
+  // Greek homoglyphs
+  "\u0391": "A", "\u03B1": "a", // Α/α → A/a
+  "\u0392": "B", "\u03B2": "b", // Β/β → B/b
+  "\u0395": "E", "\u03B5": "e", // Ε/ε → E/e
+  "\u039F": "O", "\u03BF": "o", // Ο/ο → O/o
+  "\u03A1": "P", "\u03C1": "p", // Ρ/ρ → P/p
+  "\u03A4": "T", "\u03C4": "t", // Τ/τ → T/t
+};
+
+/**
+ * Normalize text to defeat adversarial evasion techniques:
+ * 1. Strip zero-width and invisible formatting characters
+ * 2. NFKD decomposition (expands fullwidth digits, ligatures)
+ * 3. Fold common homoglyphs (Cyrillic/Greek → Latin)
+ */
+export function normalizeText(text: string): string {
+  // 1. Strip zero-width and invisible characters
+  let normalized = text.replace(/[\u200B-\u200D\uFEFF\u00AD\u2060\u180E]/g, "");
+
+  // 2. NFKD normalization: decomposes fullwidth digits (０-９ → 0-9),
+  //    ligatures (ﬁ → fi), etc.
+  normalized = normalized.normalize("NFKD");
+
+  // 3. Strip combining marks left over from NFKD decomposition
+  //    (e.g., accents on characters), keeping digits and basic Latin
+  normalized = normalized.replace(/[\u0300-\u036F]/g, "");
+
+  // 4. Fold homoglyphs
+  normalized = foldHomoglyphs(normalized);
+
+  return normalized;
+}
+
+function foldHomoglyphs(text: string): string {
+  let result = "";
+  for (const char of text) {
+    result += HOMOGLYPH_MAP[char] ?? char;
+  }
+  return result;
 }
 
 const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
@@ -23,12 +85,14 @@ const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
 export function detectPII(text: string, options?: PIIDetectorOptions): boolean {
   if (!text) return false;
 
+  const normalized = normalizeText(text);
+
   for (const { pattern } of PII_PATTERNS) {
-    if (pattern.test(text)) return true;
+    if (pattern.test(normalized)) return true;
   }
 
   if (options?.blocklist) {
-    const lower = text.toLowerCase();
+    const lower = normalized.toLowerCase();
     for (const keyword of options.blocklist) {
       if (lower.includes(keyword.toLowerCase())) return true;
     }
@@ -43,14 +107,15 @@ export function detectPIITypes(
 ): string[] {
   if (!text) return [];
 
+  const normalized = normalizeText(text);
   const found: string[] = [];
 
   for (const { name, pattern } of PII_PATTERNS) {
-    if (pattern.test(text)) found.push(name);
+    if (pattern.test(normalized)) found.push(name);
   }
 
   if (options?.blocklist) {
-    const lower = text.toLowerCase();
+    const lower = normalized.toLowerCase();
     for (const keyword of options.blocklist) {
       if (lower.includes(keyword.toLowerCase())) {
         found.push("blocklist");
