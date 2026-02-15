@@ -6,6 +6,7 @@ import { deployCommand } from "./commands/deploy.js";
 import { statusCommand } from "./commands/status.js";
 import { stopCommand } from "./commands/stop.js";
 import { auditCommand } from "./commands/audit.js";
+import { routeTestCommand } from "./commands/route-test.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -61,6 +62,23 @@ export function createProgram(): Command {
     .action(async (options: { tail: string; source: string }) => {
       const source = options.source === "compliance" ? "compliance" : "container";
       await auditCommand(parseInt(options.tail, 10), source);
+    });
+
+  program
+    .command("route-test")
+    .description("Test routing decision for a prompt")
+    .argument("<prompt>", "The prompt to test routing for")
+    .option("-c, --config <path>", "Path to clawforce.yaml", "./clawforce.yaml")
+    .action(async (prompt: string, options: { config: string }) => {
+      try {
+        await routeTestCommand(options.config, prompt);
+      } catch (error) {
+        console.error(
+          "Route test failed:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
     });
 
   return program;

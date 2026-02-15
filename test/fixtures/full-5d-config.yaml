@@ -1,0 +1,42 @@
+name: "five-dim-test"
+role: "inbox-analyst"
+
+slack:
+  app_token: "xapp-1-ABC123DEF456"
+  bot_token: "xoxb-123456789-ABCDEFGHIJ"
+  approval_channel: "C0123456789"
+  allowed_channels:
+    - "C9876543210"
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
+  api_key: "${ANTHROPIC_API_KEY}"
+
+router:
+  enabled: true
+  rules:
+    - condition: "pii_detected"
+      model: "ollama/llama3.3:8b"
+    - condition: "low_complexity"
+      model: "ollama/llama3.3:8b"
+    - condition: "high_complexity"
+      model: "anthropic/claude-sonnet-4-5"
+    - condition: "domain_code"
+      model: "openai/gpt-4o"
+    - condition: "domain_writing"
+      model: "anthropic/claude-sonnet-4-5"
+    - condition: "over_budget"
+      model: "ollama/llama3.3:8b"
+  sensitivity_keywords:
+    - "password"
+    - "secret"
+  budget:
+    daily_limit: 10.00
+    fallback_model: "ollama/llama3.3:8b"
+
+compliance:
+  enabled: true
+
+dashboard:
+  enabled: true
