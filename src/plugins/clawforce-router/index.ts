@@ -2,14 +2,9 @@
  * Clawforce Model Router Plugin for OpenClaw.
  *
  * Analyzes incoming prompts across 5 dimensions (PII, complexity, domain,
- * budget, latency) and logs a routing decision. Uses `prependContext` to
- * inject routing metadata into the agent context and writes decisions to
- * the compliance log for dashboard consumption.
- *
- * Note: OpenClaw's plugin API does not currently expose a model override
- * mechanism. This plugin records what model *should* be used and prepends
- * routing context. Actual model enforcement requires OpenClaw-side changes
- * (tracked for Tier 2).
+ * budget, latency) and enforces routing decisions via modelOverride and
+ * providerOverride. Also injects routing metadata via `prependContext` and
+ * writes decisions to the compliance log for dashboard consumption.
  */
 
 import { appendFileSync, mkdirSync } from "node:fs";
@@ -52,7 +47,11 @@ export interface RouterPluginApi {
     handler: (
       event: { prompt: string; messages?: unknown[] },
       ctx: { agentId?: string; sessionKey?: string },
-    ) => { prependContext?: string } | void,
+    ) => {
+      prependContext?: string;
+      modelOverride?: string;
+      providerOverride?: string;
+    } | void,
     opts?: { priority?: number },
   ) => void;
 }
@@ -60,6 +59,25 @@ export interface RouterPluginApi {
 // Default token estimates for cost estimation before routing
 const ESTIMATED_INPUT_TOKENS = 500;
 const ESTIMATED_OUTPUT_TOKENS = 1000;
+
+/**
+ * Parse a "provider/model" string into separate override fields.
+ * E.g. "ollama/llama3.3:8b" → { providerOverride: "ollama", modelOverride: "llama3.3:8b" }
+ * If no slash, the entire string is treated as modelOverride with no provider.
+ */
+export function parseModelRef(ref: string): {
+  modelOverride: string;
+  providerOverride?: string;
+} {
+  const slashIdx = ref.indexOf("/");
+  if (slashIdx === -1) {
+    return { modelOverride: ref };
+  }
+  return {
+    providerOverride: ref.slice(0, slashIdx),
+    modelOverride: ref.slice(slashIdx + 1),
+  };
+}
 
 export function activate(api: RouterPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
@@ -161,7 +179,10 @@ export function activate(api: RouterPluginApi): void {
         );
       }
 
-      return { prependContext: contextLines.join("\n") };
+      return {
+        prependContext: contextLines.join("\n"),
+        ...parseModelRef(decision.model),
+      };
     },
     { priority: 10 },
   );
