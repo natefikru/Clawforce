@@ -127,7 +127,7 @@ describe("Router Plugin", () => {
   it("should use custom rules from pluginConfig", () => {
     const api = createMockApi({
       rules: [
-        { condition: "pii_detected", model: "custom/private-model" },
+        { condition: "pii_detected", model: "ollama/private-model" },
       ],
     });
     activate(api);
@@ -138,7 +138,7 @@ describe("Router Plugin", () => {
       { agentId: "main" },
     );
 
-    expect(result?.prependContext).toContain("custom/private-model");
+    expect(result?.prependContext).toContain("ollama/private-model");
   });
 
   it("should use custom sensitivity keywords", () => {
@@ -344,7 +344,7 @@ describe("Router Model Enforcement (Layer 3)", () => {
   it("custom rules with provider/model → correct override split", () => {
     const api = createMockApi({
       rules: [
-        { condition: "pii_detected", model: "custom/private-model" },
+        { condition: "pii_detected", model: "ollama/private-model" },
       ],
     });
     activate(api);
@@ -355,7 +355,7 @@ describe("Router Model Enforcement (Layer 3)", () => {
       { agentId: "main" },
     );
 
-    expect(result?.providerOverride).toBe("custom");
+    expect(result?.providerOverride).toBe("ollama");
     expect(result?.modelOverride).toBe("private-model");
   });
 

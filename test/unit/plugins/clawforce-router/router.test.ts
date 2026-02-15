@@ -37,7 +37,7 @@ describe("selectModel", () => {
 
     it("should use PII rule model even with custom rules", () => {
       const rules: RoutingRule[] = [
-        { condition: "pii_detected", model: "custom/local-model" },
+        { condition: "pii_detected", model: "ollama/custom-model" },
       ];
       const result = selectModel({
         hasPII: true,
@@ -45,7 +45,7 @@ describe("selectModel", () => {
         rules,
         defaultModel: DEFAULT_MODEL,
       });
-      expect(result.model).toBe("custom/local-model");
+      expect(result.model).toBe("ollama/custom-model");
     });
 
     it("should include matched rule in decision", () => {
@@ -135,15 +135,16 @@ describe("selectModel", () => {
       expect(result.model).toBe(DEFAULT_MODEL);
     });
 
-    it("should work with empty rules array", () => {
+    it("should route PII to local with empty rules array (hard invariant)", () => {
       const result = selectModel({
         hasPII: true,
         complexity: "high",
         rules: [],
         defaultModel: DEFAULT_MODEL,
       });
-      expect(result.model).toBe(DEFAULT_MODEL);
-      expect(result.reason).toContain("default");
+      // Hard invariant: PII always routes local, even with empty rules
+      expect(result.model.startsWith("ollama/") || result.model.startsWith("local/")).toBe(true);
+      expect(result.reason).toContain("enforcing local-only invariant");
     });
   });
 
@@ -160,8 +161,8 @@ describe("selectModel", () => {
 
     it("should use first matching PII rule if duplicates exist", () => {
       const rules: RoutingRule[] = [
-        { condition: "pii_detected", model: "first-model" },
-        { condition: "pii_detected", model: "second-model" },
+        { condition: "pii_detected", model: "local/first-model" },
+        { condition: "pii_detected", model: "local/second-model" },
       ];
       const result = selectModel({
         hasPII: true,
@@ -169,7 +170,7 @@ describe("selectModel", () => {
         rules,
         defaultModel: DEFAULT_MODEL,
       });
-      expect(result.model).toBe("first-model");
+      expect(result.model).toBe("local/first-model");
     });
 
     it("should not match PII rule when hasPII is false", () => {
@@ -478,6 +479,107 @@ describe("multi-dimensional routing", () => {
         defaultModel: DEFAULT_MODEL,
       });
       expect(result.dimension).toBeUndefined();
+    });
+  });
+
+  describe("hard PII invariant", () => {
+    const CLOUD_PROVIDERS = ["anthropic", "openai", "google", "azure"];
+
+    it("should route PII to local even with no pii_detected rule", () => {
+      const result = selectModel({
+        hasPII: true,
+        complexity: "high",
+        rules: [
+          { condition: "high_complexity", model: "anthropic/claude-sonnet-4-5" },
+        ],
+        defaultModel: DEFAULT_MODEL,
+      });
+      expect(result.dimension).toBe("sensitivity");
+      expect(result.reason).toContain("enforcing local-only invariant");
+      // Must be a local model
+      expect(
+        result.model.startsWith("ollama/") || result.model.startsWith("local/"),
+      ).toBe(true);
+    });
+
+    it("should override PII rule pointing to cloud model", () => {
+      const result = selectModel({
+        hasPII: true,
+        complexity: "low",
+        rules: [
+          { condition: "pii_detected", model: "anthropic/claude-sonnet-4-5" },
+        ],
+        defaultModel: DEFAULT_MODEL,
+      });
+      expect(result.dimension).toBe("sensitivity");
+      expect(result.reason).toContain("overriding to local");
+      for (const provider of CLOUD_PROVIDERS) {
+        expect(result.model).not.toContain(provider);
+      }
+    });
+
+    it("should use defaultLocalModel when overriding cloud PII rule", () => {
+      const result = selectModel({
+        hasPII: true,
+        complexity: "low",
+        rules: [
+          { condition: "pii_detected", model: "openai/gpt-4o" },
+        ],
+        defaultModel: DEFAULT_MODEL,
+        defaultLocalModel: "ollama/custom-local:7b",
+      });
+      expect(result.model).toBe("ollama/custom-local:7b");
+    });
+
+    it("should use defaultLocalModel as invariant fallback", () => {
+      const result = selectModel({
+        hasPII: true,
+        complexity: "low",
+        rules: [],
+        defaultModel: DEFAULT_MODEL,
+        defaultLocalModel: "ollama/qwen3-32b",
+      });
+      expect(result.model).toBe("ollama/qwen3-32b");
+    });
+
+    it("should keep valid local PII rule unchanged", () => {
+      const result = selectModel({
+        hasPII: true,
+        complexity: "low",
+        rules: [
+          { condition: "pii_detected", model: "ollama/llama3.3:8b" },
+        ],
+        defaultModel: DEFAULT_MODEL,
+      });
+      expect(result.model).toBe("ollama/llama3.3:8b");
+      expect(result.reason).toBe("PII detected — routing to local model");
+    });
+
+    it("SECURITY: PII with empty rules still routes local", () => {
+      const result = selectModel({
+        hasPII: true,
+        complexity: "high",
+        rules: [],
+        defaultModel: "anthropic/claude-sonnet-4-5",
+      });
+      for (const provider of CLOUD_PROVIDERS) {
+        expect(result.model).not.toContain(provider);
+      }
+    });
+
+    it("SECURITY: PII with all cloud rules still routes local", () => {
+      const result = selectModel({
+        hasPII: true,
+        complexity: "high",
+        rules: [
+          { condition: "pii_detected", model: "openai/gpt-4o" },
+          { condition: "high_complexity", model: "anthropic/claude-opus-4" },
+        ],
+        defaultModel: "anthropic/claude-sonnet-4-5",
+      });
+      for (const provider of CLOUD_PROVIDERS) {
+        expect(result.model).not.toContain(provider);
+      }
     });
   });
 });

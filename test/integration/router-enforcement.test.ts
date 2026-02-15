@@ -165,10 +165,10 @@ describe("Router Enforcement Integration (Layer 4)", () => {
   });
 
   describe("custom configuration routing (full chain)", () => {
-    it("custom rules route PII to custom provider", () => {
+    it("custom rules route PII to custom local provider", () => {
       const pipeline = createPluginPipeline({
         rules: [
-          { condition: "pii_detected", model: "private-cloud/secure-llm-v2" },
+          { condition: "pii_detected", model: "ollama/secure-llm-v2" },
         ],
       });
 
@@ -176,7 +176,8 @@ describe("Router Enforcement Integration (Layer 4)", () => {
         "My SSN is 123-45-6789",
       );
 
-      expect(effectiveProvider).toBe("private-cloud");
+      // PII must always route to local model (safety invariant)
+      expect(effectiveProvider).toBe("ollama");
       expect(effectiveModel).toBe("secure-llm-v2");
     });
 

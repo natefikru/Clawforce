@@ -8,6 +8,7 @@
 import type { ComplexityLevel } from "./complexity-analyzer.js";
 import type { TaskDomain } from "./domain-detector.js";
 import type { BudgetCheck } from "./budget-tracker.js";
+import { isLocalModel } from "../../shared/pricing.js";
 
 export type RoutingCondition =
   | "pii_detected"
@@ -33,6 +34,7 @@ export interface SelectModelInput {
   budgetCheck?: BudgetCheck;
   rules: RoutingRule[];
   defaultModel: string;
+  defaultLocalModel?: string;
   priority?: RoutingDimension[];
 }
 
@@ -71,6 +73,7 @@ export function selectModel(input: SelectModelInput): RoutingDecision {
     budgetCheck,
     rules,
     defaultModel,
+    defaultLocalModel,
     priority = DEFAULT_PRIORITY,
   } = input;
 
@@ -81,6 +84,7 @@ export function selectModel(input: SelectModelInput): RoutingDecision {
       domain,
       budgetCheck,
       rules,
+      defaultLocalModel,
     });
     if (result) {
       return { ...result, dimension };
@@ -99,6 +103,7 @@ interface DimensionContext {
   domain?: TaskDomain;
   budgetCheck?: BudgetCheck;
   rules: RoutingRule[];
+  defaultLocalModel?: string;
 }
 
 function evaluateDimension(
@@ -119,14 +124,36 @@ function evaluateDimension(
   }
 }
 
+const DEFAULT_LOCAL_MODEL = "ollama/llama3.3:8b";
+
 function evaluateSensitivity(ctx: DimensionContext) {
   if (!ctx.hasPII) return null;
+
+  const localFallback = ctx.defaultLocalModel ?? DEFAULT_LOCAL_MODEL;
   const rule = ctx.rules.find((r) => r.condition === "pii_detected");
-  if (!rule) return null;
+
+  if (rule) {
+    // SAFETY INVARIANT: PII rule MUST point to a local model.
+    // If misconfigured to point to a cloud model, override to local.
+    if (!isLocalModel(rule.model)) {
+      return {
+        model: localFallback,
+        reason: "PII detected — rule pointed to cloud model, overriding to local (safety invariant)",
+        matchedRule: rule,
+      };
+    }
+    return {
+      model: rule.model,
+      reason: "PII detected — routing to local model",
+      matchedRule: rule,
+    };
+  }
+
+  // HARD INVARIANT: no PII rule exists? Still route to local.
+  // PII NEVER goes to a cloud model under any configuration.
   return {
-    model: rule.model,
-    reason: "PII detected — routing to local model",
-    matchedRule: rule,
+    model: localFallback,
+    reason: "PII detected — no explicit rule, enforcing local-only invariant",
   };
 }
 
