@@ -60,6 +60,39 @@ export interface RouterPluginApi {
 const ESTIMATED_INPUT_TOKENS = 500;
 const ESTIMATED_OUTPUT_TOKENS = 1000;
 
+/** Max number of recent messages to scan for PII alongside the current prompt. */
+const DEFAULT_HISTORY_SCAN_DEPTH = 5;
+
+/**
+ * Build the text corpus to scan for PII.
+ * Combines the current prompt with the last N messages from conversation history
+ * to catch PII introduced in earlier turns.
+ */
+export function buildScanText(
+  prompt: string,
+  messages?: unknown[],
+  depth: number = DEFAULT_HISTORY_SCAN_DEPTH,
+): string {
+  if (!messages || messages.length === 0) return prompt;
+
+  const recentMessages = messages.slice(-depth);
+  const historyText = recentMessages
+    .map((msg) => {
+      if (typeof msg === "string") return msg;
+      if (msg && typeof msg === "object") {
+        const m = msg as Record<string, unknown>;
+        // Support common message shapes: { content: string } or { text: string }
+        if (typeof m.content === "string") return m.content;
+        if (typeof m.text === "string") return m.text;
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  return historyText ? `${historyText}\n${prompt}` : prompt;
+}
+
 /**
  * Parse a "provider/model" string into separate override fields.
  * E.g. "ollama/llama3.3:8b" → { providerOverride: "ollama", modelOverride: "llama3.3:8b" }
@@ -97,12 +130,13 @@ export function activate(api: RouterPluginApi): void {
       const prompt = event.prompt ?? "";
       if (!prompt.trim()) return;
 
-      // Dimension 1: PII detection
-      const hasPII = detectPII(prompt, {
+      // Dimension 1: PII detection (scan prompt + recent conversation history)
+      const textToScan = buildScanText(prompt, event.messages);
+      const hasPII = detectPII(textToScan, {
         blocklist: config.sensitivityKeywords,
       });
       const piiTypes = hasPII
-        ? detectPIITypes(prompt, { blocklist: config.sensitivityKeywords })
+        ? detectPIITypes(textToScan, { blocklist: config.sensitivityKeywords })
         : [];
 
       // Dimension 2: Complexity analysis

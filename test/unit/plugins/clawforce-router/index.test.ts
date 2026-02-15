@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { activate, parseModelRef, type RouterPluginApi } from "../../../../src/plugins/clawforce-router/index.js";
+import { activate, parseModelRef, buildScanText, type RouterPluginApi } from "../../../../src/plugins/clawforce-router/index.js";
 
 vi.mock("node:fs", () => ({
   appendFileSync: vi.fn(),
@@ -19,7 +19,7 @@ function createMockApi(
     string,
     {
       handler: (
-        event: { prompt: string },
+        event: { prompt: string; messages?: unknown[] },
         ctx: { agentId?: string; sessionKey?: string },
       ) => HookResult;
       opts?: { priority?: number };
@@ -30,7 +30,7 @@ function createMockApi(
     string,
     {
       handler: (
-        event: { prompt: string },
+        event: { prompt: string; messages?: unknown[] },
         ctx: { agentId?: string; sessionKey?: string },
       ) => HookResult;
       opts?: { priority?: number };
@@ -48,7 +48,7 @@ function createMockApi(
     on: vi.fn((hookName: string, handler: unknown, opts?: { priority?: number }) => {
       hooks.set(hookName, {
         handler: handler as (
-          event: { prompt: string },
+          event: { prompt: string; messages?: unknown[] },
           ctx: { agentId?: string; sessionKey?: string },
         ) => HookResult,
         opts,
@@ -475,5 +475,137 @@ describe("Router Model Enforcement (Layer 3)", () => {
 
     expect(result?.providerOverride).toBe("ollama");
     expect(result?.modelOverride).toBe("llama3.3:8b");
+  });
+});
+
+describe("buildScanText", () => {
+  it("should return prompt when no messages", () => {
+    expect(buildScanText("hello")).toBe("hello");
+  });
+
+  it("should return prompt when messages is undefined", () => {
+    expect(buildScanText("hello", undefined)).toBe("hello");
+  });
+
+  it("should return prompt when messages is empty", () => {
+    expect(buildScanText("hello", [])).toBe("hello");
+  });
+
+  it("should combine messages with prompt", () => {
+    const messages = [
+      { content: "prior message" },
+    ];
+    const result = buildScanText("current prompt", messages);
+    expect(result).toContain("prior message");
+    expect(result).toContain("current prompt");
+  });
+
+  it("should handle string messages", () => {
+    const result = buildScanText("current", ["older message"]);
+    expect(result).toContain("older message");
+    expect(result).toContain("current");
+  });
+
+  it("should handle text property on message objects", () => {
+    const messages = [{ text: "text-based message" }];
+    const result = buildScanText("current", messages);
+    expect(result).toContain("text-based message");
+  });
+
+  it("should limit to last N messages by depth", () => {
+    const messages = [
+      { content: "msg1" },
+      { content: "msg2" },
+      { content: "msg3" },
+      { content: "msg4" },
+    ];
+    const result = buildScanText("current", messages, 2);
+    expect(result).not.toContain("msg1");
+    expect(result).not.toContain("msg2");
+    expect(result).toContain("msg3");
+    expect(result).toContain("msg4");
+  });
+
+  it("should skip non-string message content", () => {
+    const messages = [
+      { content: 42 },
+      { content: "valid message" },
+      null,
+    ];
+    const result = buildScanText("current", messages);
+    expect(result).toContain("valid message");
+    expect(result).toContain("current");
+  });
+});
+
+describe("Conversation History PII Scanning", () => {
+  it("should detect PII in conversation history", () => {
+    const api = createMockApi();
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      {
+        prompt: "What was that number again?",
+        messages: [
+          { content: "My SSN is 123-45-6789" },
+          { content: "Thanks for providing that" },
+        ],
+      },
+      { agentId: "main" },
+    );
+
+    // Should route to local because PII is in history
+    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.modelOverride).toBe("llama3.3:8b");
+  });
+
+  it("should still detect PII in current prompt (regression)", () => {
+    const api = createMockApi();
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "My SSN is 123-45-6789" },
+      { agentId: "main" },
+    );
+
+    expect(result?.providerOverride).toBe("ollama");
+  });
+
+  it("should route normally when no PII in prompt or history", () => {
+    const api = createMockApi();
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      {
+        prompt: "Hello there",
+        messages: [
+          { content: "How are you?" },
+          { content: "Fine thanks" },
+        ],
+      },
+      { agentId: "main" },
+    );
+
+    // Low complexity → routes to local (ollama) by default rules
+    expect(result?.providerOverride).toBe("ollama");
+    // But via complexity, not PII
+    expect(result?.prependContext).not.toContain("PII detected");
+  });
+
+  it("should handle missing messages array gracefully", () => {
+    const api = createMockApi();
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    // No messages property at all
+    const result = hook.handler(
+      { prompt: "Hello there" },
+      { agentId: "main" },
+    );
+
+    expect(result).toBeDefined();
   });
 });
