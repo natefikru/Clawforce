@@ -233,4 +233,93 @@ describe("generateCompose", () => {
       expect(parsed.services.ollama.healthcheck).toBeDefined();
     });
   });
+
+  describe("runtime: SGLang", () => {
+    it("should generate sglang service with correct image", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "sglang", model: "qwen3-32b", port: 30000 } })),
+      );
+      expect(parsed.services.sglang).toBeDefined();
+      expect(parsed.services.sglang.image).toBe("lmsysorg/sglang:latest");
+    });
+
+    it("should set correct sglang command", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "sglang", model: "qwen3-32b", port: 30000 } })),
+      );
+      const cmd = parsed.services.sglang.command;
+      expect(cmd).toContain("--model-path");
+      expect(cmd).toContain("qwen3-32b");
+      expect(cmd).toContain("--port");
+      expect(cmd).toContain("30000");
+    });
+
+    it("should include quantization flag when specified", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "sglang", model: "qwen3-32b", quantization: "fp16", port: 30000 } })),
+      );
+      const cmd = parsed.services.sglang.command;
+      expect(cmd).toContain("--quantization");
+      expect(cmd).toContain("fp16");
+    });
+
+    it("should map port correctly", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "sglang", model: "qwen3-32b", port: 31000 } })),
+      );
+      expect(parsed.services.sglang.ports).toContain("31000:31000");
+    });
+
+    it("should add nvidia GPU config", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "sglang", model: "qwen3-32b", gpu: "nvidia", port: 30000 } })),
+      );
+      expect(parsed.services.sglang.deploy.resources.reservations.devices[0].driver).toBe("nvidia");
+    });
+
+    it("should set SGLANG_HOST env var on gateway", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "sglang", model: "qwen3-32b", port: 30000 } })),
+      );
+      expect(parsed.services["openclaw-gateway"].environment).toContain("SGLANG_HOST=http://sglang:30000");
+    });
+  });
+
+  describe("runtime: vLLM", () => {
+    it("should generate vllm service with correct image", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "vllm", model: "qwen3-32b", port: 8000 } })),
+      );
+      expect(parsed.services.vllm).toBeDefined();
+      expect(parsed.services.vllm.image).toBe("vllm/vllm-openai:latest");
+    });
+
+    it("should set correct vllm command", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "vllm", model: "qwen3-32b", port: 8000 } })),
+      );
+      const cmd = parsed.services.vllm.command;
+      expect(cmd).toContain("--model");
+      expect(cmd).toContain("qwen3-32b");
+      expect(cmd).toContain("--port");
+      expect(cmd).toContain("8000");
+    });
+
+    it("should set VLLM_HOST env var on gateway", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "vllm", model: "qwen3-32b", port: 8000 } })),
+      );
+      expect(parsed.services["openclaw-gateway"].environment).toContain("VLLM_HOST=http://vllm:8000");
+    });
+  });
+
+  describe("runtime: ollama (via runtime section)", () => {
+    it("should fall back to ollama service when engine is ollama", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ runtime: { engine: "ollama", model: "llama3.3:8b" } })),
+      );
+      expect(parsed.services.ollama).toBeDefined();
+      expect(parsed.services.ollama.image).toBe("ollama/ollama:latest");
+    });
+  });
 });

@@ -69,53 +69,60 @@ export function generateCompose(config: ClawforceConfig): string {
     },
   };
 
-  if (config.ollama?.enabled) {
-    const volumeName = `${config.name}-ollama-data`;
+  if (config.runtime) {
+    const rt = config.runtime;
+    const engine = rt.engine ?? "sglang";
+    const serviceName = engine === "ollama" ? "ollama" : engine;
 
-    compose.services["openclaw-gateway"].depends_on = {
-      ollama: { condition: "service_healthy" },
-    };
-
-    // Add Ollama URL so gateway can find it
-    compose.services["openclaw-gateway"].environment!.push(
-      "OLLAMA_HOST=http://ollama:11434",
-    );
-
-    compose.services.ollama = {
-      image: "ollama/ollama:latest",
-      container_name: `${containerPrefix}-ollama`,
-      restart: "unless-stopped",
-      ports: ["11434:11434"],
-      volumes: [`${volumeName}:/root/.ollama`],
-      healthcheck: {
-        test: [
-          "CMD",
-          "curl",
-          "-sf",
-          "http://127.0.0.1:11434/api/tags",
-        ],
-        interval: "10s",
-        timeout: "5s",
-        retries: 5,
-      },
-    };
-
-    // GPU passthrough for Ollama
-    if (config.ollama.gpu === "nvidia") {
-      compose.services.ollama.deploy = {
-        resources: {
-          reservations: {
-            devices: [
-              { driver: "nvidia", count: "all", capabilities: ["gpu"] },
-            ],
-          },
-        },
+    if (engine === "sglang") {
+      const port = rt.port ?? 30000;
+      compose.services["openclaw-gateway"].depends_on = {
+        [serviceName]: { condition: "service_started" },
       };
-    } else if (config.ollama.gpu === "amd") {
-      compose.services.ollama.devices = ["/dev/kfd", "/dev/dri"];
-    }
+      compose.services["openclaw-gateway"].environment!.push(
+        `SGLANG_HOST=http://${serviceName}:${port}`,
+      );
 
-    compose.volumes = { [volumeName]: {} };
+      const svc: ComposeService = {
+        image: "lmsysorg/sglang:latest",
+        container_name: `${containerPrefix}-sglang`,
+        restart: "unless-stopped",
+        ports: [`${port}:${port}`],
+        command: [
+          "python3", "-m", "sglang.launch_server",
+          "--model-path", rt.model ?? "qwen3-32b",
+          "--port", String(port),
+          ...(rt.quantization ? ["--quantization", rt.quantization] : []),
+        ],
+      };
+
+      applyGpuConfig(svc, rt.gpu);
+      compose.services[serviceName] = svc;
+    } else if (engine === "vllm") {
+      const port = rt.port ?? 8000;
+      compose.services["openclaw-gateway"].depends_on = {
+        [serviceName]: { condition: "service_started" },
+      };
+      compose.services["openclaw-gateway"].environment!.push(
+        `VLLM_HOST=http://${serviceName}:${port}`,
+      );
+
+      const svc: ComposeService = {
+        image: "vllm/vllm-openai:latest",
+        container_name: `${containerPrefix}-vllm`,
+        restart: "unless-stopped",
+        ports: [`${port}:${port}`],
+        command: ["--model", rt.model ?? "qwen3-32b", "--port", String(port)],
+      };
+
+      applyGpuConfig(svc, rt.gpu);
+      compose.services[serviceName] = svc;
+    } else {
+      // runtime.engine === "ollama" — use same logic as legacy ollama section
+      addOllamaService(compose, containerPrefix, config.name, rt.model ?? "llama3.3:8b", rt.gpu);
+    }
+  } else if (config.ollama?.enabled) {
+    addOllamaService(compose, containerPrefix, config.name, config.ollama.model, config.ollama.gpu);
   }
 
   if (config.dashboard && config.dashboard.enabled !== false) {
@@ -143,4 +150,54 @@ export function generateCompose(config: ClawforceConfig): string {
   }
 
   return stringifyYaml(compose, { lineWidth: 0 });
+}
+
+function applyGpuConfig(svc: ComposeService, gpu?: string): void {
+  if (gpu === "nvidia") {
+    svc.deploy = {
+      resources: {
+        reservations: {
+          devices: [{ driver: "nvidia", count: "all", capabilities: ["gpu"] }],
+        },
+      },
+    };
+  } else if (gpu === "amd") {
+    svc.devices = ["/dev/kfd", "/dev/dri"];
+  }
+}
+
+function addOllamaService(
+  compose: ComposeConfig,
+  containerPrefix: string,
+  configName: string,
+  _model?: string,
+  gpu?: string,
+): void {
+  const volumeName = `${configName}-ollama-data`;
+
+  compose.services["openclaw-gateway"].depends_on = {
+    ollama: { condition: "service_healthy" },
+  };
+
+  compose.services["openclaw-gateway"].environment!.push(
+    "OLLAMA_HOST=http://ollama:11434",
+  );
+
+  const svc: ComposeService = {
+    image: "ollama/ollama:latest",
+    container_name: `${containerPrefix}-ollama`,
+    restart: "unless-stopped",
+    ports: ["11434:11434"],
+    volumes: [`${volumeName}:/root/.ollama`],
+    healthcheck: {
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:11434/api/tags"],
+      interval: "10s",
+      timeout: "5s",
+      retries: 5,
+    },
+  };
+
+  applyGpuConfig(svc, gpu);
+  compose.services.ollama = svc;
+  compose.volumes = { ...compose.volumes, [volumeName]: {} };
 }
