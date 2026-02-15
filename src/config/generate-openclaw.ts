@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClawforceConfig } from "./types.js";
+import { resolveProfile } from "./capability-profiles.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatesDir = join(__dirname, "..", "..", "templates");
@@ -138,6 +139,15 @@ export function generateOpenClawConfig(
     mergeInto(
       result as unknown as Record<string, unknown>,
       roleConfig as unknown as Record<string, unknown>,
+    );
+  }
+
+  // Apply capability profile (after role partial, before passthrough)
+  if (config.capabilities) {
+    const profileConfig = resolveProfile(config.capabilities);
+    mergeInto(
+      result as unknown as Record<string, unknown>,
+      profileConfig as Record<string, unknown>,
     );
   }
 

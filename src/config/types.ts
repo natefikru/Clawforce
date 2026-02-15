@@ -99,6 +99,8 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
+  capabilities: z.enum(["minimal", "standard", "full"]).optional(),
+
   openclaw: z.record(z.unknown()).optional(),
 }).refine(
   (data) => data.slack || data.telegram,
