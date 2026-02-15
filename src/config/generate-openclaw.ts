@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClawforceConfig } from "./types.js";
@@ -22,8 +23,8 @@ export interface OpenClawConfig {
       mode: string;
       appToken: string;
       botToken: string;
-      dmPolicy: string;
       groupPolicy: string;
+      dm?: { policy: string };
       channels: Record<string, { requireMention: boolean }>;
     };
   };
@@ -33,6 +34,7 @@ export interface OpenClawConfig {
   };
   hooks?: {
     enabled: boolean;
+    token?: string;
     internal?: {
       enabled: boolean;
       entries?: Record<string, { enabled: boolean }>;
@@ -80,8 +82,10 @@ export function generateOpenClawConfig(
     mode: "socket",
     appToken: config.slack.app_token,
     botToken: config.slack.bot_token,
-    dmPolicy: "allowlist",
     groupPolicy: "allowlist",
+    dm: {
+      policy: "pairing",
+    },
     channels: slackChannels,
   };
 
@@ -103,8 +107,11 @@ export function generateOpenClawConfig(
   }
 
   // Enable command-logger hook for audit trail
+  const hooksToken = randomBytes(32).toString("hex");
   if (!result.hooks) {
-    result.hooks = { enabled: true };
+    result.hooks = { enabled: true, token: hooksToken };
+  } else {
+    result.hooks.token = hooksToken;
   }
   result.hooks.internal = {
     enabled: true,

@@ -75,19 +75,19 @@ export async function deployCommand(configPath: string): Promise<void> {
   logger.success("Containers started");
 
   // 9. Health check
-  logger.step("Waiting for health check...");
-  const healthy = await waitForHealthy("http://127.0.0.1:18789/health", 30000);
+  logger.step("Waiting for container to start...");
+  const containerName = `clawforce-${config.name}-gateway`;
+  const healthy = await waitForHealthy(containerName, deployDir, 30000);
 
   if (!healthy) {
     throw new Error(
-      "Health check failed after 30s. Check logs with: docker compose logs",
+      "Container failed to start after 30s. Check logs with: docker compose logs",
     );
   }
 
   logger.header("Deployment successful!");
-  logger.info(`Gateway:          http://127.0.0.1:18789`);
+  logger.info(`Gateway:          ws://127.0.0.1:18789`);
   logger.info(`Role:             ${config.role}`);
-  logger.info(`Approval channel: ${config.slack.approval_channel}`);
   logger.info(`Deploy dir:       ${deployDir}`);
   logger.info("");
   logger.info("Manage with:");

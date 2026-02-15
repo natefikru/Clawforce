@@ -5,11 +5,11 @@ interface ComposeService {
   image: string;
   container_name: string;
   restart: string;
-  user?: string;
   init?: boolean;
   ports?: string[];
   environment?: string[];
   volumes?: string[];
+  command?: string[];
   depends_on?: Record<string, { condition: string }>;
   healthcheck?: {
     test: string[];
@@ -30,13 +30,14 @@ export function generateCompose(config: ClawforceConfig): string {
   const compose: ComposeConfig = {
     services: {
       "openclaw-gateway": {
-        image: "openclaw/openclaw:latest",
+        image: "openclaw:local",
         container_name: `${containerPrefix}-gateway`,
         restart: "unless-stopped",
-        user: "1000:1000",
         init: true,
         ports: ["18789:18789"],
         environment: [
+          "HOME=/home/node",
+          "TERM=xterm-256color",
           "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
           "OPENCLAW_GATEWAY_BIND=lan",
           "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}",
@@ -47,17 +48,15 @@ export function generateCompose(config: ClawforceConfig): string {
           "./workspace:/home/node/.openclaw/workspace",
           "./data:/home/node/.openclaw/data",
         ],
-        healthcheck: {
-          test: [
-            "CMD",
-            "curl",
-            "-sf",
-            "http://127.0.0.1:18789/health",
-          ],
-          interval: "30s",
-          timeout: "5s",
-          retries: 3,
-        },
+        command: [
+          "node",
+          "dist/index.js",
+          "gateway",
+          "--bind",
+          "lan",
+          "--port",
+          "18789",
+        ],
       },
     },
   };

@@ -92,19 +92,20 @@ describe("deployCommand", () => {
     );
   });
 
-  it("should check health", async () => {
+  it("should check container health", async () => {
     await deployCommand(join(fixturesDir, "valid-config.yaml"));
     expect(waitForHealthy).toHaveBeenCalledWith(
-      "http://127.0.0.1:18789/health",
+      "clawforce-test-corp-gateway",
+      expect.stringContaining("clawforce-test-corp"),
       30000,
     );
   });
 
-  it("should throw if health check fails", async () => {
+  it("should throw if container fails to start", async () => {
     vi.mocked(waitForHealthy).mockResolvedValueOnce(false);
     await expect(
       deployCommand(join(fixturesDir, "valid-config.yaml")),
-    ).rejects.toThrow("Health check failed");
+    ).rejects.toThrow("Container failed to start");
   });
 
   it("should pull ollama model when enabled", async () => {

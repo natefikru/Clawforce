@@ -30,11 +30,11 @@ describe("generateCompose", () => {
     const parsed = parseYaml(generateCompose(makeConfig()));
     const gw = parsed.services["openclaw-gateway"];
     expect(gw).toBeDefined();
-    expect(gw.image).toBe("openclaw/openclaw:latest");
+    expect(gw.image).toBe("openclaw:local");
     expect(gw.container_name).toBe("clawforce-test-corp-gateway");
-    expect(gw.user).toBe("1000:1000");
     expect(gw.restart).toBe("unless-stopped");
     expect(gw.init).toBe(true);
+    expect(gw.command).toContain("gateway");
   });
 
   it("should mount correct volumes", () => {
@@ -50,10 +50,12 @@ describe("generateCompose", () => {
     expect(parsed.services["openclaw-gateway"].ports).toContain("18789:18789");
   });
 
-  it("should have health check", () => {
+  it("should have correct environment variables", () => {
     const parsed = parseYaml(generateCompose(makeConfig()));
-    const hc = parsed.services["openclaw-gateway"].healthcheck;
-    expect(hc.test).toContain("http://127.0.0.1:18789/health");
+    const env = parsed.services["openclaw-gateway"].environment;
+    expect(env).toContain("HOME=/home/node");
+    expect(env).toContain("OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}");
+    expect(env).toContain("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
   });
 
   it("should not include ollama when disabled", () => {

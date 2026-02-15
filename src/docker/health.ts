@@ -1,5 +1,8 @@
+import { exec } from "./exec.js";
+
 export async function waitForHealthy(
-  url: string,
+  containerName: string,
+  cwd: string,
   timeoutMs: number,
   intervalMs = 2000,
 ): Promise<boolean> {
@@ -7,12 +10,16 @@ export async function waitForHealthy(
 
   while (Date.now() - start < timeoutMs) {
     try {
-      const response = await fetch(url);
-      if (response.ok) {
+      const output = await exec(
+        "docker",
+        ["inspect", "--format", "{{.State.Running}}", containerName],
+        { cwd },
+      );
+      if (output.trim() === "true") {
         return true;
       }
     } catch {
-      // Connection refused or other error — retry
+      // Container not ready yet
     }
 
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
