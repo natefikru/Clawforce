@@ -8,7 +8,7 @@ import {
 import type { BudgetCheck } from "../../../../src/plugins/clawforce-router/budget-tracker.js";
 
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4-5";
-const LOCAL_MODEL = "ollama/llama3.3:8b";
+const LOCAL_MODEL = "sglang/qwen3-32b";
 
 const defaultRules = getDefaultRules();
 
@@ -143,7 +143,9 @@ describe("selectModel", () => {
         defaultModel: DEFAULT_MODEL,
       });
       // Hard invariant: PII always routes local, even with empty rules
-      expect(result.model.startsWith("ollama/") || result.model.startsWith("local/")).toBe(true);
+      expect(
+        result.model.startsWith("ollama/") || result.model.startsWith("local/") || result.model.startsWith("sglang/") || result.model.startsWith("vllm/"),
+      ).toBe(true);
       expect(result.reason).toContain("enforcing local-only invariant");
     });
   });
@@ -229,7 +231,7 @@ describe("multi-dimensional routing", () => {
   const overBudget: BudgetCheck = {
     withinBudget: false,
     remainingBudget: 0,
-    suggestedModel: "ollama/llama3.3:8b",
+    suggestedModel: "sglang/qwen3-32b",
     dailySpent: 10,
   };
 
@@ -498,7 +500,7 @@ describe("multi-dimensional routing", () => {
       expect(result.reason).toContain("enforcing local-only invariant");
       // Must be a local model
       expect(
-        result.model.startsWith("ollama/") || result.model.startsWith("local/"),
+        result.model.startsWith("ollama/") || result.model.startsWith("local/") || result.model.startsWith("sglang/") || result.model.startsWith("vllm/"),
       ).toBe(true);
     });
 
@@ -547,11 +549,11 @@ describe("multi-dimensional routing", () => {
         hasPII: true,
         complexity: "low",
         rules: [
-          { condition: "pii_detected", model: "ollama/llama3.3:8b" },
+          { condition: "pii_detected", model: "sglang/qwen3-32b" },
         ],
         defaultModel: DEFAULT_MODEL,
       });
-      expect(result.model).toBe("ollama/llama3.3:8b");
+      expect(result.model).toBe("sglang/qwen3-32b");
       expect(result.reason).toBe("PII detected — routing to local model");
     });
 

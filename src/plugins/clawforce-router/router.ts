@@ -56,8 +56,8 @@ const DEFAULT_PRIORITY: RoutingDimension[] = [
 ];
 
 const DEFAULT_RULES: RoutingRule[] = [
-  { condition: "pii_detected", model: "ollama/llama3.3:8b" },
-  { condition: "low_complexity", model: "ollama/llama3.3:8b" },
+  { condition: "pii_detected", model: "sglang/qwen3-32b" },
+  { condition: "low_complexity", model: "sglang/qwen3-32b" },
   { condition: "high_complexity", model: "anthropic/claude-sonnet-4-5" },
 ];
 
@@ -147,7 +147,7 @@ function evaluatePolicy(ctx: DimensionContext) {
   return null;
 }
 
-const DEFAULT_LOCAL_MODEL = "ollama/llama3.3:8b";
+const DEFAULT_LOCAL_MODEL = "sglang/qwen3-32b";
 
 function evaluateSensitivity(ctx: DimensionContext) {
   if (!ctx.hasPII) return null;

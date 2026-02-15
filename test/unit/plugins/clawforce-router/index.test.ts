@@ -84,7 +84,7 @@ describe("Router Plugin", () => {
       { agentId: "main" },
     );
 
-    expect(result?.prependContext).toContain("ollama/llama3.3:8b");
+    expect(result?.prependContext).toContain("sglang/qwen3-32b");
     expect(result?.prependContext).toContain("PII detected");
   });
 
@@ -98,7 +98,7 @@ describe("Router Plugin", () => {
       { agentId: "main" },
     );
 
-    expect(result?.prependContext).toContain("ollama/llama3.3:8b");
+    expect(result?.prependContext).toContain("sglang/qwen3-32b");
     expect(result?.prependContext).toContain("cost-efficient");
   });
 
@@ -200,9 +200,9 @@ describe("Router Plugin", () => {
 
 describe("parseModelRef", () => {
   it("parses provider/model format", () => {
-    expect(parseModelRef("ollama/llama3.3:8b")).toEqual({
-      providerOverride: "ollama",
-      modelOverride: "llama3.3:8b",
+    expect(parseModelRef("sglang/qwen3-32b")).toEqual({
+      providerOverride: "sglang",
+      modelOverride: "qwen3-32b",
     });
   });
 
@@ -237,8 +237,8 @@ describe("Router Model Enforcement (Layer 3)", () => {
       { agentId: "main" },
     );
 
-    expect(result?.modelOverride).toBe("llama3.3:8b");
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.modelOverride).toBe("qwen3-32b");
+    expect(result?.providerOverride).toBe("sglang");
   });
 
   it("PII (credit card) → routes to local model", () => {
@@ -251,8 +251,8 @@ describe("Router Model Enforcement (Layer 3)", () => {
       { agentId: "main" },
     );
 
-    expect(result?.modelOverride).toBe("llama3.3:8b");
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.modelOverride).toBe("qwen3-32b");
+    expect(result?.providerOverride).toBe("sglang");
   });
 
   it("PII (email) → routes to local model", () => {
@@ -265,8 +265,8 @@ describe("Router Model Enforcement (Layer 3)", () => {
       { agentId: "main" },
     );
 
-    expect(result?.modelOverride).toBe("llama3.3:8b");
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.modelOverride).toBe("qwen3-32b");
+    expect(result?.providerOverride).toBe("sglang");
   });
 
   // === Complexity Enforcement Tests ===
@@ -281,8 +281,8 @@ describe("Router Model Enforcement (Layer 3)", () => {
       { agentId: "main" },
     );
 
-    expect(result?.modelOverride).toBe("llama3.3:8b");
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.modelOverride).toBe("qwen3-32b");
+    expect(result?.providerOverride).toBe("sglang");
   });
 
   it("high complexity → routes to powerful cloud model", () => {
@@ -378,8 +378,8 @@ describe("Router Model Enforcement (Layer 3)", () => {
       { agentId: "main" },
     );
 
-    // prependContext should mention "ollama/llama3.3:8b"
-    // modelOverride should be "llama3.3:8b" with providerOverride "ollama"
+    // prependContext should mention "sglang/qwen3-32b"
+    // modelOverride should be "qwen3-32b" with providerOverride "sglang"
     const fullModelRef = result?.providerOverride
       ? `${result.providerOverride}/${result.modelOverride}`
       : result?.modelOverride;
@@ -461,8 +461,8 @@ describe("Router Model Enforcement (Layer 3)", () => {
       { agentId: "main" },
     );
 
-    expect(result?.providerOverride).toBe("ollama");
-    expect(result?.modelOverride).toBe("llama3.3:8b");
+    expect(result?.providerOverride).toBe("sglang");
+    expect(result?.modelOverride).toBe("qwen3-32b");
   });
 });
 
@@ -544,8 +544,8 @@ describe("Conversation History PII Scanning", () => {
     );
 
     // Should route to local because PII is in history
-    expect(result?.providerOverride).toBe("ollama");
-    expect(result?.modelOverride).toBe("llama3.3:8b");
+    expect(result?.providerOverride).toBe("sglang");
+    expect(result?.modelOverride).toBe("qwen3-32b");
   });
 
   it("should still detect PII in current prompt (regression)", () => {
@@ -558,7 +558,7 @@ describe("Conversation History PII Scanning", () => {
       { agentId: "main" },
     );
 
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.providerOverride).toBe("sglang");
   });
 
   it("should route normally when no PII in prompt or history", () => {
@@ -578,7 +578,7 @@ describe("Conversation History PII Scanning", () => {
     );
 
     // Low complexity → routes to local (ollama) by default rules
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.providerOverride).toBe("sglang");
     // But via complexity, not PII
     expect(result?.prependContext).not.toContain("PII detected");
   });
@@ -614,7 +614,7 @@ describe("Policy-Based Routing", () => {
       { agentId: "main", channelId: "C_HR" },
     );
 
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.providerOverride).toBe("sglang");
     expect(result?.prependContext).toContain("policy");
   });
 
@@ -633,7 +633,7 @@ describe("Policy-Based Routing", () => {
       { agentId: "main", userId: "U_EXEC" },
     );
 
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.providerOverride).toBe("sglang");
   });
 
   it("public channel with no PII allows normal routing", () => {
@@ -666,7 +666,7 @@ describe("Policy-Based Routing", () => {
     );
 
     // Should still work — low complexity routes to ollama
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.providerOverride).toBe("sglang");
   });
 
   it("internal channel with PII routes local (policy + PII agree)", () => {
@@ -683,7 +683,7 @@ describe("Policy-Based Routing", () => {
       { agentId: "main" },
     );
 
-    expect(result?.providerOverride).toBe("ollama");
+    expect(result?.providerOverride).toBe("sglang");
   });
 });
 

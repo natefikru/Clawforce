@@ -111,34 +111,34 @@ describe("Router Enforcement Integration (Layer 4)", () => {
   });
 
   describe("PII → local model routing (full chain)", () => {
-    it("SSN in prompt → Ollama local model", () => {
+    it("SSN in prompt → SGLang local model", () => {
       const pipeline = createPluginPipeline();
       const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
         "Please help me with my tax return. My SSN is 123-45-6789.",
       );
 
-      expect(effectiveProvider).toBe("ollama");
-      expect(effectiveModel).toBe("llama3.3:8b");
+      expect(effectiveProvider).toBe("sglang");
+      expect(effectiveModel).toBe("qwen3-32b");
     });
 
-    it("credit card in prompt → Ollama local model", () => {
+    it("credit card in prompt → SGLang local model", () => {
       const pipeline = createPluginPipeline();
       const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
         "Charge the following card: 4111-1111-1111-1111",
       );
 
-      expect(effectiveProvider).toBe("ollama");
-      expect(effectiveModel).toBe("llama3.3:8b");
+      expect(effectiveProvider).toBe("sglang");
+      expect(effectiveModel).toBe("qwen3-32b");
     });
 
-    it("email address in prompt → Ollama local model", () => {
+    it("email address in prompt → SGLang local model", () => {
       const pipeline = createPluginPipeline();
       const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
         "Send the report to jane.doe@company.com",
       );
 
-      expect(effectiveProvider).toBe("ollama");
-      expect(effectiveModel).toBe("llama3.3:8b");
+      expect(effectiveProvider).toBe("sglang");
+      expect(effectiveModel).toBe("qwen3-32b");
     });
   });
 
@@ -149,8 +149,8 @@ describe("Router Enforcement Integration (Layer 4)", () => {
         "Hi there!",
       );
 
-      expect(effectiveProvider).toBe("ollama");
-      expect(effectiveModel).toBe("llama3.3:8b");
+      expect(effectiveProvider).toBe("sglang");
+      expect(effectiveModel).toBe("qwen3-32b");
     });
 
     it("complex analysis request → cloud model", () => {
@@ -204,8 +204,8 @@ describe("Router Enforcement Integration (Layer 4)", () => {
       );
 
       // PII should take priority over complexity, routing to local model
-      expect(effectiveProvider).toBe("ollama");
-      expect(effectiveModel).toBe("llama3.3:8b");
+      expect(effectiveProvider).toBe("sglang");
+      expect(effectiveModel).toBe("qwen3-32b");
     });
   });
 

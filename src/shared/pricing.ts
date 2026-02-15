@@ -32,7 +32,12 @@ export const DEFAULT_PRICING: Record<string, ModelPricing> = {
 };
 
 export function isLocalModel(model: string): boolean {
-  return model.startsWith("ollama/") || model.startsWith("local/");
+  return (
+    model.startsWith("ollama/") ||
+    model.startsWith("local/") ||
+    model.startsWith("sglang/") ||
+    model.startsWith("vllm/")
+  );
 }
 
 const warnedModels = new Set<string>();
