@@ -82,12 +82,12 @@ export async function deployCommand(configPath: string): Promise<void> {
     logger.success("Ollama model ready");
   }
 
-  // 8. Start gateway
+  // 9. Start gateway
   logger.step("Starting OpenClaw gateway...");
   await exec("docker", ["compose", "up", "-d"], { cwd: deployDir });
   logger.success("Containers started");
 
-  // 9. Health check
+  // 10. Health check
   logger.step("Waiting for container to start...");
   const containerName = `clawforce-${config.name}-gateway`;
   const healthy = await waitForHealthy(containerName, deployDir, 30000);

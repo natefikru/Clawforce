@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { execSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 export interface AgentStatus {
   containerName: string;
@@ -11,23 +14,24 @@ export interface AgentStatus {
 
 export async function GET() {
   try {
-    const containers = getContainerStatus();
+    const containers = await getContainerStatus();
     return NextResponse.json({ agents: containers });
   } catch {
     return NextResponse.json({ agents: [], error: "Failed to get status" }, { status: 500 });
   }
 }
 
-function getContainerStatus(): AgentStatus[] {
+async function getContainerStatus(): Promise<AgentStatus[]> {
   try {
-    const output = execSync(
-      'docker ps --filter "name=clawforce" --format "{{.Names}}|{{.Status}}"',
-      { encoding: "utf8", timeout: 5000 },
-    );
+    const { stdout } = await execFileAsync("docker", [
+      "ps",
+      "--filter", "name=clawforce",
+      "--format", "{{.Names}}|{{.Status}}",
+    ], { encoding: "utf8", timeout: 5000 });
 
-    if (!output.trim()) return [];
+    if (!stdout.trim()) return [];
 
-    return output
+    return stdout
       .trim()
       .split("\n")
       .filter(Boolean)

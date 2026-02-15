@@ -15,8 +15,8 @@ const MULTI_STEP_MARKERS = [
   /\bnext\b.*\bthen\b/is,
 ];
 
-const CODE_BLOCK_PATTERN = /```[\s\S]*?```/g;
-const INLINE_CODE_PATTERN = /`[^`]+`/g;
+const CODE_BLOCK_PATTERN = /```[\s\S]*?```/;
+const INLINE_CODE_PATTERN = /`[^`]+`/;
 
 const HIGH_COMPLEXITY_KEYWORDS = [
   "refactor",

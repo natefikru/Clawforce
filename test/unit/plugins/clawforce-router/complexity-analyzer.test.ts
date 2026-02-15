@@ -151,4 +151,14 @@ describe("extractFactors", () => {
     expect(factors.highComplexityKeywordCount).toBe(0);
     expect(factors.questionCount).toBe(0);
   });
+
+  it("should produce consistent results on repeated calls (no regex statefulness)", () => {
+    const input = "Please refactor this code:\n```js\nconst x = 1;\n```";
+    const result1 = extractFactors(input);
+    const result2 = extractFactors(input);
+    const result3 = extractFactors(input);
+    expect(result1.hasCodeBlocks).toBe(true);
+    expect(result2.hasCodeBlocks).toBe(true);
+    expect(result3.hasCodeBlocks).toBe(true);
+  });
 });

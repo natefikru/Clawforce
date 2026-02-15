@@ -131,6 +131,16 @@ describe("detectPII", () => {
     it("should work with empty blocklist", () => {
       expect(detectPII("just text", { blocklist: [] })).toBe(false);
     });
+
+    it("should not flag 10 consecutive digits as phone number", () => {
+      expect(detectPII("there were 1234567890 items")).toBe(false);
+    });
+
+    it("should not flag credit card numbers as phone numbers", () => {
+      const types = detectPIITypes("card: 4111111111111111");
+      expect(types).toContain("credit_card");
+      expect(types).not.toContain("phone");
+    });
   });
 });
 

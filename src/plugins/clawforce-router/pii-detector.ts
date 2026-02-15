@@ -17,7 +17,7 @@ const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   // Email address
   { name: "email", pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/ },
   // US phone: (123) 456-7890, 123-456-7890, +1-123-456-7890
-  { name: "phone", pattern: /(?:\+?1[-\s]?)?\(?\d{3}\)?[-\s.]?\d{3}[-\s.]?\d{4}\b/ },
+  { name: "phone", pattern: /\b(?:\+?1[-\s]?)?\(?\d{3}\)?[-\s.]\d{3}[-\s.]\d{4}\b/ },
 ];
 
 export function detectPII(text: string, options?: PIIDetectorOptions): boolean {

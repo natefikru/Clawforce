@@ -7,7 +7,7 @@ const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get("limit") ?? "50", 10);
+  const limit = Math.min(Math.max(parseInt(searchParams.get("limit") ?? "50", 10) || 50, 1), 1000);
   const eventFilter = searchParams.get("event");
 
   try {
