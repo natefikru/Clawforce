@@ -321,19 +321,22 @@ function resolveConfig(
   pluginConfig?: Record<string, unknown>,
 ): ResolvedRouterConfig {
   return {
-    defaultModel:
-      (pluginConfig?.defaultModel as string) ?? "anthropic/claude-sonnet-4-5",
+    defaultModel: typeof pluginConfig?.defaultModel === "string"
+      ? pluginConfig.defaultModel : "anthropic/claude-sonnet-4-5",
     defaultLocalModel: typeof pluginConfig?.defaultLocalModel === "string"
       ? pluginConfig.defaultLocalModel : undefined,
-    rules: (pluginConfig?.rules as RoutingRule[]) ?? getDefaultRules(),
-    sensitivityKeywords:
-      (pluginConfig?.sensitivityKeywords as string[]) ?? [],
-    logPath:
-      (pluginConfig?.logPath as string) ??
-      "/home/node/.openclaw/data/routing.jsonl",
-    priority: pluginConfig?.priority as RoutingDimension[] | undefined,
-    budget: pluginConfig?.budget as BudgetConfig | undefined,
-    policy: pluginConfig?.policy as DataPolicy | undefined,
+    rules: Array.isArray(pluginConfig?.rules)
+      ? (pluginConfig.rules as RoutingRule[]) : getDefaultRules(),
+    sensitivityKeywords: Array.isArray(pluginConfig?.sensitivityKeywords)
+      ? (pluginConfig.sensitivityKeywords as string[]) : [],
+    logPath: typeof pluginConfig?.logPath === "string"
+      ? pluginConfig.logPath : "/home/node/.openclaw/data/routing.jsonl",
+    priority: Array.isArray(pluginConfig?.priority)
+      ? (pluginConfig.priority as RoutingDimension[]) : undefined,
+    budget: pluginConfig?.budget && typeof pluginConfig.budget === "object"
+      ? (pluginConfig.budget as BudgetConfig) : undefined,
+    policy: pluginConfig?.policy && typeof pluginConfig.policy === "object"
+      ? (pluginConfig.policy as DataPolicy) : undefined,
   };
 }
 

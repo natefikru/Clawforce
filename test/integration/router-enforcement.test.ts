@@ -303,4 +303,26 @@ describe("Router Enforcement Integration (Layer 4)", () => {
       expect(hookResult?.prependContext).not.toContain("PII detected");
     });
   });
+
+  describe("resolveConfig type safety (full chain)", () => {
+    it("handles invalid config types gracefully using defaults", () => {
+      // Pass wrong types for all config fields
+      const pipeline = createPluginPipeline({
+        defaultModel: 42,
+        rules: "not-an-array",
+        sensitivityKeywords: true,
+        logPath: 123,
+        priority: "invalid",
+      });
+
+      // Should still work with defaults — no crash
+      const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
+        "My SSN is 123-45-6789",
+      );
+
+      // PII detected → local model (using default rules)
+      expect(effectiveProvider).not.toBe("anthropic");
+      expect(effectiveModel).toBeDefined();
+    });
+  });
 });

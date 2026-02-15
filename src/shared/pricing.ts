@@ -42,6 +42,11 @@ export function isLocalModel(model: string): boolean {
 
 const warnedModels = new Set<string>();
 
+/** Reset the warned-models cache. Exported for testing only. */
+export function clearWarningCache(): void {
+  warnedModels.clear();
+}
+
 export function estimateRequestCost(
   model: string,
   estimatedInputTokens: number,

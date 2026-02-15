@@ -12,6 +12,7 @@
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { parseJsonl } from "../../shared/jsonl.js";
 
 export interface ComplianceEntry {
   ts: string;
@@ -109,17 +110,5 @@ export function writeEntry(
 }
 
 export function parseComplianceLog(content: string): ComplianceEntry[] {
-  if (!content.trim()) return [];
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line) as ComplianceEntry;
-      } catch {
-        return null;
-      }
-    })
-    .filter((entry): entry is ComplianceEntry => entry !== null);
+  return parseJsonl<ComplianceEntry>(content);
 }
