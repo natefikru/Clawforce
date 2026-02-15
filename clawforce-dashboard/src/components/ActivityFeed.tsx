@@ -161,7 +161,7 @@ export function ActivityFeed() {
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {[...entries].reverse().map((entry, i) => (
-            <div key={i} className="text-sm border-b border-gray-700 pb-2">
+            <div key={`${entry.ts}-${entry.event}-${i}`} className="text-sm border-b border-gray-700 pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-gray-500 font-mono text-xs">
                   {formatTime(entry.ts)}

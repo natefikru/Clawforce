@@ -69,15 +69,21 @@ export function AgentStatusCard() {
                   className={`inline-block h-3 w-3 shrink-0 rounded-full ${
                     agent.status === "running"
                       ? "bg-green-500"
-                      : "bg-red-500"
+                      : agent.status === "unknown"
+                        ? "bg-yellow-500"
+                        : "bg-red-500"
                   }`}
-                  title={agent.status === "running" ? "Running" : "Stopped"}
+                  title={agent.status.charAt(0).toUpperCase() + agent.status.slice(1)}
                 />
                 <span className="text-white font-mono text-sm truncate">
                   {parseFriendlyName(agent.containerName)}
                 </span>
                 <span className={`text-xs ${
-                  agent.status === "running" ? "text-green-400" : "text-red-400"
+                  agent.status === "running"
+                    ? "text-green-400"
+                    : agent.status === "unknown"
+                      ? "text-yellow-400"
+                      : "text-red-400"
                 }`}>
                   {agent.status}
                 </span>

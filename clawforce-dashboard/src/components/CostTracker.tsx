@@ -97,9 +97,7 @@ export function CostTracker() {
           loading: false,
         }));
       } catch {
-        if (!controller.signal.aborted) {
-          setWhatIf((prev) => ({ ...prev, loading: false }));
-        }
+        setWhatIf((prev) => ({ ...prev, loading: false }));
       }
     }
 

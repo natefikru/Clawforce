@@ -50,7 +50,7 @@ export function TaskLog() {
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {[...tasks].reverse().map((task, i) => (
             <div
-              key={i}
+              key={`${task.ts}-${task.tool}-${i}`}
               className="flex items-center justify-between text-sm border-b border-gray-700 pb-2"
             >
               <div className="flex items-center gap-2">
