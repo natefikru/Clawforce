@@ -22,9 +22,16 @@ interface TimeSeriesPoint {
   totalRequests: number;
 }
 
+interface WhatIfData {
+  projectedCost: string;
+  projectedSavings: number;
+  currentCost: string;
+}
+
 interface WhatIfState {
   localPercent: number;
-  projectedSavings: number | null;
+  data: WhatIfData | null;
+  loading: boolean;
 }
 
 type Tab = "summary" | "timeline" | "whatif";
@@ -36,7 +43,8 @@ export function CostTracker() {
   const [activeTab, setActiveTab] = useState<Tab>("summary");
   const [whatIf, setWhatIf] = useState<WhatIfState>({
     localPercent: 50,
-    projectedSavings: null,
+    data: null,
+    loading: false,
   });
 
   useEffect(() => {
@@ -70,6 +78,37 @@ export function CostTracker() {
     }
     fetchTimeSeries();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "whatif") return;
+    const controller = new AbortController();
+    setWhatIf((prev) => ({ ...prev, loading: true }));
+
+    async function fetchWhatIf() {
+      try {
+        const res = await fetch(
+          `/api/cost?localPercent=${whatIf.localPercent}`,
+          { signal: controller.signal },
+        );
+        const json = await res.json();
+        setWhatIf((prev) => ({
+          ...prev,
+          data: json.whatIf ?? null,
+          loading: false,
+        }));
+      } catch {
+        if (!controller.signal.aborted) {
+          setWhatIf((prev) => ({ ...prev, loading: false }));
+        }
+      }
+    }
+
+    const debounce = setTimeout(fetchWhatIf, 300);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
+  }, [activeTab, whatIf.localPercent]);
 
   if (loading) {
     return (
@@ -124,7 +163,7 @@ export function CostTracker() {
         <WhatIfView
           whatIf={whatIf}
           onPercentChange={(percent) =>
-            setWhatIf({ ...whatIf, localPercent: percent })
+            setWhatIf({ ...whatIf, localPercent: percent, data: null })
           }
           currentSavings={data.savingsPercent}
         />
@@ -273,8 +312,6 @@ function WhatIfView({
   onPercentChange: (percent: number) => void;
   currentSavings: number;
 }) {
-  const projectedSavings = whatIf.localPercent;
-
   return (
     <div className="space-y-4">
       <div className="text-sm text-gray-400">
@@ -308,14 +345,37 @@ function WhatIfView({
         <div className="bg-gray-700/50 rounded p-3">
           <div className="text-xs text-gray-400">Projected savings</div>
           <div className="text-lg font-bold text-green-400">
-            {projectedSavings}%
+            {whatIf.loading ? (
+              <span className="inline-block w-10 h-5 bg-gray-700 rounded animate-pulse" />
+            ) : whatIf.data ? (
+              `${whatIf.data.projectedSavings}%`
+            ) : (
+              "—"
+            )}
           </div>
         </div>
       </div>
 
+      {whatIf.data && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-700/50 rounded p-3">
+            <div className="text-xs text-gray-400">Current cost</div>
+            <div className="text-sm font-medium text-white">
+              {whatIf.data.currentCost}
+            </div>
+          </div>
+          <div className="bg-gray-700/50 rounded p-3">
+            <div className="text-xs text-gray-400">Projected cost</div>
+            <div className="text-sm font-medium text-green-400">
+              {whatIf.data.projectedCost}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="text-xs text-gray-500">
-        Move the slider to see estimated savings if you route more traffic to
-        local models. Actual savings depend on which requests are routed locally.
+        Projections based on actual usage data. The most expensive cloud
+        requests are routed to local models first for maximum savings.
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -7,12 +7,16 @@ import {
   type TokenUsage,
 } from "@/lib/cost-calculator";
 import { parseJsonl, getModelUsage } from "@/lib/log-parser";
+import { calculateWhatIf } from "@/lib/cost-explorer";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const CONFIG_DIR = process.env.CONFIG_DIR ?? "/config";
 const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const localPercentParam = searchParams.get("localPercent");
+
   try {
     // Try to read token usage from session transcripts
     const usages = readSessionUsages();
@@ -32,7 +36,7 @@ export async function GET() {
 
     const breakdown = calculateCostBreakdown(usages);
 
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       totalCost: formatCost(breakdown.totalCost),
       cloudCost: formatCost(breakdown.cloudCost),
       localCost: formatCost(breakdown.localCost),
@@ -46,7 +50,20 @@ export async function GET() {
         ]),
       ),
       source: "sessions",
-    });
+    };
+
+    // Include what-if projection when localPercent is requested
+    if (localPercentParam !== null) {
+      const percent = Math.max(0, Math.min(100, parseInt(localPercentParam) || 0));
+      const whatIf = calculateWhatIf(usages, { type: "localPercent", percent });
+      response.whatIf = {
+        projectedCost: formatCost(whatIf.projectedCost),
+        projectedSavings: whatIf.savingsPercent,
+        currentCost: formatCost(whatIf.currentCost),
+      };
+    }
+
+    return NextResponse.json(response);
   } catch {
     return NextResponse.json(
       { error: "Failed to calculate costs" },
