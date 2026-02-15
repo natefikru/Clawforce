@@ -6,6 +6,7 @@ import {
   type RoutingDimension,
 } from "../../../../src/plugins/clawforce-router/router.js";
 import type { BudgetCheck } from "../../../../src/plugins/clawforce-router/budget-tracker.js";
+import { isLocalModel } from "../../../../src/shared/pricing.js";
 
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4-5";
 const LOCAL_MODEL = "sglang/qwen3-32b";
@@ -410,13 +411,33 @@ describe("multi-dimensional routing", () => {
       expect(result.dimension).toBe("domain");
     });
 
-    it("should allow custom priority ordering", () => {
+    it("should allow custom priority ordering for non-PII prompts", () => {
       const rules: RoutingRule[] = [
         { condition: "pii_detected", model: "local/pii" },
         { condition: "domain_code", model: "code/model" },
         { condition: "high_complexity", model: "high/model" },
       ];
       // Domain first, then sensitivity
+      const priority: RoutingDimension[] = ["domain", "sensitivity", "complexity"];
+      const result = selectModel({
+        hasPII: false,
+        complexity: "high",
+        domain: "code",
+        rules,
+        defaultModel: DEFAULT_MODEL,
+        priority,
+      });
+      // No PII — domain evaluated first, matches domain_code
+      expect(result.model).toBe("code/model");
+      expect(result.dimension).toBe("domain");
+    });
+
+    it("should enforce PII safety invariant regardless of priority ordering", () => {
+      const rules: RoutingRule[] = [
+        { condition: "pii_detected", model: "local/pii" },
+        { condition: "domain_code", model: "code/model" },
+      ];
+      // Domain first — would normally pick code/model before sensitivity
       const priority: RoutingDimension[] = ["domain", "sensitivity", "complexity"];
       const result = selectModel({
         hasPII: true,
@@ -426,9 +447,26 @@ describe("multi-dimensional routing", () => {
         defaultModel: DEFAULT_MODEL,
         priority,
       });
-      // Domain evaluated first, matches domain_code
-      expect(result.model).toBe("code/model");
-      expect(result.dimension).toBe("domain");
+      // Post-routing PII invariant overrides cloud domain model to local
+      expect(isLocalModel(result.model)).toBe(true);
+      expect(result.dimension).toBe("sensitivity");
+    });
+
+    it("should use defaultLocalModel in PII safety invariant when provided", () => {
+      const rules: RoutingRule[] = [
+        { condition: "domain_code", model: "anthropic/claude-sonnet-4-5" },
+      ];
+      const priority: RoutingDimension[] = ["domain", "sensitivity"];
+      const result = selectModel({
+        hasPII: true,
+        complexity: "low",
+        domain: "code",
+        rules,
+        defaultModel: DEFAULT_MODEL,
+        defaultLocalModel: "ollama/custom-local:7b",
+        priority,
+      });
+      expect(result.model).toBe("ollama/custom-local:7b");
     });
   });
 

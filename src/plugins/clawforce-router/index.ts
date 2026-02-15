@@ -177,6 +177,7 @@ export function activate(api: RouterPluginApi): void {
         dataTier,
         rules: config.rules,
         defaultModel: config.defaultModel,
+        defaultLocalModel: config.defaultLocalModel,
         priority: config.priority,
       });
 
@@ -307,6 +308,7 @@ export function activate(api: RouterPluginApi): void {
 
 interface ResolvedRouterConfig {
   defaultModel: string;
+  defaultLocalModel?: string;
   rules: RoutingRule[];
   sensitivityKeywords: string[];
   logPath: string;
@@ -321,6 +323,8 @@ function resolveConfig(
   return {
     defaultModel:
       (pluginConfig?.defaultModel as string) ?? "anthropic/claude-sonnet-4-5",
+    defaultLocalModel: typeof pluginConfig?.defaultLocalModel === "string"
+      ? pluginConfig.defaultLocalModel : undefined,
     rules: (pluginConfig?.rules as RoutingRule[]) ?? getDefaultRules(),
     sensitivityKeywords:
       (pluginConfig?.sensitivityKeywords as string[]) ?? [],

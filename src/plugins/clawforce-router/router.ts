@@ -81,6 +81,8 @@ export function selectModel(input: SelectModelInput): RoutingDecision {
     priority = DEFAULT_PRIORITY,
   } = input;
 
+  let decision: RoutingDecision | null = null;
+
   for (const dimension of priority) {
     const result = evaluateDimension(dimension, {
       hasPII,
@@ -92,14 +94,31 @@ export function selectModel(input: SelectModelInput): RoutingDecision {
       defaultLocalModel,
     });
     if (result) {
-      return { ...result, dimension };
+      decision = { ...result, dimension };
+      break;
     }
   }
 
-  return {
-    model: defaultModel,
-    reason: "No routing rule matched — using default model",
-  };
+  if (!decision) {
+    decision = {
+      model: defaultModel,
+      reason: "No routing rule matched — using default model",
+    };
+  }
+
+  // POST-ROUTING PII SAFETY INVARIANT:
+  // Regardless of dimension ordering, PII NEVER routes to a cloud model.
+  // This catches cases where custom priority puts domain/cost before sensitivity.
+  if (hasPII && !isLocalModel(decision.model)) {
+    const localFallback = defaultLocalModel ?? DEFAULT_LOCAL_MODEL;
+    return {
+      model: localFallback,
+      reason: "PII detected — post-routing safety invariant forced local model",
+      dimension: "sensitivity",
+    };
+  }
+
+  return decision;
 }
 
 interface DimensionContext {
