@@ -84,4 +84,26 @@ describe("filterOutput", () => {
     expect(result.redacted).toBe(true);
     expect(result.content).toContain("[PHONE_REDACTED]");
   });
+
+  it("should redact SSN with zero-width characters inserted", () => {
+    const result = filterOutput("SSN: 123\u200B-45\u200B-6789");
+    expect(result.redacted).toBe(true);
+    expect(result.content).toContain("[SSN_REDACTED]");
+    expect(result.content).not.toContain("6789");
+  });
+
+  it("should redact email with Cyrillic homoglyphs", () => {
+    // Cyrillic 'а' (U+0430) instead of Latin 'a'
+    const result = filterOutput("Contact: user@ex\u0430mple.com");
+    expect(result.redacted).toBe(true);
+    expect(result.content).toContain("[EMAIL_REDACTED]");
+  });
+
+  it("should normalize output even when no PII found", () => {
+    const result = filterOutput("Clean text\u200B with zero-width chars");
+    expect(result.redacted).toBe(false);
+    // Zero-width chars should be stripped in output
+    expect(result.content).not.toContain("\u200B");
+    expect(result.content).toBe("Clean text with zero-width chars");
+  });
 });
