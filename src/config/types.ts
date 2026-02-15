@@ -48,6 +48,7 @@ export const ClawforceConfigSchema = z.object({
     .object({
       enabled: z.boolean(),
       model: z.string().optional(),
+      gpu: z.enum(["nvidia", "amd", "none"]).optional(),
     })
     .optional(),
 

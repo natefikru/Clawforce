@@ -11,6 +11,14 @@ interface ComposeService {
   volumes?: string[];
   command?: string[];
   depends_on?: Record<string, { condition: string }>;
+  devices?: string[];
+  deploy?: {
+    resources: {
+      reservations: {
+        devices: Array<{ driver: string; count: string; capabilities: string[] }>;
+      };
+    };
+  };
   healthcheck?: {
     test: string[];
     interval: string;
@@ -91,6 +99,21 @@ export function generateCompose(config: ClawforceConfig): string {
         retries: 5,
       },
     };
+
+    // GPU passthrough for Ollama
+    if (config.ollama.gpu === "nvidia") {
+      compose.services.ollama.deploy = {
+        resources: {
+          reservations: {
+            devices: [
+              { driver: "nvidia", count: "all", capabilities: ["gpu"] },
+            ],
+          },
+        },
+      };
+    } else if (config.ollama.gpu === "amd") {
+      compose.services.ollama.devices = ["/dev/kfd", "/dev/dri"];
+    }
 
     compose.volumes = { [volumeName]: {} };
   }

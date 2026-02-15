@@ -146,4 +146,73 @@ describe("generateCompose", () => {
     );
     expect(parsed.services.dashboard).toBeUndefined();
   });
+
+  describe("GPU passthrough", () => {
+    it("should add nvidia GPU config to ollama service", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: true, gpu: "nvidia" } })),
+      );
+      const deploy = parsed.services.ollama.deploy;
+      expect(deploy).toBeDefined();
+      expect(deploy.resources.reservations.devices).toHaveLength(1);
+      expect(deploy.resources.reservations.devices[0].driver).toBe("nvidia");
+      expect(deploy.resources.reservations.devices[0].count).toBe("all");
+      expect(deploy.resources.reservations.devices[0].capabilities).toContain("gpu");
+    });
+
+    it("should add AMD device mappings to ollama service", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: true, gpu: "amd" } })),
+      );
+      expect(parsed.services.ollama.devices).toContain("/dev/kfd");
+      expect(parsed.services.ollama.devices).toContain("/dev/dri");
+    });
+
+    it("should not add GPU config when gpu is none", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: true, gpu: "none" } })),
+      );
+      expect(parsed.services.ollama.deploy).toBeUndefined();
+      expect(parsed.services.ollama.devices).toBeUndefined();
+    });
+
+    it("should not add GPU config when gpu is not specified", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: true } })),
+      );
+      expect(parsed.services.ollama.deploy).toBeUndefined();
+      expect(parsed.services.ollama.devices).toBeUndefined();
+    });
+
+    it("should not add nvidia deploy field to non-GPU ollama", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: true, model: "llama3.3:8b" } })),
+      );
+      expect(parsed.services.ollama.deploy).toBeUndefined();
+    });
+
+    it("should not have GPU config when ollama is disabled", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: false, gpu: "nvidia" } })),
+      );
+      expect(parsed.services.ollama).toBeUndefined();
+    });
+
+    it("should combine nvidia GPU with other ollama settings", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: true, model: "llama3.3:8b", gpu: "nvidia" } })),
+      );
+      expect(parsed.services.ollama.deploy).toBeDefined();
+      expect(parsed.services.ollama.healthcheck).toBeDefined();
+      expect(parsed.services.ollama.container_name).toBe("clawforce-test-corp-ollama");
+    });
+
+    it("should combine AMD GPU with other ollama settings", () => {
+      const parsed = parseYaml(
+        generateCompose(makeConfig({ ollama: { enabled: true, model: "llama3.3:8b", gpu: "amd" } })),
+      );
+      expect(parsed.services.ollama.devices).toContain("/dev/kfd");
+      expect(parsed.services.ollama.healthcheck).toBeDefined();
+    });
+  });
 });
