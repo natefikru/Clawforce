@@ -79,15 +79,32 @@ export function activate(api: CompliancePluginApi): void {
   });
 }
 
+let complianceLogDirEnsured = false;
+
+function ensureComplianceLogDir(logPath: string): void {
+  if (!complianceLogDirEnsured) {
+    mkdirSync(dirname(logPath), { recursive: true });
+    complianceLogDirEnsured = true;
+  }
+}
+
+/** Reset the directory-ensured flag. Exported for testing only. */
+export function resetLogDirCache(): void {
+  complianceLogDirEnsured = false;
+}
+
 export function writeEntry(
   logPath: string,
   entry: ComplianceEntry,
 ): void {
   try {
-    mkdirSync(dirname(logPath), { recursive: true });
+    ensureComplianceLogDir(logPath);
     appendFileSync(logPath, JSON.stringify(entry) + "\n", "utf8");
-  } catch {
+  } catch (err) {
     // Best-effort logging — don't crash the agent
+    process.stderr.write(
+      `[clawforce-compliance] Failed to write log to ${logPath}: ${String(err)}\n`,
+    );
   }
 }
 

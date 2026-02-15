@@ -337,12 +337,21 @@ function resolveConfig(
   };
 }
 
+let routingLogDirEnsured = false;
+
+function ensureRoutingLogDir(logPath: string): void {
+  if (!routingLogDirEnsured) {
+    mkdirSync(dirname(logPath), { recursive: true });
+    routingLogDirEnsured = true;
+  }
+}
+
 function writeRoutingLog(
   logPath: string,
   entry: Record<string, unknown>,
 ): void {
   try {
-    mkdirSync(dirname(logPath), { recursive: true });
+    ensureRoutingLogDir(logPath);
     appendFileSync(logPath, JSON.stringify(entry) + "\n", "utf8");
   } catch (err) {
     // Best-effort logging — don't crash the agent on write failure

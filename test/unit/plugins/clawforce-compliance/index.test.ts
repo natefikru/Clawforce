@@ -4,6 +4,7 @@ import {
   activate,
   writeEntry,
   parseComplianceLog,
+  resetLogDirCache,
   type CompliancePluginApi,
   type ComplianceEntry,
 } from "../../../../src/plugins/clawforce-compliance/index.js";
@@ -173,6 +174,7 @@ describe("Compliance Logger Plugin", () => {
 describe("writeEntry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetLogDirCache();
   });
 
   it("should write JSON entry with newline", () => {
@@ -196,6 +198,14 @@ describe("writeEntry", () => {
     });
   });
 
+  it("should only call mkdirSync once across multiple writes", () => {
+    writeEntry("/path/to/log.jsonl", { ts: "1", event: "first" });
+    writeEntry("/path/to/log.jsonl", { ts: "2", event: "second" });
+    writeEntry("/path/to/log.jsonl", { ts: "3", event: "third" });
+    expect(mockedMkdirSync).toHaveBeenCalledTimes(1);
+    expect(mockedAppendFileSync).toHaveBeenCalledTimes(3);
+  });
+
   it("should not throw on write failure", () => {
     mockedAppendFileSync.mockImplementation(() => {
       throw new Error("disk full");
@@ -204,6 +214,23 @@ describe("writeEntry", () => {
     expect(() =>
       writeEntry("/path/to/log.jsonl", { ts: "now", event: "test" }),
     ).not.toThrow();
+  });
+
+  it("should write error to stderr on write failure", () => {
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    mockedAppendFileSync.mockImplementation(() => {
+      throw new Error("disk full");
+    });
+
+    writeEntry("/path/to/log.jsonl", { ts: "now", event: "test" });
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[clawforce-compliance] Failed to write log"),
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("disk full"),
+    );
+    stderrSpy.mockRestore();
   });
 });
 
