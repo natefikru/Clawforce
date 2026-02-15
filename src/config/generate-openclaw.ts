@@ -8,6 +8,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatesDir = join(__dirname, "..", "..", "templates");
 
 export interface OpenClawConfig {
+  gateway?: {
+    mode: string;
+  };
   agents: {
     defaults: {
       workspace: string;
@@ -49,6 +52,9 @@ export function generateOpenClawConfig(
   config: ClawforceConfig,
 ): OpenClawConfig {
   const result: OpenClawConfig = {
+    gateway: {
+      mode: "local",
+    },
     agents: {
       defaults: {
         workspace: "/home/node/.openclaw/workspace",
