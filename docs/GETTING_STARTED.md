@@ -232,7 +232,8 @@ role: inbox-analyst
 models:
   primary: "anthropic/claude-sonnet-4-5"
   credential_mode: env
-  api_key: "${ANTHROPIC_API_KEY}"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
 
 gateway:
   bind: loopback
@@ -280,7 +281,8 @@ models:
   primary: "anthropic/claude-sonnet-4-5"  # Default cloud model
   local: "sglang/qwen3-32b"              # Default local model (for PII/budget fallback)
   credential_mode: env                    # env | auth_profile
-  api_key: "${ANTHROPIC_API_KEY}"         # Used when credential_mode=env (currently wired as ANTHROPIC_API_KEY)
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"     # Used when credential_mode=env
 
 gateway:
   bind: loopback                       # loopback (default, safe) | lan (exposes to network)
@@ -418,7 +420,9 @@ Models use `provider/model-name` format:
 | `sglang` | `sglang/qwen3-32b` | Local |
 | `vllm` | `vllm/mistral-7b` | Local |
 
-Any model with provider `ollama`, `sglang`, or `vllm` is treated as **local** for PII routing and health monitoring purposes.
+Any model whose provider matches a registered runtime engine id (for example `ollama`, `sglang`, `vllm`) is treated as **local** for PII routing and health monitoring purposes.
+
+NOTE: `local/*` aliases are treated as local for routing and cost, but they are not health-probed unless the provider is a registered runtime engine.
 
 ---
 

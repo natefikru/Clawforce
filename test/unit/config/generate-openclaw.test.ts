@@ -224,14 +224,42 @@ describe("generateOpenClawConfig", () => {
     expect(result.plugins?.entries?.["clawforce-compliance"]).toBeDefined();
   });
 
-  it("should still include router plugin when router toggle is disabled", () => {
+  it("should exclude router plugin when router toggle is disabled", () => {
     const result = generateOpenClawConfig(
       makeConfig({
         router: { enabled: false },
       }),
     );
-    expect(result.plugins?.entries?.["clawforce-router"]).toBeDefined();
-    expect(result.plugins?.entries?.["clawforce-router"].enabled).toBe(true);
+    expect(result.plugins?.entries?.["clawforce-router"]).toBeUndefined();
+  });
+
+  it("should honor plugins.enabled allow-list", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        plugins: {
+          enabled: ["clawforce-compliance"],
+        },
+      }),
+    );
+    expect(result.plugins?.entries?.["clawforce-router"]).toBeUndefined();
+    expect(result.plugins?.entries?.["clawforce-compliance"]).toBeDefined();
+  });
+
+  it("should merge plugins.config overrides into plugin entries", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        plugins: {
+          config: {
+            "clawforce-router": {
+              extraSetting: true,
+            },
+          },
+        },
+      }),
+    );
+    const routerConfig = result.plugins?.entries?.["clawforce-router"]
+      .config as Record<string, unknown>;
+    expect(routerConfig.extraSetting).toBe(true);
   });
 
   describe("OpenClaw passthrough", () => {
@@ -410,6 +438,34 @@ describe("generateOpenClawConfig", () => {
       expect(pluginConfig.piiPatternThresholds).toEqual({
         ip_address: 0.5,
       });
+    });
+
+    it("should pass policy config through to router plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          policy: {
+            default_tier: "internal",
+            channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+          },
+        }),
+      );
+      const pluginConfig = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+      expect(pluginConfig.policy).toEqual({
+        default_tier: "internal",
+        channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+      });
+    });
+
+    it("should pass compliance frameworks through to router plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          compliance_frameworks: ["hipaa", "pci-dss"],
+        }),
+      );
+      const pluginConfig = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+      expect(pluginConfig.complianceFrameworks).toEqual(["hipaa", "pci-dss"]);
     });
 
     it("should pass router health_check through to plugin config", () => {

@@ -13,7 +13,9 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
     },
     models: {
       primary: "anthropic/claude-sonnet-4-5",
-      api_key: "sk-ant-test123",
+      provider_keys: {
+        anthropic: "sk-ant-test123",
+      },
     },
     ...overrides,
   };

@@ -120,7 +120,7 @@ describe("plugin compiler", () => {
     });
   });
 
-  it("selects all discovered plugins regardless of plugin toggles", () => {
+  it("excludes core plugins when their toggles are disabled", () => {
     const pluginsRootDir = makeTempDir("clawforce-plugins-root-");
     const routerDir = join(pluginsRootDir, "router");
     const complianceDir = join(pluginsRootDir, "compliance");
@@ -160,7 +160,52 @@ describe("plugin compiler", () => {
       }),
       { pluginsRootDir },
     );
-    expect(selected).toEqual(["clawforce-compliance", "clawforce-router"]);
+    expect(selected).toEqual([]);
+  });
+
+  it("uses plugins.enabled allow-list when provided", () => {
+    const pluginsRootDir = makeTempDir("clawforce-plugins-root-");
+    const routerDir = join(pluginsRootDir, "router");
+    const complianceDir = join(pluginsRootDir, "compliance");
+    mkdirSync(routerDir, { recursive: true });
+    mkdirSync(complianceDir, { recursive: true });
+    writeFileSync(join(routerDir, "index.ts"), "export function activate() {}", "utf8");
+    writeFileSync(join(complianceDir, "index.ts"), "export function activate() {}", "utf8");
+    writeFileSync(
+      join(routerDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        id: "clawforce-router",
+        version: "1.0.0",
+        engines: { clawforce: ">=0.1.0", openclaw: ">=0.1.0" },
+        capabilities: ["routing"],
+        permissions: ["hooks:before_agent_start"],
+        configSchema: { type: "object" },
+      }),
+      "utf8",
+    );
+    writeFileSync(
+      join(complianceDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        id: "clawforce-compliance",
+        version: "1.0.0",
+        engines: { clawforce: ">=0.1.0", openclaw: ">=0.1.0" },
+        capabilities: ["compliance"],
+        permissions: ["hooks:message_sent"],
+        configSchema: { type: "object" },
+      }),
+      "utf8",
+    );
+
+    const selected = enabledPluginsForConfig(
+      makeConfig({
+        plugins: {
+          enabled: ["clawforce-compliance"],
+        },
+        router: { enabled: false },
+      }),
+      { pluginsRootDir },
+    );
+    expect(selected).toEqual(["clawforce-compliance"]);
   });
 
   it("includes discovered non-core plugins automatically", () => {

@@ -13,13 +13,30 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
     },
     models: {
       primary: "anthropic/claude-sonnet-4-5",
-      api_key: "sk-ant-test123",
+      provider_keys: {
+        anthropic: "sk-ant-test123",
+      },
     },
     ...overrides,
   };
 }
 
 describe("generateEnv", () => {
+  it("should reject unsupported host runtime engines", () => {
+    expect(() =>
+      generateEnv(
+        makeConfig({
+          runtime: {
+            engine: "custom-engine",
+            location: "host",
+            model: "custom/model",
+            port: 9999,
+          },
+        }),
+      ),
+    ).toThrow('Unsupported runtime engine "custom-engine"');
+  });
+
   it("should include gateway token", () => {
     const env = generateEnv(makeConfig());
     expect(env).toContain("GATEWAY_TOKEN=");
@@ -32,7 +49,7 @@ describe("generateEnv", () => {
     expect(match![1]).toHaveLength(64);
   });
 
-  it("should include API key", () => {
+  it("should include provider API keys", () => {
     const env = generateEnv(makeConfig());
     expect(env).toContain("ANTHROPIC_API_KEY=sk-ant-test123");
   });
@@ -44,7 +61,9 @@ describe("generateEnv", () => {
           primary: "anthropic/claude-sonnet-4-5",
           credential_mode: "auth_profile",
           auth_profile: "corp-prod",
-          api_key: "sk-ant-should-not-be-used",
+          provider_keys: {
+            anthropic: "sk-ant-should-not-be-used",
+          },
         },
       }),
     );
@@ -59,7 +78,9 @@ describe("generateEnv", () => {
           primary: "anthropic/claude-sonnet-4-5",
           credential_mode: "env",
           auth_profile: "corp-prod",
-          api_key: "sk-ant-test123",
+          provider_keys: {
+            anthropic: "sk-ant-test123",
+          },
         },
       }),
     );
@@ -67,11 +88,11 @@ describe("generateEnv", () => {
     expect(env).toContain("ANTHROPIC_API_KEY=sk-ant-test123");
   });
 
-  it("should handle missing API key", () => {
+  it("should handle missing provider keys", () => {
     const env = generateEnv(
       makeConfig({ models: { primary: "anthropic/claude-sonnet-4-5" } }),
     );
-    expect(env).toContain("ANTHROPIC_API_KEY=");
+    expect(env).not.toContain("ANTHROPIC_API_KEY=");
   });
 
   it("should include deployment name comment", () => {

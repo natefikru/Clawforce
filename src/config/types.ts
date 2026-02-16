@@ -2,7 +2,15 @@ import { z } from "zod";
 
 const localModelPrefixes = ["ollama/", "local/", "sglang/", "vllm/"] as const;
 
+function getModelProvider(model: string): string | undefined {
+  const slashIndex = model.indexOf("/");
+  if (slashIndex <= 0) return undefined;
+  return model.slice(0, slashIndex).toLowerCase();
+}
+
 function modelRequiresProviderApiKey(model: string): boolean {
+  const provider = getModelProvider(model);
+  if (!provider) return false;
   return !localModelPrefixes.some((prefix) => model.startsWith(prefix));
 }
 
@@ -103,7 +111,7 @@ export const ClawforceConfigSchema = z.object({
   models: z.object({
     primary: z.string().min(1),
     local: z.string().optional(),
-    api_key: z.string().optional(),
+    provider_keys: z.record(z.string(), z.string().min(1)).optional(),
     credential_mode: z.enum(["env", "auth_profile"]).optional(),
     auth_profile: z.string().min(1).optional(),
   }).superRefine((value, ctx) => {
@@ -117,17 +125,28 @@ export const ClawforceConfigSchema = z.object({
     }
     if (
       credentialMode === "env" &&
-      modelRequiresProviderApiKey(value.primary) &&
-      !value.api_key
+      modelRequiresProviderApiKey(value.primary)
     ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "models.api_key is required when models.credential_mode=env and models.primary is a cloud provider model",
-        path: ["api_key"],
-      });
+      const provider = getModelProvider(value.primary);
+      const providerKey = provider ? value.provider_keys?.[provider] : undefined;
+      if (!provider || !providerKey) {
+        const providerLabel = provider ?? "<provider>";
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            `models.provider_keys.${providerLabel} is required when models.credential_mode=env and models.primary is a cloud provider model`,
+          path: ["provider_keys", providerLabel],
+        });
+      }
     }
   }),
+
+  plugins: z
+    .object({
+      enabled: z.array(z.string().min(1)).optional(),
+      config: z.record(z.string(), z.record(z.unknown())).optional(),
+    })
+    .optional(),
 
   gateway: z
     .object({
@@ -153,7 +172,7 @@ export const ClawforceConfigSchema = z.object({
 
   runtime: z
     .object({
-      engine: z.enum(["ollama", "sglang", "vllm"]).default("sglang"),
+      engine: z.string().min(1).default("sglang"),
       location: z.enum(["container", "host"]).default("container"),
       host_url: z.string().url().optional(),
       model: z.string().default("qwen3-32b"),

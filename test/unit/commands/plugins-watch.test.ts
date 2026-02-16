@@ -46,7 +46,9 @@ describe("plugins commands", () => {
       },
       models: {
         primary: "anthropic/claude-sonnet-4-5",
-        api_key: "sk-ant-test",
+        provider_keys: {
+          anthropic: "sk-ant-test",
+        },
       },
     } as never);
   });

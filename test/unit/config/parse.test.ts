@@ -24,7 +24,7 @@ describe("parseConfig", () => {
     });
     expect(config.models.primary).toBe("anthropic/claude-sonnet-4-5");
     expect(config.models.local).toBe("ollama/llama3.3:8b");
-    expect(config.models.api_key).toBe("sk-ant-test123");
+    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-test123");
     expect(config.approval?.mode).toBe("hybrid");
     expect(config.approval?.require_approval_for).toEqual([
       "browser",
@@ -50,7 +50,7 @@ describe("parseConfig", () => {
   it("should expand environment variables", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-expanded";
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
-    expect(config.models.api_key).toBe("sk-ant-expanded");
+    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-expanded");
   });
 
   it("should throw on missing env var", () => {
@@ -198,16 +198,16 @@ describe("parseConfig", () => {
     ).toThrow("models.auth_profile is required when models.credential_mode=auth_profile");
   });
 
-  it("should reject env credential mode without api_key for cloud models", () => {
+  it("should reject env credential mode without provider key for cloud models", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-env-cloud-without-api-key.yaml")),
-    ).toThrow("models.api_key is required when models.credential_mode=env");
+    ).toThrow("models.provider_keys.anthropic is required when models.credential_mode=env");
   });
 
-  it("should allow env credential mode without api_key for local models", () => {
+  it("should allow env credential mode without provider key for local models", () => {
     const config = parseConfig(join(fixturesDir, "valid-env-local-without-api-key.yaml"));
     expect(config.models.credential_mode).toBe("env");
-    expect(config.models.api_key).toBeUndefined();
+    expect(config.models.provider_keys).toBeUndefined();
     expect(config.models.primary).toBe("ollama/llama3.3:8b");
   });
 });

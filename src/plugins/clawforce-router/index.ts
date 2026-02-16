@@ -23,10 +23,17 @@ import { detectDomain } from "./domain-detector.js";
 import {
   selectModel,
   getDefaultRules,
+  analyzeRoutingRules,
   type RoutingRule,
+  type RoutingRuleDiagnostics,
   type RoutingDimension,
 } from "./router.js";
-import { resolveDataTier, type DataPolicy } from "./data-policy.js";
+import { resolveDataTier, type DataPolicy, type DataTier } from "./data-policy.js";
+import {
+  getMinimumTier,
+  getRequiredPatterns,
+  type ComplianceFramework,
+} from "./compliance-profiles.js";
 import {
   BudgetTracker,
   type BudgetConfig,
@@ -37,6 +44,7 @@ import {
   ModelHealthMonitor,
   type HealthCheckConfig,
   type ProviderHealthState,
+  parseLocalProvider,
 } from "./health-monitor.js";
 import { IdleMonitor } from "./idle-monitor.js";
 import { dispatchAlertNotifications } from "../../alerts/dispatcher.js";
@@ -55,6 +63,8 @@ export interface RouterPluginConfig {
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
   healthCheck?: Partial<HealthCheckConfig>;
+  policy?: DataPolicy;
+  complianceFrameworks?: ComplianceFramework[];
   alerts?: RouterAlertConfig;
   piiThreshold?: number;
   piiPatternThresholds?: Record<string, number>;
@@ -344,8 +354,19 @@ export function activate(api: RouterPluginApi): void {
       });
     },
   });
-  for (const model of collectConfiguredLocalModels(config)) {
+  const configuredLocalModels = collectConfiguredLocalModels(config);
+  for (const model of configuredLocalModels) {
     healthMonitor.trackModel(model);
+  }
+  const localModelsWithoutHealthProbe = configuredLocalModels.filter((model) =>
+    parseLocalProvider(model) === null
+  );
+  if (localModelsWithoutHealthProbe.length > 0) {
+    api.logger.warn(
+      `Router config contains local model refs without health probes: ${
+        localModelsWithoutHealthProbe.join(", ")
+      }. Use a registered runtime provider prefix (e.g. sglang/, vllm/, ollama/) for health-gated failover.`,
+    );
   }
   healthMonitor.start();
   const instanceId = `router-${++instanceCounter}`;
@@ -385,6 +406,13 @@ export function activate(api: RouterPluginApi): void {
     `Router plugin activated (${config.rules.length} rules, default: ${config.defaultModel})` +
       (budgetTracker ? `, budget: $${config.budget!.dailyLimit}/day` : ""),
   );
+  if (config.ruleDiagnostics.unknownConditions.length > 0) {
+    api.logger.warn(
+      `Router config contains unsupported custom rule conditions: ${
+        config.ruleDiagnostics.unknownConditions.join(", ")
+      }. They are ignored unless handled by a custom router extension.`,
+    );
+  }
 
   assertHookPermission(api.id, permissions, "before_agent_start");
   api.on(
@@ -413,6 +441,10 @@ export function activate(api: RouterPluginApi): void {
       const dataTier = config.policy
         ? resolveDataTier(config.policy, connector)
         : undefined;
+      const effectiveDataTier = resolveEffectiveDataTier(
+        dataTier,
+        config.minimumComplianceTier,
+      );
 
       // Dimension 4: Budget check
       const estimatedCost = estimateRequestCost(
@@ -459,7 +491,7 @@ export function activate(api: RouterPluginApi): void {
         complexity,
         domain: domainSignals.domain,
         budgetCheck,
-        dataTier,
+        dataTier: effectiveDataTier,
         rules: config.rules,
         defaultModel: config.defaultModel,
         defaultLocalModel: config.defaultLocalModel,
@@ -544,7 +576,7 @@ export function activate(api: RouterPluginApi): void {
 
       api.logger.info(
         `Route: ${decision.model} (${decision.reason})` +
-          (dataTier ? ` [tier: ${dataTier}]` : "") +
+          (effectiveDataTier ? ` [tier: ${effectiveDataTier}]` : "") +
           (hasPII ? ` [PII: ${piiTypes.join(", ")}]` : "") +
           ` [complexity: ${complexity}]` +
           ` [domain: ${domainSignals.domain}]` +
@@ -569,7 +601,7 @@ export function activate(api: RouterPluginApi): void {
         domainConfidence: domainSignals.confidence,
         dimension: decision.dimension,
         matchedCondition: decision.matchedRule?.condition,
-        dataTier,
+        dataTier: effectiveDataTier,
         budgetSpent: budgetCheck.dailySpent,
         budgetRemaining: budgetCheck.remainingBudget,
         healthStatus: healthState?.status,
@@ -721,22 +753,27 @@ interface ResolvedRouterConfig {
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
   policy?: DataPolicy;
+  complianceFrameworks: ComplianceFramework[];
+  minimumComplianceTier?: ReturnType<typeof getMinimumTier>;
+  requiredCompliancePatterns: string[];
   healthCheck: HealthCheckConfig;
   alerts: ResolvedRouterAlertConfig;
   piiThreshold: number;
   piiPatternThresholds?: Record<string, number>;
+  ruleDiagnostics: RoutingRuleDiagnostics;
 }
 
 function resolveConfig(
   pluginConfig?: Record<string, unknown>,
 ): ResolvedRouterConfig {
+  const rules = Array.isArray(pluginConfig?.rules)
+    ? (pluginConfig.rules as RoutingRule[]) : getDefaultRules();
   return {
     defaultModel: typeof pluginConfig?.defaultModel === "string"
       ? pluginConfig.defaultModel : "anthropic/claude-sonnet-4-5",
     defaultLocalModel: typeof pluginConfig?.defaultLocalModel === "string"
       ? pluginConfig.defaultLocalModel : undefined,
-    rules: Array.isArray(pluginConfig?.rules)
-      ? (pluginConfig.rules as RoutingRule[]) : getDefaultRules(),
+    rules,
     sensitivityKeywords: Array.isArray(pluginConfig?.sensitivityKeywords)
       ? (pluginConfig.sensitivityKeywords as string[]) : [],
     logPath: typeof pluginConfig?.logPath === "string"
@@ -747,6 +784,17 @@ function resolveConfig(
       ? (pluginConfig.budget as BudgetConfig) : undefined,
     policy: pluginConfig?.policy && typeof pluginConfig.policy === "object"
       ? (pluginConfig.policy as DataPolicy) : undefined,
+    complianceFrameworks: Array.isArray(pluginConfig?.complianceFrameworks)
+      ? (pluginConfig.complianceFrameworks as ComplianceFramework[])
+      : [],
+    minimumComplianceTier: Array.isArray(pluginConfig?.complianceFrameworks) &&
+        pluginConfig.complianceFrameworks.length > 0
+      ? getMinimumTier(pluginConfig.complianceFrameworks as ComplianceFramework[])
+      : undefined,
+    requiredCompliancePatterns: Array.isArray(pluginConfig?.complianceFrameworks) &&
+        pluginConfig.complianceFrameworks.length > 0
+      ? getRequiredPatterns(pluginConfig.complianceFrameworks as ComplianceFramework[])
+      : [],
     healthCheck: resolveHealthCheckConfig(pluginConfig?.healthCheck),
     alerts: resolveAlertConfig(pluginConfig?.alerts),
     piiThreshold: typeof pluginConfig?.piiThreshold === "number"
@@ -754,6 +802,7 @@ function resolveConfig(
     piiPatternThresholds: pluginConfig?.piiPatternThresholds &&
       typeof pluginConfig.piiPatternThresholds === "object"
       ? (pluginConfig.piiPatternThresholds as Record<string, number>) : undefined,
+    ruleDiagnostics: analyzeRoutingRules(rules),
   };
 }
 
@@ -908,11 +957,30 @@ function resolveHealthCheckConfig(value: unknown): HealthCheckConfig {
 }
 
 function buildPIIOptions(config: ResolvedRouterConfig): PIIDetectorOptions {
+  const patternThresholds = { ...(config.piiPatternThresholds ?? {}) };
+  for (const pattern of config.requiredCompliancePatterns) {
+    patternThresholds[pattern] = 0;
+  }
+
   return {
     blocklist: config.sensitivityKeywords,
     threshold: config.piiThreshold,
-    patternThresholds: config.piiPatternThresholds,
+    patternThresholds: Object.keys(patternThresholds).length > 0
+      ? patternThresholds
+      : undefined,
   };
+}
+
+function resolveEffectiveDataTier(
+  policyTier: DataTier | undefined,
+  minimumComplianceTier: DataTier | undefined,
+): DataTier | undefined {
+  if (!policyTier) return minimumComplianceTier;
+  if (!minimumComplianceTier) return policyTier;
+  const order: DataTier[] = ["public", "internal", "confidential", "restricted"];
+  return order.indexOf(policyTier) >= order.indexOf(minimumComplianceTier)
+    ? policyTier
+    : minimumComplianceTier;
 }
 
 function collectConfiguredLocalModels(config: ResolvedRouterConfig): string[] {

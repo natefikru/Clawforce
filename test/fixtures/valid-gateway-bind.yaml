@@ -6,6 +6,7 @@ openclaw:
       enabled: true
 models:
   primary: "anthropic/claude-sonnet-4-5"
-  api_key: "${ANTHROPIC_API_KEY}"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
 gateway:
   bind: "lan"
