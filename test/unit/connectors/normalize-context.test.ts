@@ -6,14 +6,14 @@ describe("normalizeConnectorContext", () => {
     const result = normalizeConnectorContext(
       { from: "event-user" },
       {
-        messageProvider: "slack",
+        messageProvider: "discord",
         channelId: "C123",
         userId: "U123",
         sessionKey: "s-1",
       },
     );
 
-    expect(result.provider).toBe("slack");
+    expect(result.provider).toBe("discord");
     expect(result.conversationId).toBe("C123");
     expect(result.actorId).toBe("U123");
     expect(result.sessionKey).toBe("s-1");
@@ -22,14 +22,14 @@ describe("normalizeConnectorContext", () => {
   it("falls back to event fields when ctx values are missing", () => {
     const result = normalizeConnectorContext(
       {
-        provider: "telegram",
+        provider: "matrix",
         conversationId: "tg-chat-1",
         actorId: "tg-user-1",
       },
       {},
     );
 
-    expect(result.provider).toBe("telegram");
+    expect(result.provider).toBe("matrix");
     expect(result.conversationId).toBe("tg-chat-1");
     expect(result.actorId).toBe("tg-user-1");
   });

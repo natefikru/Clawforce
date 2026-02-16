@@ -6,14 +6,14 @@
 
 ## What It Does
 
-- Monitors configured Slack channels 24/7
+- Monitors configured channels 24/7
 - Detects action items, questions, and urgent messages
 - Delivers daily briefing at 8am ET on weekdays
 - Responds to "what did I miss?" queries on-demand
 
 ## Requirements
 
-- Slack workspace with bot installed
+- At least one configured channel
 - At least 1 allowed channel to monitor
 - Approval channel for human-in-the-loop mode
 

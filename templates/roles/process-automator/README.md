@@ -8,12 +8,12 @@
 
 - Executes browser-based workflows on schedule or on-demand
 - Navigates web interfaces, fills forms, extracts data
-- Reports task completion/failure to Slack
+- Reports task completion/failure to configured channels
 - Captures screenshots on errors for debugging
 
 ## Requirements
 
-- Slack workspace with bot installed
+- At least one configured channel
 - Browser automation (Chromium) available in container
 - Approval channel for human-in-the-loop mode
 - Cron scheduling for automated triggers

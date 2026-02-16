@@ -6,12 +6,6 @@ openclaw:
     discord:
       enabled: true
 
-slack:
-  app_token: "xapp-1-MINIMAL"
-  bot_token: "xoxb-MINIMAL"
-  approval_channel: "C0000000000"
-  allowed_channels: []
-
 models:
   primary: "anthropic/claude-sonnet-4-5"
   api_key: "${ANTHROPIC_API_KEY}"

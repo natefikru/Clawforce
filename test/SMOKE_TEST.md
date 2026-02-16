@@ -69,7 +69,7 @@ clawforce status
 ### 6. Connector Configuration Validation
 
 - [ ] `config/openclaw.json` includes configured entries under `channels`
-- [ ] No Clawforce-generated Slack/Telegram channel synthesis is present
+- [ ] No Clawforce-generated connector-specific channel synthesis is present
 - [ ] Connector settings are passed through from `openclaw.channels`
 
 ### 7. Cron Job (Inbox Analyst only)

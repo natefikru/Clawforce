@@ -14,7 +14,7 @@
     },
     "delivery": {
       "mode": "announce",
-      "channel": "slack",
+      "channel": "default",
       "bestEffort": true
     }
   }

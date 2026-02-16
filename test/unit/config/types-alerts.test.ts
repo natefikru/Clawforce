@@ -71,12 +71,12 @@ describe("ClawforceConfigSchema — alerts", () => {
         notifications: {
           dashboard: true,
           email: { enabled: false },
-          slack: { enabled: true, webhook_url: "https://hooks.slack.com/services/T/B/X" },
+          legacy_connector: { enabled: true, endpoint: "https://example.com/hook" },
         },
       }),
     );
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect((result.data.alerts?.notifications as Record<string, unknown>).slack).toBeUndefined();
+    expect((result.data.alerts?.notifications as Record<string, unknown>).legacy_connector).toBeUndefined();
   });
 });

@@ -63,7 +63,7 @@ afterEach(() => {
 function sampleComplianceLines(): string[] {
   return [
     JSON.stringify({ ts: "2026-02-15T10:00:00Z", event: "tool_call", agentId: "main", tool: "exec", success: true }),
-    JSON.stringify({ ts: "2026-02-15T10:01:00Z", event: "message_sent", channel: "slack", to: "#general" }),
+    JSON.stringify({ ts: "2026-02-15T10:01:00Z", event: "message_sent", channel: "generic", to: "#general" }),
     JSON.stringify({ ts: "2026-02-15T10:02:00Z", event: "tool_call", agentId: "main", tool: "search", success: false }),
   ];
 }

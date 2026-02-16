@@ -6,14 +6,14 @@
 
 ## What It Does
 
-- Accepts research requests via Slack
+- Accepts research requests via configured channels
 - Browses the web using browser automation
 - Compiles structured reports with source attribution
 - Posts draft reports to approval channel before delivery
 
 ## Requirements
 
-- Slack workspace with bot installed
+- At least one configured channel
 - Browser automation (Chromium) available in container
 - Approval channel for human-in-the-loop mode
 

@@ -1,18 +1,11 @@
 name: "smoke-test"
 role: "research-agent"
 
-# Option A: Telegram (simpler setup)
-telegram:
-  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
-  dm_policy: "open"
-
-# Option B: Slack (requires app + bot tokens)
-# slack:
-#   app_token: "xapp-YOUR_APP_TOKEN"
-#   bot_token: "xoxb-YOUR_BOT_TOKEN"
-#   approval_channel: "C0000000001"
-#   allowed_channels:
-#     - "C0000000002"
+openclaw:
+  channels:
+    discord:
+      enabled: true
+      token: "YOUR_DISCORD_BOT_TOKEN"
 
 models:
   primary: "anthropic/claude-sonnet-4-5"

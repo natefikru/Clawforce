@@ -511,7 +511,7 @@ describe("generateOpenClawConfig", () => {
       });
     });
 
-    it("should not include connector-specific alert notification keys", () => {
+    it("should not include legacy notification keys", () => {
       const result = generateOpenClawConfig(
         makeConfig({
           router: { enabled: true },
@@ -528,8 +528,8 @@ describe("generateOpenClawConfig", () => {
       const alerts = result.plugins?.entries?.["clawforce-router"].config
         ?.alerts as Record<string, unknown>;
       const notifications = alerts.notifications as Record<string, unknown>;
-      expect(notifications.slack).toBeUndefined();
-      expect(notifications.telegram).toBeUndefined();
+      expect(notifications.legacyConnectorA).toBeUndefined();
+      expect(notifications.legacyConnectorB).toBeUndefined();
       expect(notifications.webhook_url).toBeUndefined();
     });
   });
