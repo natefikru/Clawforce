@@ -14,6 +14,7 @@ import type {
   AlertRow,
   ModelDistribution,
   DailySpend,
+  ModelHealthStateRow,
 } from "./types.js";
 
 export class StorageReader {
@@ -188,6 +189,14 @@ export class StorageReader {
     return this.db
       .prepare(`SELECT * FROM alerts ${where} ORDER BY ts DESC LIMIT ?`)
       .all(...params) as AlertRow[];
+  }
+
+  getModelHealthStates(): ModelHealthStateRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM model_health_state ORDER BY updated_at DESC`,
+      )
+      .all() as ModelHealthStateRow[];
   }
 
   getModelDistribution(opts: {

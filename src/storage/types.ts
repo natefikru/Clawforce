@@ -48,6 +48,29 @@ export interface RoutingLogEntry {
   success?: boolean;
   durationMs?: number;
   messageCount?: number;
+  modelProvider?: string;
+  healthStatus?: string;
+  healthCircuit?: string;
+  healthError?: string;
+}
+
+export interface AlertEntry {
+  ts: string;
+  severity: "info" | "warning" | "error";
+  type: string;
+  agentId?: string;
+  message: string;
+  acknowledged?: boolean;
+  data?: Record<string, unknown>;
+}
+
+export interface ModelHealthStateEntry {
+  provider: string;
+  status: "healthy" | "degraded" | "down" | "unknown";
+  circuit: "closed" | "open" | "half_open";
+  lastCheckedAt?: string;
+  lastHealthyAt?: string;
+  lastError?: string;
 }
 
 /** Raw SQL row from routing_decisions table. */
@@ -102,6 +125,16 @@ export interface AlertRow {
   acknowledged: number;
   data: string | null;
   created_at: string;
+}
+
+export interface ModelHealthStateRow {
+  provider: string;
+  status: string;
+  circuit: string;
+  last_checked_at: string | null;
+  last_healthy_at: string | null;
+  last_error: string | null;
+  updated_at: string;
 }
 
 export interface UsageSummary {

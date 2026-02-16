@@ -304,6 +304,92 @@ describe("StorageWriter", () => {
     });
   });
 
+  describe("writeAlert", () => {
+    it("inserts row into alerts table", () => {
+      writer.writeAlert({
+        ts: "2026-02-15T12:00:00Z",
+        severity: "warning",
+        type: "model_health",
+        message: "SGLang is degraded",
+        data: { provider: "sglang", status: "degraded" },
+      });
+
+      const row = db
+        .prepare("SELECT * FROM alerts")
+        .get() as {
+        ts: string;
+        severity: string;
+        type: string;
+        message: string;
+        acknowledged: number;
+        data: string | null;
+      };
+
+      expect(row.ts).toBe("2026-02-15T12:00:00Z");
+      expect(row.severity).toBe("warning");
+      expect(row.type).toBe("model_health");
+      expect(row.message).toBe("SGLang is degraded");
+      expect(row.acknowledged).toBe(0);
+      expect(JSON.parse(row.data ?? "{}")).toEqual({
+        provider: "sglang",
+        status: "degraded",
+      });
+    });
+
+    it("writes alert to JSONL stream", () => {
+      writer.writeAlert({
+        ts: "2026-02-15T12:00:00Z",
+        severity: "error",
+        type: "model_health",
+        message: "SGLang is down",
+      });
+
+      expect(mockAppendFileSync).toHaveBeenCalledWith(
+        "/tmp/compliance.jsonl",
+        expect.stringContaining("\"event\":\"alert\""),
+        "utf8",
+      );
+    });
+  });
+
+  describe("writeModelHealthState", () => {
+    it("upserts current provider health state", () => {
+      writer.writeModelHealthState({
+        provider: "sglang",
+        status: "degraded",
+        circuit: "half_open",
+        lastCheckedAt: "2026-02-15T12:00:00Z",
+        lastHealthyAt: "2026-02-15T11:00:00Z",
+        lastError: "probe timeout",
+      });
+      writer.writeModelHealthState({
+        provider: "sglang",
+        status: "healthy",
+        circuit: "closed",
+        lastCheckedAt: "2026-02-15T12:01:00Z",
+        lastHealthyAt: "2026-02-15T12:01:00Z",
+      });
+
+      const row = db
+        .prepare("SELECT * FROM model_health_state WHERE provider = ?")
+        .get("sglang") as {
+        provider: string;
+        status: string;
+        circuit: string;
+        last_checked_at: string;
+        last_healthy_at: string;
+        last_error: string | null;
+      };
+
+      expect(row.provider).toBe("sglang");
+      expect(row.status).toBe("healthy");
+      expect(row.circuit).toBe("closed");
+      expect(row.last_checked_at).toBe("2026-02-15T12:01:00Z");
+      expect(row.last_healthy_at).toBe("2026-02-15T12:01:00Z");
+      expect(row.last_error).toBeNull();
+    });
+  });
+
   describe("JSONL directory caching", () => {
     it("only calls mkdirSync once per directory", () => {
       const entry: ComplianceEntry = {

@@ -1,18 +1,18 @@
 # Clawforce: Forward Roadmap
 
 **Date**: 2026-02-15
-**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, Phase 2A.1, Phase 2A.2, and Phase 2A.3 complete)
+**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, and Phase 2A.1 through 2A.4 complete)
 **Built On**: OpenClaw (open-source personal AI assistant)
 
 ---
 
 ## Current State (What's Shipped)
 
-All work shipped on `main` branch. 789 tests passing (666 root + 123 dashboard) with 80% coverage enforced.
+Current branch state: 820 tests passing (693 root + 127 dashboard) with 80% coverage enforced in the main project.
 
 | Component | Status | Tests | Notes |
 |-----------|--------|-------|-------|
-| CLI (deploy, status, stop, audit, route-test, migrate, user) | Complete | 666 | Full lifecycle management + SQLite migration + user management |
+| CLI (deploy, status, stop, audit, route-test, migrate, user) | Complete | 693 | Full lifecycle management + SQLite migration + user management |
 | 5-Dimension Model Router | Complete | ~200 | PII, complexity, domain, budget, data policy |
 | PII Detection (11 types + adversarial defense) | Complete | ~80 | Unicode normalization, homoglyph folding |
 | Output Filtering (PII redaction) | Complete | ~30 | message_sending + tool_result_persist hooks |
@@ -28,7 +28,7 @@ All work shipped on `main` branch. 789 tests passing (666 root + 123 dashboard) 
 | Config System (clawforce.yaml -> openclaw.json) | Complete | ~30 | Zod validation, capability profiles |
 | OpenClaw Plugin Integration | Complete | — | before_agent_start hook with modelOverride/providerOverride |
 
-**What's NOT built**: Multi-agent orchestration, alert system, billing, onboarding wizard, health monitoring/failover, cross-tool coordination layer, expanded template library.
+**What's NOT built**: Multi-agent orchestration, alert system, billing, onboarding wizard, cross-tool coordination layer, expanded template library.
 
 ---
 
@@ -109,12 +109,15 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - **Merged**: PR #5
 - **Why**: Polling was too slow for live demos and operational monitoring.
 
-#### 2A.4 Model Health Monitoring & Failover
+#### 2A.4 Model Health Monitoring & Failover — COMPLETE ✅
 - Health check loop for local models (Ollama, SGLang, vLLM)
 - Circuit breaker: if local model is down, block requests rather than cascading PII to cloud
 - Health status exposed in dashboard and CLI (`clawforce status`)
 - Health events written to SQLite `alerts` table
-- Configurable failover policy: `block`, `queue`, or `failover-safe` (only non-sensitive to cloud)
+- Canonical current provider health state persisted in SQLite `model_health_state`
+- Configurable failover policy: `block` or `failover-safe` (only non-sensitive to cloud)
+- `queue` policy is intentionally fail-closed in current implementation (not yet supported as deferred execution)
+- Provider-scoped probing prevents startup noise for unused runtimes
 - **Why**: If local model goes down, PII could cascade to cloud. This is a security invariant violation.
 
 #### 2A.5 Alert System
@@ -148,7 +151,7 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - ~~JSONL files still written alongside SQLite (dual-write verified)~~ ✅
 - ~~Dashboard requires authentication to access~~ ✅
 - ~~Activity feed updates in real-time without polling~~ ✅
-- Local model failure does NOT cascade PII to cloud
+- ~~Local model failure does NOT cascade PII to cloud~~ ✅
 - Alerts fire for all critical conditions
 - Plugins are compiled before deployment
 
@@ -169,6 +172,9 @@ This is the highest-value feature gap. The Calacanis team built their own Ultron
   - Budget allocation (per-agent daily limits from shared pool)
 - Leverage OpenClaw's existing multi-agent routing (8-tier priority bindings)
 - Generate one `openclaw.json` with all agents registered
+- **Per-agent budget tracking**: Extend `BudgetTracker` to pass agent IDs (schema supports it, currently hardcoded `_global`)
+- **Per-agent compliance logging**: Scope compliance events to agent ID for filtering and dashboard views
+- **Docker Compose generation for N agents**: Dynamically generate services for each configured agent
 
 ```yaml
 # clawforce.yaml - multi-agent example
@@ -296,11 +302,20 @@ integrations:
   7. Test run (verify agent responds correctly in connected channels)
 - Outputs a complete `clawforce.yaml` ready for `clawforce deploy`
 
+#### 2C.4 Dashboard Configuration & Management UX
+- **Config editing in dashboard**: Change routing rules, budget limits, model preferences from UI (not just CLI)
+- **Agent management UI**: Start/stop/restart agents from dashboard
+- **Model health status panel**: Visual indicator of local model (Ollama/SGLang/vLLM) health in dashboard
+- **Routing decision explainer**: Per-activity-item visual showing WHY a request was routed to a specific model (e.g., "routed to local: PII detected")
+- **Route-test from dashboard**: Run `clawforce route-test` equivalent from UI for testing routing decisions
+- **Why**: CLI-only config is fine for developers but blocks adoption by operations teams and design partners
+
 **Phase 2C Exit Criteria**:
 - 10+ role templates available and documented
 - At least 2 tool integrations (Google Workspace + Notion) working end-to-end
 - `clawforce init` wizard produces working configs from scratch
 - All templates include test scenarios
+- Dashboard supports basic config editing and model health visibility
 
 ---
 

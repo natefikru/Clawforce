@@ -199,6 +199,29 @@ describe("StorageReader", () => {
     });
   });
 
+  describe("getModelHealthStates", () => {
+    it("returns latest canonical provider health states", () => {
+      writer.writeModelHealthState({
+        provider: "sglang",
+        status: "degraded",
+        circuit: "half_open",
+        lastCheckedAt: "2026-02-15T12:00:00Z",
+      });
+      writer.writeModelHealthState({
+        provider: "ollama",
+        status: "healthy",
+        circuit: "closed",
+        lastCheckedAt: "2026-02-15T12:00:05Z",
+      });
+
+      const states = reader.getModelHealthStates();
+      expect(states).toHaveLength(2);
+      const byProvider = Object.fromEntries(states.map((s) => [s.provider, s]));
+      expect(byProvider.sglang.status).toBe("degraded");
+      expect(byProvider.ollama.circuit).toBe("closed");
+    });
+  });
+
   describe("getTotalEventCount", () => {
     it("returns total count without filter", () => {
       writer.writeComplianceEvent({ ts: "2026-02-15T10:00:00Z", event: "a" });

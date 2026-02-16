@@ -119,6 +119,37 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    description: "Composite alerts index for model health queries",
+    up: (db) => {
+      const table = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'alerts'",
+        )
+        .get() as { name?: string } | undefined;
+      if (!table?.name) return;
+      db.exec("CREATE INDEX IF NOT EXISTS idx_alerts_type_ts ON alerts(type, ts DESC)");
+    },
+  },
+  {
+    version: 4,
+    description: "Canonical current model health state table",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS model_health_state (
+          provider TEXT PRIMARY KEY,
+          status TEXT NOT NULL,
+          circuit TEXT NOT NULL,
+          last_checked_at TEXT,
+          last_healthy_at TEXT,
+          last_error TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_model_health_state_updated ON model_health_state(updated_at DESC);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: DatabaseSync): void {

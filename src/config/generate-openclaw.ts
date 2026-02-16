@@ -160,6 +160,7 @@ export function generateOpenClawConfig(
   if (config.router && config.router.enabled !== false) {
     const routerConfig: Record<string, unknown> = {
       defaultModel: config.models.primary,
+      ...(config.models.local ? { defaultLocalModel: config.models.local } : {}),
     };
     if (config.router.rules) {
       routerConfig.rules = config.router.rules;
@@ -175,6 +176,17 @@ export function generateOpenClawConfig(
         dailyLimit: config.router.budget.daily_limit,
         perRequestCap: config.router.budget.per_request_cap,
         fallbackModel: config.router.budget.fallback_model,
+      };
+    }
+    if (config.router.health_check) {
+      routerConfig.healthCheck = {
+        enabled: config.router.health_check.enabled,
+        intervalSeconds: config.router.health_check.interval_seconds,
+        timeoutSeconds: config.router.health_check.timeout_seconds,
+        staleAfterSeconds: config.router.health_check.stale_after_seconds,
+        failoverPolicy: config.router.health_check.failover_policy,
+        failureThreshold: config.router.health_check.failure_threshold,
+        recoveryThreshold: config.router.health_check.recovery_threshold,
       };
     }
     pluginEntries["clawforce-router"] = {

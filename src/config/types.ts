@@ -94,6 +94,26 @@ export const ClawforceConfigSchema = z.object({
           fallback_model: z.string(),
         })
         .optional(),
+      health_check: z
+        .object({
+          enabled: z.boolean().default(true),
+          interval_seconds: z.number().int().positive().default(10),
+          timeout_seconds: z.number().int().positive().default(3),
+          stale_after_seconds: z.number().int().positive().default(30),
+          failover_policy: z.enum(["block", "queue", "failover-safe"]).default("block"),
+          failure_threshold: z.number().int().positive().default(3),
+          recovery_threshold: z.number().int().positive().default(2),
+        })
+        .superRefine((value, ctx) => {
+          if (value.failover_policy === "queue") {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                "router.health_check.failover_policy=queue is not implemented yet; use block or failover-safe",
+            });
+          }
+        })
+        .optional(),
     })
     .optional(),
 

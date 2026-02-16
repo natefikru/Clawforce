@@ -50,7 +50,7 @@ describe("migrations", () => {
       const db = freshDb();
       runMigrations(db);
       expect(() => runMigrations(db)).not.toThrow();
-      expect(getCurrentVersion(db)).toBe(2);
+      expect(getCurrentVersion(db)).toBe(4);
       db.close();
     });
 
@@ -83,7 +83,7 @@ describe("migrations", () => {
         version: number;
         applied_at: string;
       }[];
-      expect(rows).toHaveLength(2);
+      expect(rows).toHaveLength(4);
       expect(rows[0].version).toBe(1);
       expect(rows[0].applied_at).toBeTruthy();
 
@@ -105,7 +105,7 @@ describe("migrations", () => {
     it("returns correct version after migrations", () => {
       const db = freshDb();
       runMigrations(db);
-      expect(getCurrentVersion(db)).toBe(2);
+      expect(getCurrentVersion(db)).toBe(4);
       db.close();
     });
   });
@@ -202,7 +202,7 @@ describe("migrations", () => {
       const db = freshDb();
       runMigrations(db);
 
-      expect(getCurrentVersion(db)).toBe(2);
+      expect(getCurrentVersion(db)).toBe(4);
 
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type='table'")
@@ -313,10 +313,10 @@ describe("migrations", () => {
         "INSERT INTO compliance_events (ts, event, data) VALUES (?, ?, ?)",
       ).run("2026-01-01", "test", "{}");
 
-      // Run migrations — should only apply v2
+      // Run migrations — should apply v2, v3, and v4
       runMigrations(db);
 
-      expect(getCurrentVersion(db)).toBe(2);
+      expect(getCurrentVersion(db)).toBe(4);
 
       const count = db
         .prepare("SELECT COUNT(*) as c FROM compliance_events")
@@ -327,6 +327,44 @@ describe("migrations", () => {
         .prepare("SELECT name FROM sqlite_master WHERE type='table'")
         .all() as { name: string }[];
       expect(tables.map((t) => t.name)).toContain("dashboard_users");
+
+      db.close();
+    });
+  });
+
+  describe("v3 - alerts index", () => {
+    it("creates composite alerts type/timestamp index", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      const indexes = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='alerts'",
+        )
+        .all() as { name: string }[];
+      const indexNames = indexes.map((i) => i.name);
+      expect(indexNames).toContain("idx_alerts_type_ts");
+
+      db.close();
+    });
+  });
+
+  describe("v4 - model health state table", () => {
+    it("creates model_health_state table and index", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all() as { name: string }[];
+      expect(tables.map((t) => t.name)).toContain("model_health_state");
+
+      const indexes = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='model_health_state'",
+        )
+        .all() as { name: string }[];
+      expect(indexes.map((i) => i.name)).toContain("idx_model_health_state_updated");
 
       db.close();
     });
