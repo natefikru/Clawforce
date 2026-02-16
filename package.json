@@ -16,6 +16,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
+    "plugins:bundle": "tsx src/cli.ts plugins-bundle -c ./clawforce.yaml",
+    "plugins:watch": "tsx src/cli.ts plugins-watch -c ./clawforce.yaml",
     "precommit:root": "pnpm typecheck && pnpm test",
     "precommit:dashboard": "pnpm --dir clawforce-dashboard lint && pnpm --dir clawforce-dashboard test",
     "check:root": "pnpm typecheck && pnpm build && pnpm test && pnpm knip --include dependencies,unlisted,unresolved",
@@ -29,6 +31,7 @@
     "bcryptjs": "^3.0.3",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
+    "esbuild": "^0.27.3",
     "nodemailer": "^8.0.1",
     "yaml": "^2.8.2",
     "zod": "^3.24.0"

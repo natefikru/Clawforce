@@ -9,6 +9,7 @@ import { auditCommand } from "./commands/audit.js";
 import { migrateCommand } from "./commands/migrate.js";
 import { routeTestCommand } from "./commands/route-test.js";
 import { userAddCommand, userListCommand, userRemoveCommand } from "./commands/user.js";
+import { pluginsBundleCommand, pluginsWatchCommand } from "./commands/plugins-watch.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -109,6 +110,44 @@ export function createProgram(): Command {
       } catch (error) {
         console.error(
           "Route test failed:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("plugins-bundle")
+    .description("Bundle plugins once for OpenClaw extensions output")
+    .option("-c, --config <path>", "Path to clawforce.yaml", "./clawforce.yaml")
+    .option("--extensions-dir <path>", "Override extensions output directory")
+    .option("--router", "Bundle router plugin only")
+    .option("--compliance", "Bundle compliance plugin only")
+    .action(async (options: { config: string; extensionsDir?: string; router?: boolean; compliance?: boolean }) => {
+      try {
+        await pluginsBundleCommand(options);
+      } catch (error) {
+        console.error(
+          "Plugin bundle failed:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("plugins-watch")
+    .description("Bundle plugins and watch for local changes")
+    .option("-c, --config <path>", "Path to clawforce.yaml", "./clawforce.yaml")
+    .option("--extensions-dir <path>", "Override extensions output directory")
+    .option("--router", "Watch router plugin only")
+    .option("--compliance", "Watch compliance plugin only")
+    .action(async (options: { config: string; extensionsDir?: string; router?: boolean; compliance?: boolean }) => {
+      try {
+        await pluginsWatchCommand(options);
+      } catch (error) {
+        console.error(
+          "Plugin watch failed:",
           error instanceof Error ? error.message : error,
         );
         process.exit(1);

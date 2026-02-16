@@ -68,4 +68,48 @@ describe("CLI", () => {
     expect(configOption).toBeDefined();
     expect(configOption!.defaultValue).toBe("./clawforce.yaml");
   });
+
+  it("should register plugins-watch command", () => {
+    const program = createProgram();
+    const pluginsWatch = program.commands.find((c) => c.name() === "plugins-watch");
+    expect(pluginsWatch).toBeDefined();
+    expect(pluginsWatch!.description()).toContain("watch");
+  });
+
+  it("plugins-watch command should have expected options", () => {
+    const program = createProgram();
+    const pluginsWatch = program.commands.find((c) => c.name() === "plugins-watch")!;
+    const configOption = pluginsWatch.options.find((o) => o.long === "--config");
+    const extensionsDirOption = pluginsWatch.options.find((o) => o.long === "--extensions-dir");
+    const routerOption = pluginsWatch.options.find((o) => o.long === "--router");
+    const complianceOption = pluginsWatch.options.find((o) => o.long === "--compliance");
+
+    expect(configOption).toBeDefined();
+    expect(configOption!.defaultValue).toBe("./clawforce.yaml");
+    expect(extensionsDirOption).toBeDefined();
+    expect(routerOption).toBeDefined();
+    expect(complianceOption).toBeDefined();
+  });
+
+  it("should register plugins-bundle command", () => {
+    const program = createProgram();
+    const pluginsBundle = program.commands.find((c) => c.name() === "plugins-bundle");
+    expect(pluginsBundle).toBeDefined();
+    expect(pluginsBundle!.description()).toContain("Bundle");
+  });
+
+  it("plugins-bundle command should have expected options", () => {
+    const program = createProgram();
+    const pluginsBundle = program.commands.find((c) => c.name() === "plugins-bundle")!;
+    const configOption = pluginsBundle.options.find((o) => o.long === "--config");
+    const extensionsDirOption = pluginsBundle.options.find((o) => o.long === "--extensions-dir");
+    const routerOption = pluginsBundle.options.find((o) => o.long === "--router");
+    const complianceOption = pluginsBundle.options.find((o) => o.long === "--compliance");
+
+    expect(configOption).toBeDefined();
+    expect(configOption!.defaultValue).toBe("./clawforce.yaml");
+    expect(extensionsDirOption).toBeDefined();
+    expect(routerOption).toBeDefined();
+    expect(complianceOption).toBeDefined();
+  });
 });

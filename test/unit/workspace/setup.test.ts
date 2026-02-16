@@ -127,9 +127,10 @@ describe("setupWorkspace", () => {
     );
     const pluginDir = join(testDir, "config/extensions/clawforce-router");
     expect(existsSync(pluginDir)).toBe(true);
-    expect(existsSync(join(pluginDir, "index.ts"))).toBe(true);
-    expect(existsSync(join(pluginDir, "pii-detector.ts"))).toBe(true);
-    expect(existsSync(join(pluginDir, "router.ts"))).toBe(true);
+    expect(existsSync(join(pluginDir, "index.js"))).toBe(true);
+    expect(existsSync(join(pluginDir, "index.js.map"))).toBe(true);
+    expect(existsSync(join(pluginDir, "openclaw.plugin.json"))).toBe(true);
+    expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 
   it("should copy compliance plugin when compliance is enabled", () => {
@@ -139,7 +140,10 @@ describe("setupWorkspace", () => {
     );
     const pluginDir = join(testDir, "config/extensions/clawforce-compliance");
     expect(existsSync(pluginDir)).toBe(true);
-    expect(existsSync(join(pluginDir, "index.ts"))).toBe(true);
+    expect(existsSync(join(pluginDir, "index.js"))).toBe(true);
+    expect(existsSync(join(pluginDir, "index.js.map"))).toBe(true);
+    expect(existsSync(join(pluginDir, "openclaw.plugin.json"))).toBe(true);
+    expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 
   it("should not copy router plugin when explicitly disabled", () => {
