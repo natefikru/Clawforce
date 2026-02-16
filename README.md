@@ -103,7 +103,13 @@ Outbound messages and tool results are scanned for PII before leaving the agent.
 
 ### Deployment Security Gate
 
-`clawforce deploy` runs `openclaw security audit --deep` inside the gateway container and fails deployment on critical findings. For local-only iteration, you can bypass this with `CLAWFORCE_SKIP_SECURITY_AUDIT=1`.
+`clawforce deploy` runs `openclaw security audit --deep` inside the gateway container and fails deployment on critical findings. For local-only iteration, you can bypass this with `CLAWFORCE_SKIP_SECURITY_AUDIT=1`. Bypass is blocked in CI and production contexts.
+
+### Alert Transport Security
+
+- Slack webhooks must use `https://`.
+- SMTP notifications enforce TLS (`requireTLS`) and only allow ports `465` or `587`.
+- Sensitive notification credentials are materialized into deployment `.env` and passed to the gateway as environment variables, instead of being embedded directly in generated plugin config.
 
 ### Compliance Logging
 
