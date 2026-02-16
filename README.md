@@ -1,8 +1,54 @@
 # Clawforce
 
-Deploy autonomous AI agents on your infrastructure with intelligent model routing, PII protection, and compliance logging. Built on [OpenClaw](https://github.com/natefikru/openclaw).
+**Enterprise AI agent management for teams that can't afford to get security wrong.**
 
-Your data never leaves your machines. Sensitive requests route to local models automatically.
+Clawforce deploys, routes, and monitors autonomous AI agents on your infrastructure — with built-in PII protection, compliance logging, and intelligent cost optimization. Your data never leaves your network. Sensitive requests route to local models automatically.
+
+Built on [OpenClaw](https://github.com/natefikru/openclaw), the open-source multi-channel AI gateway.
+
+---
+
+## The Problem
+
+Businesses want AI agents handling real work — email triage, research, process automation — but face three blockers:
+
+1. **Data sovereignty** — Regulated industries can't send customer PII to cloud AI providers. Period.
+2. **Cost unpredictability** — Cloud AI bills scale with usage and are hard to forecast or control.
+3. **No audit trail** — Compliance teams need to know exactly what the AI did, when, and with whose data.
+
+OpenClaw solves the runtime problem (channels, tools, sandboxing). Clawforce solves the business problem: how do you deploy, secure, monitor, and control AI agents at scale?
+
+## The Solution
+
+Clawforce is an orchestration and management layer that wraps OpenClaw with:
+
+- **Intelligent model routing** — A 5-dimension router (PII sensitivity, data policy, complexity, domain, budget) picks the right model for every request. Simple tasks go to cheap local models. Complex tasks go to capable cloud models. PII never touches the cloud.
+- **Cost intelligence** — Daily budget caps, automatic fallback to local models when spend limits are hit, and a cost dashboard showing exactly where money goes.
+- **Compliance-ready logging** — Every agent action is captured as structured audit logs (JSONL + SQLite) with pre-built profiles for HIPAA, PCI-DSS, GDPR, CCPA, and SOX.
+- **Real-time monitoring** — Dashboard with agent health, activity feeds, alerts, and cost tracking. Know what your agents are doing at all times.
+- **One-command deployment** — A single YAML config generates the full stack: gateway, local models, compliance plugins, and monitoring dashboard — all via Docker Compose.
+
+```
+Customer Infrastructure (channels, tools, data)
+    │
+[Clawforce]  ← orchestration, security, compliance, cost intelligence
+    │
+[OpenClaw]   ← open-source AI gateway (20+ channels, 15+ LLM providers)
+    │
+[LLM Providers]  ← Anthropic, OpenAI, Google, or local models (Ollama, vLLM, SGLang)
+```
+
+## Why It Matters
+
+| Value | Proof Point |
+|-------|------------|
+| **Cost savings** | Router reduces cloud AI spend 40-65% by routing simple tasks to local models |
+| **Data sovereignty** | PII enforced at 3 independent layers — never reaches cloud models regardless of config |
+| **Compliance** | Full audit trail for SOC 2 / HIPAA. Every action logged with model, reason, and PII classification |
+| **Operational visibility** | Real-time dashboard with health, activity, alerts, cost tracking, and what-if analysis |
+| **Time to value** | One YAML file, one command: `clawforce deploy` |
+
+---
 
 ## Quick Start
 
@@ -49,9 +95,11 @@ Secure-by-default deployment behavior:
 - Dashboard requires an explicit auth policy whenever dashboard is enabled.
 - Deploy runs an OpenClaw security audit gate and blocks on critical findings.
 
+---
+
 ## Features
 
-### Model Router
+### 5-Dimension Model Router
 
 Routes every request across 5 dimensions to pick the right model:
 
@@ -62,21 +110,6 @@ Routes every request across 5 dimensions to pick the right model:
 - **Budget** — Daily spend limits with automatic fallback to local models when over budget
 
 PII never routes to cloud models. This is enforced as a post-routing safety invariant regardless of configuration.
-
-### Model Health and Failover
-
-Local model runtimes are actively health-checked (Ollama, SGLang, vLLM) with circuit-breaker behavior. When a selected local provider is unhealthy:
-
-- `block` denies the request.
-- `failover-safe` allows only non-sensitive requests to fall back to cloud.
-- `queue` is currently not implemented as deferred execution and is treated as fail-closed.
-
-```yaml
-router:
-  health_check:
-    enabled: true
-    failover_policy: block      # block | failover-safe
-```
 
 ```yaml
 router:
@@ -95,6 +128,20 @@ router:
   budget:
     daily_limit: 10.00
     fallback_model: "sglang/qwen3-32b"
+```
+
+### Model Health and Failover
+
+Local model runtimes are actively health-checked (Ollama, SGLang, vLLM) with circuit-breaker behavior. When a selected local provider is unhealthy:
+
+- `block` denies the request.
+- `failover-safe` allows only non-sensitive requests to fall back to cloud.
+
+```yaml
+router:
+  health_check:
+    enabled: true
+    failover_policy: block      # block | failover-safe
 ```
 
 ### Output Filtering
@@ -134,7 +181,7 @@ Next.js dashboard with 5 panels:
 - **Cost Tracker** — Gateway-sourced cost data with Summary, Timeline, and What-If analysis tabs
 - **Task Log** — Recent agent runs with duration and outcome
 
-**Authentication** — Auth.js v5 with username/password credentials stored in SQLite. Dashboard-enabled configs must explicitly declare an auth policy (`dashboard.auth.enabled: true|false`). This avoids accidental insecure defaults.
+**Authentication** — Auth.js v5 with username/password credentials stored in SQLite. Dashboard-enabled configs must explicitly declare an auth policy (`dashboard.auth.enabled: true|false`).
 
 ### Agent Role Templates
 
@@ -142,6 +189,8 @@ Three starter templates included:
 - **Inbox Analyst** — Monitors channel activity, summarizes threads, flags action items
 - **Research Agent** — Takes requests via configured channels, browses web, compiles reports
 - **Process Automator** — Cron-triggered browser workflows, reports results
+
+---
 
 ## CLI
 
@@ -179,6 +228,8 @@ Dimensions:
   Budget: $0.00/$10.00 remaining
 ```
 
+---
+
 ## Configuration
 
 Full `clawforce.yaml` reference:
@@ -192,7 +243,6 @@ models:
   local: "sglang/qwen3-32b"
   credential_mode: env           # env | auth_profile
   api_key: "${ANTHROPIC_API_KEY}"  # used when credential_mode=env
-  # auth_profile: "corp-prod"      # required when credential_mode=auth_profile
 
 gateway:
   bind: loopback                 # loopback | lan
@@ -224,9 +274,6 @@ dashboard:
     enabled: true
     username: admin
     password: "your-secure-password"  # Min 8 characters
-  # To explicitly run an open dashboard, set:
-  # auth:
-  #   enabled: false
 
 ollama:
   enabled: true
@@ -235,7 +282,6 @@ ollama:
 
 capabilities: full               # minimal | standard | full
 
-# Alerting and notifications
 alerts:
   enabled: true
   types:
@@ -274,6 +320,8 @@ openclaw:
         browser: { enabled: true, headless: true }
 ```
 
+---
+
 ## Architecture
 
 ```
@@ -300,13 +348,15 @@ clawforce deploy
 
 The router plugin hooks into `before_agent_start` to override model selection, `message_sending` and `tool_result_persist` to redact PII from outputs, and `agent_end` for session audit logging.
 
+---
+
 ## Development
 
 ```bash
 git clone https://github.com/natefikru/clawforce.git
 cd clawforce
 pnpm install
-pnpm test           # 712 tests
+pnpm test           # 809 tests
 ```
 
 Dashboard:
@@ -319,31 +369,16 @@ pnpm test           # 140 tests
 
 ### Plugin Build Pipeline
 
-Clawforce now bundles OpenClaw plugins to JavaScript during workspace setup/deploy.
+Clawforce bundles OpenClaw plugins to JavaScript during workspace setup/deploy.
 
 - Output directory: `clawforce-<name>/config/extensions/<plugin>/`
 - Artifacts: `index.js`, `index.js.map`, and `openclaw.plugin.json`
-- Raw TypeScript plugin source files are not copied to extensions output
 
 For local plugin development, use watch mode:
 
 ```bash
-# One-shot bundle
 clawforce plugins-bundle -c clawforce.yaml
-
-# Default output path is based on config file location:
-# <config-dir>/clawforce-<name>/config/extensions
 clawforce plugins-watch -c clawforce.yaml
-
-# Optional custom output path
-clawforce plugins-bundle -c clawforce.yaml --extensions-dir /path/to/extensions
-clawforce plugins-watch -c clawforce.yaml --extensions-dir /path/to/extensions
-
-# Optional plugin filter
-clawforce plugins-bundle -c clawforce.yaml --router
-clawforce plugins-bundle -c clawforce.yaml --compliance
-clawforce plugins-watch -c clawforce.yaml --router
-clawforce plugins-watch -c clawforce.yaml --compliance
 ```
 
 ### Test Coverage

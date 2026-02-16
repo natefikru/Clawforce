@@ -8,7 +8,7 @@ export interface ModelPricing {
   outputPerMillion: number;
 }
 
-const DEFAULT_PRICING: Record<string, ModelPricing> = {
+export const DEFAULT_PRICING: Record<string, ModelPricing> = {
   "anthropic/claude-sonnet-4-5": {
     inputPerMillion: 3.0,
     outputPerMillion: 15.0,
@@ -31,6 +31,15 @@ const DEFAULT_PRICING: Record<string, ModelPricing> = {
   },
 };
 
+/**
+ * Conservative fallback for unknown cloud models.
+ * Uses the highest common pricing tier to prevent budget bypass.
+ */
+export const FALLBACK_CLOUD_PRICING: ModelPricing = {
+  inputPerMillion: 15.0,
+  outputPerMillion: 75.0,
+};
+
 export function isLocalModel(model: string): boolean {
   return (
     model.startsWith("ollama/") ||
@@ -42,7 +51,7 @@ export function isLocalModel(model: string): boolean {
 
 const warnedModels = new Set<string>();
 
-function clearWarningCache(): void {
+export function resetWarningCache(): void {
   warnedModels.clear();
 }
 
@@ -55,15 +64,15 @@ export function estimateRequestCost(
   if (isLocalModel(model)) return 0;
 
   const prices = pricing ?? DEFAULT_PRICING;
-  const modelPricing = prices[model];
+  let modelPricing = prices[model];
   if (!modelPricing) {
     if (!warnedModels.has(model)) {
       warnedModels.add(model);
       process.stderr.write(
-        `[clawforce] No pricing data for model "${model}" — budget tracking will undercount\n`,
+        `[clawforce] No pricing data for model "${model}" — using conservative fallback ($${FALLBACK_CLOUD_PRICING.inputPerMillion}/$${FALLBACK_CLOUD_PRICING.outputPerMillion} per M tokens)\n`,
       );
     }
-    return 0;
+    modelPricing = FALLBACK_CLOUD_PRICING;
   }
 
   const inputCost =
