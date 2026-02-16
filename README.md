@@ -83,9 +83,11 @@ openclaw:
     discord:
       enabled: true
       token: "${DISCORD_BOT_TOKEN}"
-ollama:
-  enabled: true
+runtime:
+  engine: "ollama"
+  location: "container"
   model: "qwen3.3:8b"
+  gpu: "nvidia"
 EOF
 
 # Deploy
@@ -299,10 +301,12 @@ dashboard:
     username: admin
     password: "your-secure-password"  # Min 8 characters
 
-ollama:
-  enabled: true
+runtime:
+  engine: "ollama"               # ollama | sglang | vllm
+  location: "container"          # container | host
   model: "qwen3.3:8b"
   gpu: nvidia                    # nvidia | amd | none
+  port: 11434                    # engine port (ollama default: 11434)
 
 capabilities: full               # minimal | standard | full
 

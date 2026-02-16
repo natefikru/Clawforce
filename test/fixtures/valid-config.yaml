@@ -23,6 +23,7 @@ sensitivity:
     - "credit card"
   pii_detection: true
 
-ollama:
-  enabled: true
+runtime:
+  engine: "ollama"
+  location: "container"
   model: "llama3.3:8b"

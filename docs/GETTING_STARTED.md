@@ -340,11 +340,6 @@ dashboard:
     username: admin
     password: "your-secure-password"   # Min 8 characters
 
-ollama:
-  enabled: true
-  model: "qwen3.3:8b"
-  gpu: nvidia                          # nvidia | amd | none
-
 runtime:                               # Runtime configuration (managed sidecar or host endpoint)
   engine: "sglang"                     # ollama | sglang | vllm
   location: "container"                # container (managed sidecar) | host (external runtime)
@@ -555,10 +550,12 @@ router:
   health_check:
     enabled: true
     failover_policy: failover-safe
-ollama:
-  enabled: true
+runtime:
+  engine: "ollama"
+  location: "container"
   model: "llama3.3:8b"
-  gpu: nvidia
+  gpu: "nvidia"
+  port: 11434
 compliance:
   enabled: true
 dashboard:

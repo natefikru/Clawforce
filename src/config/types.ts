@@ -151,14 +151,6 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
-  ollama: z
-    .object({
-      enabled: z.boolean(),
-      model: z.string().optional(),
-      gpu: z.enum(["nvidia", "amd", "none"]).optional(),
-    })
-    .optional(),
-
   runtime: z
     .object({
       engine: z.enum(["ollama", "sglang", "vllm"]).default("sglang"),

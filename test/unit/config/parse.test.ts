@@ -30,8 +30,9 @@ describe("parseConfig", () => {
       "browser",
       "message.send",
     ]);
-    expect(config.ollama?.enabled).toBe(true);
-    expect(config.ollama?.model).toBe("llama3.3:8b");
+    expect(config.runtime?.engine).toBe("ollama");
+    expect(config.runtime?.location).toBe("container");
+    expect(config.runtime?.model).toBe("llama3.3:8b");
   });
 
   it("should parse a minimal config", () => {
@@ -43,7 +44,7 @@ describe("parseConfig", () => {
       discord: { enabled: true },
     });
     expect(config.approval).toBeUndefined();
-    expect(config.ollama).toBeUndefined();
+    expect(config.runtime).toBeUndefined();
   });
 
   it("should expand environment variables", () => {
@@ -142,7 +143,7 @@ describe("parseConfig", () => {
   });
 
   it("should allow config without runtime", () => {
-    const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
+    const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
     expect(config.runtime).toBeUndefined();
     expect(config.compliance_frameworks).toBeUndefined();
   });

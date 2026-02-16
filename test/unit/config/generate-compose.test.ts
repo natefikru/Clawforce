@@ -145,7 +145,16 @@ describe("generateCompose", () => {
 
   it("should include ollama when enabled", () => {
     const parsed = parseYaml(
-      generateCompose(makeConfig({ ollama: { enabled: true, model: "llama3.3:8b" } })),
+      generateCompose(
+        makeConfig({
+          runtime: {
+            engine: "ollama",
+            location: "container",
+            model: "llama3.3:8b",
+            port: 11434,
+          },
+        }),
+      ),
     );
     expect(parsed.services.ollama).toBeDefined();
     expect(parsed.services.ollama.image).toBe("ollama/ollama:latest");
@@ -154,7 +163,16 @@ describe("generateCompose", () => {
 
   it("should add ollama dependency to gateway when ollama enabled", () => {
     const parsed = parseYaml(
-      generateCompose(makeConfig({ ollama: { enabled: true } })),
+      generateCompose(
+        makeConfig({
+          runtime: {
+            engine: "ollama",
+            location: "container",
+            model: "llama3.3:8b",
+            port: 11434,
+          },
+        }),
+      ),
     );
     expect(
       parsed.services["openclaw-gateway"].depends_on.ollama.condition,
@@ -163,7 +181,16 @@ describe("generateCompose", () => {
 
   it("should add OLLAMA_HOST env var when ollama enabled", () => {
     const parsed = parseYaml(
-      generateCompose(makeConfig({ ollama: { enabled: true } })),
+      generateCompose(
+        makeConfig({
+          runtime: {
+            engine: "ollama",
+            location: "container",
+            model: "llama3.3:8b",
+            port: 11434,
+          },
+        }),
+      ),
     );
     expect(parsed.services["openclaw-gateway"].environment).toContain(
       "OLLAMA_HOST=http://ollama:11434",
@@ -172,14 +199,33 @@ describe("generateCompose", () => {
 
   it("should create named volume for ollama data", () => {
     const parsed = parseYaml(
-      generateCompose(makeConfig({ ollama: { enabled: true } })),
+      generateCompose(
+        makeConfig({
+          runtime: {
+            engine: "ollama",
+            location: "container",
+            model: "llama3.3:8b",
+            port: 11434,
+          },
+        }),
+      ),
     );
     expect(parsed.volumes["test-corp-ollama-data"]).toBeDefined();
   });
 
   it("should use deployment name in container names", () => {
     const parsed = parseYaml(
-      generateCompose(makeConfig({ name: "acme", ollama: { enabled: true } })),
+      generateCompose(
+        makeConfig({
+          name: "acme",
+          runtime: {
+            engine: "ollama",
+            location: "container",
+            model: "llama3.3:8b",
+            port: 11434,
+          },
+        }),
+      ),
     );
     expect(parsed.services["openclaw-gateway"].container_name).toBe(
       "clawforce-acme-gateway",
@@ -247,7 +293,17 @@ describe("generateCompose", () => {
   describe("GPU passthrough", () => {
     it("should add nvidia GPU config to ollama service", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: true, gpu: "nvidia" } })),
+        generateCompose(
+          makeConfig({
+            runtime: {
+              engine: "ollama",
+              location: "container",
+              model: "llama3.3:8b",
+              gpu: "nvidia",
+              port: 11434,
+            },
+          }),
+        ),
       );
       const deploy = parsed.services.ollama.deploy;
       expect(deploy).toBeDefined();
@@ -259,7 +315,17 @@ describe("generateCompose", () => {
 
     it("should add AMD device mappings to ollama service", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: true, gpu: "amd" } })),
+        generateCompose(
+          makeConfig({
+            runtime: {
+              engine: "ollama",
+              location: "container",
+              model: "llama3.3:8b",
+              gpu: "amd",
+              port: 11434,
+            },
+          }),
+        ),
       );
       expect(parsed.services.ollama.devices).toContain("/dev/kfd");
       expect(parsed.services.ollama.devices).toContain("/dev/dri");
@@ -267,7 +333,17 @@ describe("generateCompose", () => {
 
     it("should not add GPU config when gpu is none", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: true, gpu: "none" } })),
+        generateCompose(
+          makeConfig({
+            runtime: {
+              engine: "ollama",
+              location: "container",
+              model: "llama3.3:8b",
+              gpu: "none",
+              port: 11434,
+            },
+          }),
+        ),
       );
       expect(parsed.services.ollama.deploy).toBeUndefined();
       expect(parsed.services.ollama.devices).toBeUndefined();
@@ -275,7 +351,16 @@ describe("generateCompose", () => {
 
     it("should not add GPU config when gpu is not specified", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: true } })),
+        generateCompose(
+          makeConfig({
+            runtime: {
+              engine: "ollama",
+              location: "container",
+              model: "llama3.3:8b",
+              port: 11434,
+            },
+          }),
+        ),
       );
       expect(parsed.services.ollama.deploy).toBeUndefined();
       expect(parsed.services.ollama.devices).toBeUndefined();
@@ -283,21 +368,40 @@ describe("generateCompose", () => {
 
     it("should not add nvidia deploy field to non-GPU ollama", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: true, model: "llama3.3:8b" } })),
+        generateCompose(
+          makeConfig({
+            runtime: {
+              engine: "ollama",
+              location: "container",
+              model: "llama3.3:8b",
+              port: 11434,
+            },
+          }),
+        ),
       );
       expect(parsed.services.ollama.deploy).toBeUndefined();
     });
 
     it("should not have GPU config when ollama is disabled", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: false, gpu: "nvidia" } })),
+        generateCompose(makeConfig()),
       );
       expect(parsed.services.ollama).toBeUndefined();
     });
 
     it("should combine nvidia GPU with other ollama settings", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: true, model: "llama3.3:8b", gpu: "nvidia" } })),
+        generateCompose(
+          makeConfig({
+            runtime: {
+              engine: "ollama",
+              location: "container",
+              model: "llama3.3:8b",
+              gpu: "nvidia",
+              port: 11434,
+            },
+          }),
+        ),
       );
       expect(parsed.services.ollama.deploy).toBeDefined();
       expect(parsed.services.ollama.healthcheck).toBeDefined();
@@ -306,7 +410,17 @@ describe("generateCompose", () => {
 
     it("should combine AMD GPU with other ollama settings", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ ollama: { enabled: true, model: "llama3.3:8b", gpu: "amd" } })),
+        generateCompose(
+          makeConfig({
+            runtime: {
+              engine: "ollama",
+              location: "container",
+              model: "llama3.3:8b",
+              gpu: "amd",
+              port: 11434,
+            },
+          }),
+        ),
       );
       expect(parsed.services.ollama.devices).toContain("/dev/kfd");
       expect(parsed.services.ollama.healthcheck).toBeDefined();

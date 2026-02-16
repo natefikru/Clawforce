@@ -94,13 +94,11 @@ export async function deployCommand(configPath: string): Promise<void> {
   // 8. Pull Ollama model if configured as a managed container runtime
   const runtimeEngine = config.runtime?.engine;
   const runtimeLocation = config.runtime?.location ?? "container";
-  const usesContainerOllamaRuntime =
+  const shouldPullOllamaModel =
     runtimeEngine === "ollama" && runtimeLocation === "container";
-  const usesOllamaSection = config.ollama?.enabled === true;
-  const shouldPullOllamaModel = usesContainerOllamaRuntime || usesOllamaSection;
-  const ollamaModelToPull = usesContainerOllamaRuntime
+  const ollamaModelToPull = shouldPullOllamaModel
     ? (config.runtime?.model ?? "llama3.3:8b")
-    : config.ollama?.model;
+    : undefined;
 
   if (shouldPullOllamaModel && ollamaModelToPull) {
     logger.step(`Starting Ollama and pulling model: ${ollamaModelToPull}...`);
