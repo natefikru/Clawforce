@@ -7,14 +7,14 @@
  */
 
 import type { DatabaseSync } from "node:sqlite";
-import type { PollSource, PollResult, SSEMessage } from "./sse";
+import type { SyncPollSource, PollResult, SSEMessage } from "./sse";
 
 export interface CostData {
   spent: number;
   requestCount: number;
 }
 
-export function createCostPoller(db: DatabaseSync): PollSource {
+export function createCostPoller(db: DatabaseSync): SyncPollSource {
   let lastKnown: CostData | null = null;
 
   return {

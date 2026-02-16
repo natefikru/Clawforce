@@ -7,7 +7,7 @@
  */
 
 import type { DatabaseSync } from "node:sqlite";
-import type { SSEMessage, PollSource, PollResult } from "./sse";
+import type { SSEMessage, SyncPollSource, PollResult } from "./sse";
 
 const BACKFILL_LIMIT = 50;
 const RECONNECT_LIMIT = 500;
@@ -20,7 +20,7 @@ const POLL_BATCH = 100;
 export function createActivityPoller(
   db: DatabaseSync,
   initialCursor: number,
-): PollSource {
+): SyncPollSource {
   let cursor = initialCursor;
 
   return {

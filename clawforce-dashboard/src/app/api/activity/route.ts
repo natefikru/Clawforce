@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   if (db) {
     try {
       const conditions: string[] = [];
-      const params: unknown[] = [];
+      const params: (string | number)[] = [];
 
       if (eventFilter) {
         conditions.push("event = ?");

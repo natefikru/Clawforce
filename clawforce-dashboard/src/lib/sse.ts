@@ -23,6 +23,11 @@ export interface PollSource {
   poll(): PollResult | Promise<PollResult>;
 }
 
+/** A PollSource that always returns synchronously. */
+export interface SyncPollSource extends PollSource {
+  poll(): PollResult;
+}
+
 export interface PollResult {
   events: SSEMessage[];
 }
