@@ -92,4 +92,50 @@ describe("generateEnv", () => {
     const token2 = env2.match(/GATEWAY_TOKEN=([a-f0-9]+)/)![1];
     expect(token1).not.toBe(token2);
   });
+
+  it("should export alert secrets when configured", () => {
+    const env = generateEnv(
+      makeConfig({
+        alerts: {
+          enabled: true,
+          types: {
+            model_health: true,
+            budget_exceeded: true,
+            pii_violation: true,
+            agent_error: true,
+            agent_idle: true,
+          },
+          idle: {
+            threshold_minutes: 60,
+            cooldown_minutes: 30,
+          },
+          budget: {
+            cooldown_minutes: 60,
+            auto_block_on_exceeded: false,
+          },
+          notifications: {
+            dashboard: true,
+            slack: {
+              enabled: true,
+              webhook_url: "https://hooks.slack.com/services/T000/B000/TEST",
+            },
+            email: {
+              enabled: true,
+              smtp_host: "smtp.example.com",
+              smtp_port: 587,
+              username: "alerts@example.com",
+              password: "super-secret",
+              from: "alerts@example.com",
+              to: ["ops@example.com"],
+            },
+          },
+        },
+      }),
+    );
+
+    expect(env).toContain(
+      "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T000/B000/TEST",
+    );
+    expect(env).toContain("CLAWFORCE_ALERTS_EMAIL_PASSWORD=super-secret");
+  });
 });

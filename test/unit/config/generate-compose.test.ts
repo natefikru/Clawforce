@@ -59,6 +59,56 @@ describe("generateCompose", () => {
     expect(env).toContain("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
   });
 
+  it("should pass alert secret env vars to gateway when configured", () => {
+    const parsed = parseYaml(
+      generateCompose(
+        makeConfig({
+          alerts: {
+            enabled: true,
+            types: {
+              model_health: true,
+              budget_exceeded: true,
+              pii_violation: true,
+              agent_error: true,
+              agent_idle: true,
+            },
+            idle: {
+              threshold_minutes: 60,
+              cooldown_minutes: 30,
+            },
+            budget: {
+              cooldown_minutes: 60,
+              auto_block_on_exceeded: false,
+            },
+            notifications: {
+              dashboard: true,
+              slack: {
+                enabled: true,
+                webhook_url: "https://hooks.slack.com/services/T000/B000/TEST",
+              },
+              email: {
+                enabled: true,
+                smtp_host: "smtp.example.com",
+                smtp_port: 587,
+                username: "alerts@example.com",
+                password: "super-secret",
+                from: "alerts@example.com",
+                to: ["ops@example.com"],
+              },
+            },
+          },
+        }),
+      ),
+    );
+    const env = parsed.services["openclaw-gateway"].environment;
+    expect(env).toContain(
+      "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL=${CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL}",
+    );
+    expect(env).toContain(
+      "CLAWFORCE_ALERTS_EMAIL_PASSWORD=${CLAWFORCE_ALERTS_EMAIL_PASSWORD}",
+    );
+  });
+
   it("should omit provider API key in auth_profile credential mode", () => {
     const parsed = parseYaml(
       generateCompose(
