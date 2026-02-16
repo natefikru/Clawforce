@@ -155,6 +155,8 @@ const DEFAULT_HEALTH_CHECK: HealthCheckConfig = {
   failoverPolicy: "block",
   failureThreshold: 3,
   recoveryThreshold: 2,
+  retryAttempts: 2,
+  retryDelayMs: 500,
 };
 
 const DEFAULT_ALERT_CONFIG: ResolvedRouterAlertConfig = {
@@ -890,6 +892,14 @@ function resolveHealthCheckConfig(value: unknown): HealthCheckConfig {
       typeof cfg.recoveryThreshold === "number" && cfg.recoveryThreshold > 0
         ? cfg.recoveryThreshold
         : DEFAULT_HEALTH_CHECK.recoveryThreshold,
+    retryAttempts:
+      typeof cfg.retryAttempts === "number" && cfg.retryAttempts >= 0
+        ? cfg.retryAttempts
+        : DEFAULT_HEALTH_CHECK.retryAttempts,
+    retryDelayMs:
+      typeof cfg.retryDelayMs === "number" && cfg.retryDelayMs >= 0
+        ? cfg.retryDelayMs
+        : DEFAULT_HEALTH_CHECK.retryDelayMs,
   };
 }
 

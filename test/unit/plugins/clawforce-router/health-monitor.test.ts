@@ -13,6 +13,8 @@ const BASE_CONFIG: HealthCheckConfig = {
   failoverPolicy: "block",
   failureThreshold: 2,
   recoveryThreshold: 2,
+  retryAttempts: 0,
+  retryDelayMs: 100,
 };
 
 describe("parseLocalProvider", () => {

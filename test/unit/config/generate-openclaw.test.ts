@@ -404,6 +404,8 @@ describe("generateOpenClawConfig", () => {
               failover_policy: "failover-safe",
               failure_threshold: 4,
               recovery_threshold: 2,
+              retry_attempts: 2,
+              retry_delay_ms: 500,
             },
           },
         }),

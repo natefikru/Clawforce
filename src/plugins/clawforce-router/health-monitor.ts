@@ -13,6 +13,8 @@ export interface HealthCheckConfig {
   failoverPolicy: FailoverPolicy;
   failureThreshold: number;
   recoveryThreshold: number;
+  retryAttempts: number;
+  retryDelayMs: number;
 }
 
 export interface ProviderHealthState {
