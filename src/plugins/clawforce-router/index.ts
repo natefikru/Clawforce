@@ -1,8 +1,8 @@
 /**
  * Clawforce Model Router Plugin for OpenClaw.
  *
- * Analyzes incoming prompts across 5 dimensions (PII, complexity, domain,
- * budget, latency) and enforces routing decisions via modelOverride and
+ * Analyzes incoming prompts across 5 dimensions (policy, PII, complexity,
+ * domain, budget) and enforces routing decisions via modelOverride and
  * providerOverride. Also injects routing metadata via `prependContext` and
  * writes decisions to the compliance log for dashboard consumption.
  */
@@ -16,7 +16,7 @@ import type {
   AlertType,
   RoutingLogEntry,
 } from "../../storage/types.js";
-import { detectPII, detectPIITypes } from "./pii-detector.js";
+import { detectPII, detectPIITypes, type PIIDetectorOptions } from "./pii-detector.js";
 import { filterOutput } from "./output-filter.js";
 import { analyzeComplexity } from "./complexity-analyzer.js";
 import { detectDomain } from "./domain-detector.js";
@@ -56,6 +56,8 @@ export interface RouterPluginConfig {
   budget?: BudgetConfig;
   healthCheck?: Partial<HealthCheckConfig>;
   alerts?: RouterAlertConfig;
+  piiThreshold?: number;
+  piiPatternThresholds?: Record<string, number>;
 }
 
 export interface RouterAlertConfig {
@@ -394,11 +396,10 @@ export function activate(api: RouterPluginApi): void {
       // Dimension 1: PII detection (scan prompt + recent conversation history)
       const messages = Array.isArray(event.messages) ? event.messages : undefined;
       const textToScan = buildScanText(prompt, messages);
-      const hasPII = detectPII(textToScan, {
-        blocklist: config.sensitivityKeywords,
-      });
+      const piiOptions = buildPIIOptions(config);
+      const hasPII = detectPII(textToScan, piiOptions);
       const piiTypes = hasPII
-        ? detectPIITypes(textToScan, { blocklist: config.sensitivityKeywords })
+        ? detectPIITypes(textToScan, piiOptions)
         : [];
 
       // Dimension 2: Complexity analysis
@@ -604,9 +605,7 @@ export function activate(api: RouterPluginApi): void {
       const content = typeof rawContent === "string" ? rawContent : "";
       if (!content) return;
 
-      const result = filterOutput(content, {
-        blocklist: config.sensitivityKeywords,
-      });
+      const result = filterOutput(content, buildPIIOptions(config));
       if (result.redacted) {
         api.logger.warn(
           `Output filter: redacted ${result.matchCount} PII match(es) [${result.redactedTypes.join(", ")}]`,
@@ -631,9 +630,7 @@ export function activate(api: RouterPluginApi): void {
       const message = event.message as { content?: string } | undefined;
       if (!message?.content) return;
 
-      const result = filterOutput(message.content, {
-        blocklist: config.sensitivityKeywords,
-      });
+      const result = filterOutput(message.content, buildPIIOptions(config));
       if (result.redacted) {
         api.logger.warn(
           `Tool result filter: redacted ${result.matchCount} PII match(es) from ${event.toolName ?? "unknown"}`,
@@ -726,6 +723,8 @@ interface ResolvedRouterConfig {
   policy?: DataPolicy;
   healthCheck: HealthCheckConfig;
   alerts: ResolvedRouterAlertConfig;
+  piiThreshold: number;
+  piiPatternThresholds?: Record<string, number>;
 }
 
 function resolveConfig(
@@ -750,6 +749,11 @@ function resolveConfig(
       ? (pluginConfig.policy as DataPolicy) : undefined,
     healthCheck: resolveHealthCheckConfig(pluginConfig?.healthCheck),
     alerts: resolveAlertConfig(pluginConfig?.alerts),
+    piiThreshold: typeof pluginConfig?.piiThreshold === "number"
+      ? pluginConfig.piiThreshold : 0,
+    piiPatternThresholds: pluginConfig?.piiPatternThresholds &&
+      typeof pluginConfig.piiPatternThresholds === "object"
+      ? (pluginConfig.piiPatternThresholds as Record<string, number>) : undefined,
   };
 }
 
@@ -900,6 +904,14 @@ function resolveHealthCheckConfig(value: unknown): HealthCheckConfig {
       typeof cfg.retryDelayMs === "number" && cfg.retryDelayMs >= 0
         ? cfg.retryDelayMs
         : DEFAULT_HEALTH_CHECK.retryDelayMs,
+  };
+}
+
+function buildPIIOptions(config: ResolvedRouterConfig): PIIDetectorOptions {
+  return {
+    blocklist: config.sensitivityKeywords,
+    threshold: config.piiThreshold,
+    patternThresholds: config.piiPatternThresholds,
   };
 }
 

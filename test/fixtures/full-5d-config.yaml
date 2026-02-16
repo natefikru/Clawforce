@@ -11,6 +11,12 @@ models:
   local: "ollama/llama3.3:8b"
   api_key: "${ANTHROPIC_API_KEY}"
 
+sensitivity:
+  pii_detection: true
+  pii_confidence_threshold: 0.80
+  pii_pattern_thresholds:
+    ip_address: 0.50
+
 router:
   enabled: true
   rules:

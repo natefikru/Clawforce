@@ -391,6 +391,27 @@ describe("generateOpenClawConfig", () => {
       expect(budget.fallbackModel).toBe("ollama/llama3.3:8b");
     });
 
+    it("should pass sensitivity thresholds through to router plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          sensitivity: {
+            pii_detection: true,
+            pii_confidence_threshold: 0.9,
+            pii_pattern_thresholds: {
+              ip_address: 0.5,
+            },
+          },
+        }),
+      );
+
+      const pluginConfig = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+      expect(pluginConfig.piiThreshold).toBe(0.9);
+      expect(pluginConfig.piiPatternThresholds).toEqual({
+        ip_address: 0.5,
+      });
+    });
+
     it("should pass router health_check through to plugin config", () => {
       const result = generateOpenClawConfig(
         makeConfig({
@@ -420,6 +441,8 @@ describe("generateOpenClawConfig", () => {
       expect(health.failoverPolicy).toBe("failover-safe");
       expect(health.failureThreshold).toBe(4);
       expect(health.recoveryThreshold).toBe(2);
+      expect(health.retryAttempts).toBe(2);
+      expect(health.retryDelayMs).toBe(500);
     });
 
     it("should include default alerts config in router plugin config when alerts are omitted", () => {

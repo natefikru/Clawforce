@@ -258,6 +258,13 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
     };
   }
 
+  if (config.sensitivity?.pii_confidence_threshold !== undefined) {
+    routerConfig.piiThreshold = config.sensitivity.pii_confidence_threshold;
+  }
+  if (config.sensitivity?.pii_pattern_thresholds) {
+    routerConfig.piiPatternThresholds = config.sensitivity.pii_pattern_thresholds;
+  }
+
   return routerConfig;
 }
 
