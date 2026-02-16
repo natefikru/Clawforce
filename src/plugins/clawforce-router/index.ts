@@ -344,7 +344,8 @@ export function activate(api: RouterPluginApi): void {
     healthMonitor.trackModel(model);
   }
   healthMonitor.start();
-  registerProcessCleanup(healthMonitor);
+  const instanceId = `router-${++instanceCounter}`;
+  registerProcessCleanup(instanceId, healthMonitor);
 
   const idleMonitor = new IdleMonitor({
     thresholdMinutes: config.alerts.idle.thresholdMinutes,
@@ -366,7 +367,7 @@ export function activate(api: RouterPluginApi): void {
     },
   });
   idleMonitor.start();
-  registerIdleCleanup(idleMonitor);
+  registerIdleCleanup(instanceId, idleMonitor);
 
   function writeLog(entry: RoutingLogEntry): void {
     if (writer) {
@@ -908,26 +909,28 @@ function collectConfiguredLocalModels(config: ResolvedRouterConfig): string[] {
   return [...models];
 }
 
-function registerProcessCleanup(monitor: ModelHealthMonitor): void {
-  if (currentHealthMonitor && currentHealthMonitor !== monitor) {
-    currentHealthMonitor.stop();
+function registerProcessCleanup(instanceId: string, monitor: ModelHealthMonitor): void {
+  const existing = activeHealthMonitors.get(instanceId);
+  if (existing && existing !== monitor) {
+    existing.stop();
   }
-  currentHealthMonitor = monitor;
+  activeHealthMonitors.set(instanceId, monitor);
   if (cleanupHandlersRegistered) return;
 
-  const stop = () => {
-    currentHealthMonitor?.stop();
-    currentIdleMonitor?.stop();
+  const stopAll = () => {
+    for (const m of activeHealthMonitors.values()) m.stop();
+    for (const m of activeIdleMonitors.values()) m.stop();
   };
-  process.once("beforeExit", stop);
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  process.once("beforeExit", stopAll);
+  process.once("SIGINT", stopAll);
+  process.once("SIGTERM", stopAll);
   cleanupHandlersRegistered = true;
 }
 
 let cleanupHandlersRegistered = false;
-let currentHealthMonitor: ModelHealthMonitor | null = null;
-let currentIdleMonitor: IdleMonitor | null = null;
+const activeHealthMonitors = new Map<string, ModelHealthMonitor>();
+const activeIdleMonitors = new Map<string, IdleMonitor>();
+let instanceCounter = 0;
 
 let routingLogDirEnsured = false;
 
@@ -938,11 +941,25 @@ function ensureRoutingLogDir(logPath: string): void {
   }
 }
 
-function registerIdleCleanup(monitor: IdleMonitor): void {
-  if (currentIdleMonitor && currentIdleMonitor !== monitor) {
-    currentIdleMonitor.stop();
+function registerIdleCleanup(instanceId: string, monitor: IdleMonitor): void {
+  const existing = activeIdleMonitors.get(instanceId);
+  if (existing && existing !== monitor) {
+    existing.stop();
   }
-  currentIdleMonitor = monitor;
+  activeIdleMonitors.set(instanceId, monitor);
+}
+
+export function deactivateInstance(instanceId: string): void {
+  const health = activeHealthMonitors.get(instanceId);
+  if (health) {
+    health.stop();
+    activeHealthMonitors.delete(instanceId);
+  }
+  const idle = activeIdleMonitors.get(instanceId);
+  if (idle) {
+    idle.stop();
+    activeIdleMonitors.delete(instanceId);
+  }
 }
 
 function resetRoutingLogDirCache(): void {
