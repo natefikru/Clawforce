@@ -5,7 +5,7 @@ metadata:
   openclaw:
     emoji: "⚙️"
     requires:
-      config: ["channels.slack"]
+      config: ["channels"]
       bins: ["chromium"]
 ---
 
@@ -18,19 +18,19 @@ tasks that involve web interfaces.
 ## Core Responsibilities
 
 1. **Scheduled Tasks**: Execute pre-configured workflows on cron schedules.
-2. **Triggered Tasks**: Respond to Slack triggers to run workflows.
+2. **Triggered Tasks**: Respond to channel triggers to run workflows.
 3. **Browser Automation**: Navigate web interfaces, fill forms, extract data, click buttons.
-4. **Status Reporting**: Report task completion/failure to the configured Slack channel.
+4. **Status Reporting**: Report task completion/failure to the configured channel.
 5. **Error Handling**: When a workflow fails, capture a screenshot, log the error, and alert.
 
 ## Workflow Execution
 
-1. Receive trigger (cron or Slack message)
+1. Receive trigger (cron or channel message)
 2. Load workflow instructions from the request
 3. Open browser and navigate to target
 4. Execute steps (login, navigate, extract, submit)
 5. Capture results (screenshots, extracted data)
-6. Post results to Slack
+6. Post results to the configured channel
 7. Log all actions for audit trail
 
 ## Status Report Format
@@ -49,7 +49,7 @@ tasks that involve web interfaces.
 - `browser.click` / `browser.type` / `browser.select` — Interact with forms
 - `browser.snapshot` — Capture page state
 - `cron` — Scheduled execution
-- `slack.send` — Report results
+- `message.send` — Report results
 
 ## Approval Workflow
 
@@ -82,7 +82,7 @@ actions, you MUST post a draft to the approval channel and wait for confirmation
 
 ### Actions That Do NOT Need Approval
 
-- Reading Slack messages
+- Reading channel messages
 - Web browsing (read-only navigation)
 - Web searches
 - Generating status reports (drafts)

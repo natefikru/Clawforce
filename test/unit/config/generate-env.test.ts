@@ -6,11 +6,10 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
     role: "inbox-analyst",
-    slack: {
-      app_token: "xapp-1-TEST",
-      bot_token: "xoxb-TEST",
-      approval_channel: "C0123456789",
-      allowed_channels: [],
+    openclaw: {
+      channels: {
+        discord: { enabled: true },
+      },
     },
     models: {
       primary: "anthropic/claude-sonnet-4-5",
@@ -115,10 +114,6 @@ describe("generateEnv", () => {
           },
           notifications: {
             dashboard: true,
-            slack: {
-              enabled: true,
-              webhook_url: "https://hooks.slack.com/services/T000/B000/TEST",
-            },
             email: {
               enabled: true,
               smtp_host: "smtp.example.com",
@@ -133,9 +128,6 @@ describe("generateEnv", () => {
       }),
     );
 
-    expect(env).toContain(
-      "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T000/B000/TEST",
-    );
     expect(env).toContain("CLAWFORCE_ALERTS_EMAIL_PASSWORD=super-secret");
   });
 });

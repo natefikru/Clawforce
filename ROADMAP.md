@@ -22,7 +22,7 @@ Current branch state: 852 tests passing (712 root + 140 dashboard) with 80% cove
 | SQLite Storage Layer | **Complete** | 87 | Dual-write, StorageWriter/Reader, migrations, migrate CLI |
 | Dashboard Auth (Auth.js v5, RBAC) | **Complete** | 112 | Multi-user, JWT sessions, login page, middleware, user CLI |
 | Real-Time Event Streaming (SSE) | **Complete** | 45 | Multiplexed SSE, cursor-based reconnection, 3 poll sources |
-| Alert System (dashboard + notifications) | **Complete** | ~20+ | Budget/PII/health/error/idle alerts, SQLite history, SSE stream, acknowledge API, Slack/email dispatch |
+| Alert System (dashboard + notifications) | **Complete** | ~20+ | Budget/PII/health/error/idle alerts, SQLite history, SSE stream, acknowledge API, channel/email dispatch |
 | Dashboard (Status, Activity, Alerts, Cost, Tasks) | Complete | 45 | Next.js, SQLite-first queries, 5 panels, 3 cost tabs |
 | Docker Compose Generation (OpenClaw + Ollama) | Complete | ~30 | Includes SGLang/vLLM runtime options |
 | 3 Role Templates | Complete | ~10 | Inbox Analyst, Research Agent, Process Automator |
@@ -41,7 +41,7 @@ Jason Calacanis's team is running OpenClaw in production with multiple "replican
 
 1. **Workflow execution > Q&A** — Value comes from agents taking actions across tools, not answering questions
 2. **Multi-agent coordination is the killer feature** — Ultron pattern: one supervisory agent managing many task agents
-3. **Cross-tool automation drives adoption** — Slack + Notion + Gmail + databases in unified workflows
+3. **Cross-tool automation drives adoption** — channels + Notion + Gmail + databases in unified workflows
 4. **Skills as units of work** — Modular, composable capabilities per agent
 5. **Data control is non-negotiable** — Private deployment is a hard requirement, not a nice-to-have
 
@@ -122,7 +122,7 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - **Why**: If local model goes down, PII could cascade to cloud. This is a security invariant violation.
 
 #### 2A.5 Alert System — COMPLETE ✅
-- Agent errors/failures alert via dashboard, Slack webhook, and optional email
+- Agent errors/failures alert via dashboard, channel webhook, and optional email
 - Budget exceeded alerts with cooldown and optional auto-block behavior
 - PII-to-cloud invariant violations raise explicit alerts and block unsafe execution
 - Model health degradation and transition alerts persisted to SQLite `alerts`
@@ -179,7 +179,7 @@ This is the highest-value feature gap. The Calacanis team built their own Ultron
 - Extend `clawforce.yaml` to define multiple agents with distinct:
   - Roles (from template library)
   - Skills (SKILL.md files)
-  - Channel assignments (which Slack channels, which email inboxes)
+  - Channel assignments (which channels, which email inboxes)
   - Model routing rules (per-agent overrides)
   - Sandbox isolation (per-agent Docker containers via OpenClaw sandbox mode)
   - Budget allocation (per-agent daily limits from shared pool)
@@ -195,7 +195,7 @@ agents:
   - name: inbox-analyst
     role: inbox-analyst
     channels:
-      - type: slack
+      - type: channel
         channels: ["#inbox-triage", "#action-items"]
     routing:
       budget_daily: 5.00
@@ -206,7 +206,7 @@ agents:
   - name: research-agent
     role: research-agent
     channels:
-      - type: slack
+      - type: channel
         channels: ["#research-requests"]
     routing:
       budget_daily: 8.00
@@ -218,7 +218,7 @@ agents:
   - name: ultron
     role: supervisor
     channels:
-      - type: slack
+      - type: channel
         channels: ["#ai-ops"]
     supervises: [inbox-analyst, research-agent]
     routing:
@@ -265,7 +265,7 @@ agents:
 #### 2C.1 Expanded Template Library
 Build 7 additional role templates (bringing total to 10+):
 
-4. **Meeting Prep Agent** — Researches attendees before calendar events, delivers briefing via Slack/email
+4. **Meeting Prep Agent** — Researches attendees before calendar events, delivers briefing via channel/email
 5. **Invoice Processor** — Watches email for invoices, extracts data, flags discrepancies, updates spreadsheets
 6. **Compliance Monitor** — Daily cron checks regulatory websites, flags relevant changes, generates weekly digest
 7. **Customer Response Drafter** — Monitors support inbox, drafts responses, holds for human approval before sending
@@ -307,7 +307,7 @@ integrations:
 #### 2C.3 Enterprise Onboarding Wizard
 - Interactive CLI wizard (`clawforce init`) that guides setup:
   1. Infrastructure check (Docker version, GPU detection, disk space, network)
-  2. Channel connection setup (Slack workspace, Teams bot, email IMAP/SMTP)
+  2. Channel connection setup (connector channel, Teams bot, email IMAP/SMTP)
   3. Agent role selection from template library
   4. Security policy configuration (sensitivity keywords, cloud allowlist)
   5. Model selection wizard (local-only vs hybrid vs cloud-primary, GPU auto-detection)
@@ -482,7 +482,7 @@ Target: 2-3 companies, 100-500 employees, ideally regulated industries (finance,
 - Phase 2A complete (auth, streaming, health monitoring, alerts)
 - Phase 2B complete (multi-agent with supervisor)
 - At least 5 templates relevant to their industry
-- Working tool integrations for their stack (Slack + at least one of: Google Workspace, Notion, Jira)
+- Working tool integrations for their stack (chat connector + at least one of: Google Workspace, Notion, Jira)
 
 ---
 

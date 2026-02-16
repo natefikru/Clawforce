@@ -1,16 +1,16 @@
 name: "invalid-alerts"
 role: "research-agent"
 
-slack:
-  app_token: "xapp-1-INVALID"
-  bot_token: "xoxb-INVALID"
-  approval_channel: "C0123456789"
-  allowed_channels: []
+openclaw:
+  channels:
+    discord:
+      enabled: true
 
 models:
   primary: "anthropic/claude-sonnet-4-5"
+  api_key: "${ANTHROPIC_API_KEY}"
 
 alerts:
   notifications:
-    slack:
+    email:
       enabled: true

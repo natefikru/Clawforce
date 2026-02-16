@@ -9,11 +9,13 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
     role: "inbox-analyst",
-    slack: {
-      app_token: "xapp-1-TEST",
-      bot_token: "xoxb-TEST",
-      approval_channel: "C0123456789",
-      allowed_channels: ["C9876543210"],
+    openclaw: {
+      channels: {
+        discord: {
+          enabled: true,
+          token: "discord-bot-token",
+        },
+      },
     },
     models: {
       primary: "anthropic/claude-sonnet-4-5",
@@ -47,18 +49,13 @@ describe("generateOpenClawConfig", () => {
     expect(result.agents.defaults.model.fallbacks).toBeUndefined();
   });
 
-  it("should configure Slack channels correctly", () => {
+  it("should preserve openclaw.channels passthrough", () => {
     const result = generateOpenClawConfig(makeConfig());
-    const slack = result.channels.slack!;
-
-    expect(slack.enabled).toBe(true);
-    expect(slack.mode).toBe("socket");
-    expect(slack.appToken).toBe("xapp-1-TEST");
-    expect(slack.botToken).toBe("xoxb-TEST");
-    // Approval channel should not require mention
-    expect(slack.channels["C0123456789"].requireMention).toBe(false);
-    // Allowed channels require mention
-    expect(slack.channels["C9876543210"].requireMention).toBe(true);
+    const channels = result.channels as Record<string, unknown>;
+    expect(channels.discord).toEqual({
+      enabled: true,
+      token: "discord-bot-token",
+    });
   });
 
   it("should set workspace path", () => {
@@ -141,64 +138,24 @@ describe("generateOpenClawConfig", () => {
     ).toBe(true);
   });
 
-  it("should handle empty allowed_channels", () => {
+  it("should allow connector-only config through openclaw.channels", () => {
     const result = generateOpenClawConfig(
       makeConfig({
-        slack: {
-          app_token: "xapp-1-TEST",
-          bot_token: "xoxb-TEST",
-          approval_channel: "C0123456789",
-          allowed_channels: [],
+        openclaw: {
+          channels: {
+            discord: {
+              enabled: true,
+              token: "discord-bot-token",
+            },
+          },
         },
       }),
     );
-    const channels = result.channels.slack!.channels;
-    expect(Object.keys(channels)).toHaveLength(1);
-    expect(channels["C0123456789"]).toBeDefined();
-  });
-
-  it("should configure Telegram channel correctly", () => {
-    const result = generateOpenClawConfig(
-      makeConfig({
-        slack: undefined,
-        telegram: {
-          bot_token: "123456:ABCdef",
-          dm_policy: "open",
-        },
-      }),
-    );
-    expect(result.channels.slack).toBeUndefined();
-    expect(result.channels.telegram).toBeDefined();
-    expect(result.channels.telegram!.enabled).toBe(true);
-    expect(result.channels.telegram!.botToken).toBe("123456:ABCdef");
-    expect(result.channels.telegram!.dmPolicy).toBe("open");
-    expect(result.channels.telegram!.groupPolicy).toBe("disabled");
-    expect(result.channels.telegram!.allowFrom).toEqual(["*"]);
-  });
-
-  it("should default Telegram dmPolicy to open", () => {
-    const result = generateOpenClawConfig(
-      makeConfig({
-        slack: undefined,
-        telegram: {
-          bot_token: "123456:ABCdef",
-        },
-      }),
-    );
-    expect(result.channels.telegram!.dmPolicy).toBe("open");
-  });
-
-  it("should not include Slack when only Telegram is configured", () => {
-    const result = generateOpenClawConfig(
-      makeConfig({
-        slack: undefined,
-        telegram: {
-          bot_token: "123456:ABCdef",
-        },
-      }),
-    );
-    expect(result.channels.slack).toBeUndefined();
-    expect(result.channels.telegram).toBeDefined();
+    const channels = result.channels as Record<string, unknown>;
+    expect(channels.discord).toEqual({
+      enabled: true,
+      token: "discord-bot-token",
+    });
   });
 
   it("should enable router plugin when router config present", () => {
@@ -260,18 +217,21 @@ describe("generateOpenClawConfig", () => {
     expect(result.plugins?.entries?.["clawforce-compliance"].enabled).toBe(true);
   });
 
-  it("should not include plugins section when no plugins configured", () => {
+  it("should include discovered plugins section by default", () => {
     const result = generateOpenClawConfig(makeConfig());
-    expect(result.plugins).toBeUndefined();
+    expect(result.plugins?.enabled).toBe(true);
+    expect(result.plugins?.entries?.["clawforce-router"]).toBeDefined();
+    expect(result.plugins?.entries?.["clawforce-compliance"]).toBeDefined();
   });
 
-  it("should not enable router plugin when explicitly disabled", () => {
+  it("should still include router plugin when router toggle is disabled", () => {
     const result = generateOpenClawConfig(
       makeConfig({
         router: { enabled: false },
       }),
     );
-    expect(result.plugins?.entries?.["clawforce-router"]).toBeUndefined();
+    expect(result.plugins?.entries?.["clawforce-router"]).toBeDefined();
+    expect(result.plugins?.entries?.["clawforce-router"].enabled).toBe(true);
   });
 
   describe("OpenClaw passthrough", () => {
@@ -342,11 +302,18 @@ describe("generateOpenClawConfig", () => {
       const result = generateOpenClawConfig(
         makeConfig({
           openclaw: {
+            channels: {
+              discord: {
+                enabled: true,
+                token: "discord-bot-token",
+              },
+            },
             cron: { enabled: true, store: "sqlite" },
           },
         }),
       );
-      expect(result.channels.slack).toBeDefined();
+      const channels = result.channels as Record<string, unknown>;
+      expect(channels.discord).toBeDefined();
       const cron = result.cron as Record<string, unknown>;
       expect(cron.enabled).toBe(true);
       expect(cron.store).toBe("sqlite");
@@ -498,10 +465,6 @@ describe("generateOpenClawConfig", () => {
             },
             notifications: {
               dashboard: true,
-              slack: {
-                enabled: true,
-                webhook_url: "https://hooks.slack.com/services/T000/B000/TEST",
-              },
               email: {
                 enabled: true,
                 smtp_host: "smtp.example.com",
@@ -536,10 +499,6 @@ describe("generateOpenClawConfig", () => {
       });
       expect(alerts.notifications).toEqual({
         dashboard: true,
-        slack: {
-          enabled: true,
-          webhookUrlEnv: "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL",
-        },
         email: {
           enabled: true,
           smtpHost: "smtp.example.com",
@@ -550,6 +509,28 @@ describe("generateOpenClawConfig", () => {
           to: ["ops@example.com"],
         },
       });
+    });
+
+    it("should not include legacy notification keys", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          alerts: {
+            enabled: true,
+            notifications: {
+              dashboard: true,
+              email: { enabled: false, smtp_port: 587 },
+            },
+          } as any,
+        }),
+      );
+
+      const alerts = result.plugins?.entries?.["clawforce-router"].config
+        ?.alerts as Record<string, unknown>;
+      const notifications = alerts.notifications as Record<string, unknown>;
+      expect(notifications.legacyConnectorA).toBeUndefined();
+      expect(notifications.legacyConnectorB).toBeUndefined();
+      expect(notifications.webhook_url).toBeUndefined();
     });
   });
 });

@@ -5,11 +5,10 @@ function baseConfig(dashboardOverride?: Record<string, unknown>) {
   return {
     name: "test-corp",
     role: "inbox-analyst",
-    slack: {
-      app_token: "xapp-1-TEST",
-      bot_token: "xoxb-TEST",
-      approval_channel: "C0123456789",
-      allowed_channels: [],
+    openclaw: {
+      channels: {
+        discord: { enabled: true },
+      },
     },
     models: {
       primary: "anthropic/claude-sonnet-4-5",

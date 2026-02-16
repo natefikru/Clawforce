@@ -4,7 +4,6 @@ import {
   buildPluginsToExtensions,
   enabledPluginsForConfig,
   watchPluginsToExtensions,
-  type PluginName,
 } from "../plugins/compiler.js";
 import { logger } from "../utils/logger.js";
 
@@ -16,14 +15,14 @@ interface PluginCommandOptions {
 }
 
 function selectedPluginsFromOptions(
-  enabledByConfig: PluginName[],
+  enabledByConfig: string[],
   options: PluginCommandOptions,
-): PluginName[] {
+): string[] {
   if (!options.router && !options.compliance) {
     return enabledByConfig;
   }
 
-  const requested = new Set<PluginName>();
+  const requested = new Set<string>();
   if (options.router) requested.add("clawforce-router");
   if (options.compliance) requested.add("clawforce-compliance");
   return enabledByConfig.filter((pluginName) => requested.has(pluginName));
@@ -47,7 +46,7 @@ function resolveExtensionsDir(
 function selectPluginsOrThrow(options: PluginCommandOptions): {
   configName: string;
   extensionsDir: string;
-  selectedPlugins: PluginName[];
+  selectedPlugins: string[];
 } {
   const config = parseConfig(options.config);
   const enabledPlugins = enabledPluginsForConfig(config);
@@ -55,7 +54,7 @@ function selectPluginsOrThrow(options: PluginCommandOptions): {
 
   if (selectedPlugins.length === 0) {
     throw new Error(
-      "No enabled plugins selected. Enable router/compliance in config or pass matching flags.",
+      "No discovered plugins selected. Add plugins to src/plugins or pass matching flags.",
     );
   }
 

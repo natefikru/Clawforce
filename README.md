@@ -13,11 +13,6 @@ npm install -g clawforce
 cat > clawforce.yaml << 'EOF'
 name: my-agent
 role: inbox-analyst
-slack:
-  app_token: "${SLACK_APP_TOKEN}"
-  bot_token: "${SLACK_BOT_TOKEN}"
-  approval_channel: "C0123456789"
-  allowed_channels: []
 models:
   primary: "anthropic/claude-sonnet-4-5"
   credential_mode: env
@@ -33,6 +28,11 @@ router:
   enabled: true
 compliance:
   enabled: true
+openclaw:
+  channels:
+    discord:
+      enabled: true
+      token: "${DISCORD_BOT_TOKEN}"
 ollama:
   enabled: true
   model: "qwen3.3:8b"
@@ -139,8 +139,8 @@ Next.js dashboard with 5 panels:
 ### Agent Role Templates
 
 Three starter templates included:
-- **Inbox Analyst** — Monitors Slack, summarizes threads, flags action items
-- **Research Agent** — Takes requests via Slack, browses web, compiles reports
+- **Inbox Analyst** — Monitors channel activity, summarizes threads, flags action items
+- **Research Agent** — Takes requests via configured channels, browses web, compiles reports
 - **Process Automator** — Cron-triggered browser workflows, reports results
 
 ## CLI
@@ -186,12 +186,6 @@ Full `clawforce.yaml` reference:
 ```yaml
 name: my-agent
 role: inbox-analyst              # inbox-analyst | research-agent | process-automator
-
-slack:
-  app_token: "${SLACK_APP_TOKEN}"
-  bot_token: "${SLACK_BOT_TOKEN}"
-  approval_channel: "C0123456789"
-  allowed_channels: []
 
 models:
   primary: "anthropic/claude-sonnet-4-5"
@@ -258,9 +252,6 @@ alerts:
     auto_block_on_exceeded: false
   notifications:
     dashboard: true
-    slack:
-      enabled: false
-      webhook_url: ""
     email:
       enabled: false
       from: ""
@@ -272,6 +263,10 @@ alerts:
 
 # Direct OpenClaw config passthrough
 openclaw:
+  channels:
+    discord:
+      enabled: true
+      token: "${DISCORD_BOT_TOKEN}"
   agents:
     defaults:
       tools:

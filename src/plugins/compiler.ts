@@ -1,6 +1,5 @@
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   buildSync,
   context,
@@ -10,40 +9,37 @@ import {
   type BuildOptions,
 } from "esbuild";
 import type { ClawforceConfig } from "../config/types.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pluginsRootDir = resolve(join(__dirname, "..", "plugins"));
-
-export const pluginNames = ["clawforce-router", "clawforce-compliance"] as const;
-export type PluginName = (typeof pluginNames)[number];
+import {
+  discoverPlugins,
+  type DiscoveredPlugin,
+  type DiscoverPluginsOptions,
+} from "./registry.js";
+import {
+  formatPluginRuntimeDiagnostics,
+  resolveSelectedPlugins,
+  type PluginRuntimeDiagnostic,
+} from "./runtime.js";
 
 interface CompileOptions {
   clean?: boolean;
+  pluginsRootDir?: string;
 }
 
 export interface PluginWatchHandle {
   close: () => Promise<void>;
 }
 
-function sourceEntryForPlugin(pluginName: PluginName): string {
-  return join(pluginsRootDir, pluginName, "index.ts");
-}
-
-function manifestSourceForPlugin(pluginName: PluginName): string {
-  return join(pluginsRootDir, pluginName, "openclaw.plugin.json");
-}
-
-function manifestOutputForPlugin(pluginName: PluginName, extensionsDir: string): string {
-  return join(extensionsDir, pluginName, "openclaw.plugin.json");
+function manifestOutputForPlugin(pluginId: string, extensionsDir: string): string {
+  return join(extensionsDir, pluginId, "openclaw.plugin.json");
 }
 
 function bundlerOptionsFor(
-  pluginName: PluginName,
+  plugin: DiscoveredPlugin,
   extensionsDir: string,
 ): BuildOptions {
   return {
-    entryPoints: [sourceEntryForPlugin(pluginName)],
-    outfile: join(extensionsDir, pluginName, "index.js"),
+    entryPoints: [plugin.sourceEntryPath],
+    outfile: join(extensionsDir, plugin.id, "index.js"),
     bundle: true,
     format: "esm",
     platform: "node",
@@ -51,6 +47,13 @@ function bundlerOptionsFor(
     sourcemap: true,
     logLevel: "silent",
   };
+}
+
+function selectedPluginIdsFromConfig(
+  _config: ClawforceConfig,
+  discoveredPlugins: readonly DiscoveredPlugin[],
+): string[] {
+  return discoveredPlugins.map((plugin) => plugin.id);
 }
 
 async function formatBuildFailure(error: BuildFailure): Promise<string> {
@@ -61,15 +64,12 @@ async function formatBuildFailure(error: BuildFailure): Promise<string> {
   return messages.join("\n");
 }
 
-export function enabledPluginsForConfig(config: ClawforceConfig): PluginName[] {
-  const selected: PluginName[] = [];
-  if (config.router?.enabled !== false && config.router) {
-    selected.push("clawforce-router");
-  }
-  if (config.compliance?.enabled !== false && config.compliance) {
-    selected.push("clawforce-compliance");
-  }
-  return selected;
+export function enabledPluginsForConfig(
+  config: ClawforceConfig,
+  options: DiscoverPluginsOptions = {},
+): string[] {
+  const discoveredPlugins = discoverPlugins(options);
+  return selectedPluginIdsFromConfig(config, discoveredPlugins);
 }
 
 function formatBuildFailureSync(error: BuildFailure): string {
@@ -84,16 +84,25 @@ function formatBuildFailureSync(error: BuildFailure): string {
 }
 
 export function buildPluginsToExtensions(
-  selectedPlugins: readonly PluginName[],
+  selectedPlugins: readonly string[],
   extensionsDir: string,
   options: CompileOptions = {},
 ): void {
   if (selectedPlugins.length === 0) return;
+  const discoveredPlugins = discoverPlugins({ pluginsRootDir: options.pluginsRootDir });
+  const selection = resolveSelectedPlugins(selectedPlugins, discoveredPlugins);
+  const diagnostics: PluginRuntimeDiagnostic[] = [...selection.diagnostics];
+  const missing = selection.diagnostics.filter((item) => item.status === "failed");
+  if (missing.length > 0) {
+    throw new Error(
+      `Plugin selection failed: ${formatPluginRuntimeDiagnostics(missing)}`,
+    );
+  }
 
   mkdirSync(extensionsDir, { recursive: true });
   if (options.clean !== false) {
-    for (const pluginName of selectedPlugins) {
-      const pluginDir = join(extensionsDir, pluginName);
+    for (const pluginId of selectedPlugins) {
+      const pluginDir = join(extensionsDir, pluginId);
       if (existsSync(pluginDir)) {
         rmSync(pluginDir, { recursive: true, force: true });
       }
@@ -101,43 +110,65 @@ export function buildPluginsToExtensions(
   }
 
   try {
-    for (const pluginName of selectedPlugins) {
-      buildSync(bundlerOptionsFor(pluginName, extensionsDir));
+    for (const plugin of selection.selectedPlugins) {
+      const pluginId = plugin.id;
+      buildSync(bundlerOptionsFor(plugin, extensionsDir));
       cpSync(
-        manifestSourceForPlugin(pluginName),
-        manifestOutputForPlugin(pluginName, extensionsDir),
+        plugin.manifestPath,
+        manifestOutputForPlugin(pluginId, extensionsDir),
       );
+      diagnostics.push({
+        id: pluginId,
+        status: "built",
+      });
     }
   } catch (error) {
     if (error && typeof error === "object" && "errors" in error) {
       const message = formatBuildFailureSync(error as BuildFailure);
-      throw new Error(`Plugin bundle failed:\n${message}`);
+      throw new Error(
+        `Plugin bundle failed: ${formatPluginRuntimeDiagnostics(diagnostics)}\n${message}`,
+      );
     }
     throw error;
   }
 }
 
 export async function watchPluginsToExtensions(
-  selectedPlugins: readonly PluginName[],
+  selectedPlugins: readonly string[],
   extensionsDir: string,
+  options: CompileOptions = {},
 ): Promise<PluginWatchHandle> {
   if (selectedPlugins.length === 0) {
     throw new Error("No plugins selected for watch mode.");
+  }
+  const discoveredPlugins = discoverPlugins({ pluginsRootDir: options.pluginsRootDir });
+  const selection = resolveSelectedPlugins(selectedPlugins, discoveredPlugins);
+  const diagnostics: PluginRuntimeDiagnostic[] = [...selection.diagnostics];
+  const missing = selection.diagnostics.filter((item) => item.status === "failed");
+  if (missing.length > 0) {
+    throw new Error(
+      `Plugin selection failed: ${formatPluginRuntimeDiagnostics(missing)}`,
+    );
   }
 
   mkdirSync(extensionsDir, { recursive: true });
   const contexts: BuildContext<BuildOptions>[] = [];
 
   try {
-    for (const pluginName of selectedPlugins) {
-      const ctx = await context(bundlerOptionsFor(pluginName, extensionsDir));
+    for (const plugin of selection.selectedPlugins) {
+      const pluginId = plugin.id;
+      const ctx = await context(bundlerOptionsFor(plugin, extensionsDir));
       contexts.push(ctx);
       await ctx.rebuild();
       cpSync(
-        manifestSourceForPlugin(pluginName),
-        manifestOutputForPlugin(pluginName, extensionsDir),
+        plugin.manifestPath,
+        manifestOutputForPlugin(pluginId, extensionsDir),
       );
       await ctx.watch();
+      diagnostics.push({
+        id: pluginId,
+        status: "watching",
+      });
     }
 
     return {
@@ -149,7 +180,9 @@ export async function watchPluginsToExtensions(
     await Promise.all(contexts.map((ctx) => ctx.dispose()));
     if (error && typeof error === "object" && "errors" in error) {
       const message = await formatBuildFailure(error as BuildFailure);
-      throw new Error(`Plugin watch failed:\n${message}`);
+      throw new Error(
+        `Plugin watch failed: ${formatPluginRuntimeDiagnostics(diagnostics)}\n${message}`,
+      );
     }
     throw error;
   }

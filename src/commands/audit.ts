@@ -108,8 +108,7 @@ async function readContainerLogs(
     const relevant = allLines.filter((line) => {
       const subsystems = [
         "agent/embedded",
-        "telegram",
-        "slack",
+        "channel/",
       ];
       return subsystems.some((s) => line.includes(s)) &&
         (line.includes("tool start") ||

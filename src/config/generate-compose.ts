@@ -50,10 +50,6 @@ export function generateCompose(config: ClawforceConfig): string {
     gatewayEnv.push("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
   }
 
-  if (config.alerts?.notifications?.slack?.webhook_url) {
-    gatewayEnv.push("CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL=${CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL}");
-  }
-
   if (config.alerts?.notifications?.email?.password) {
     gatewayEnv.push("CLAWFORCE_ALERTS_EMAIL_PASSWORD=${CLAWFORCE_ALERTS_EMAIL_PASSWORD}");
   }

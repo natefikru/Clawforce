@@ -21,23 +21,23 @@ const basePolicy: DataPolicy = {
 
 describe("resolveDataTier", () => {
   it("should resolve channel policy", () => {
-    expect(resolveDataTier(basePolicy, "C_HR")).toBe("restricted");
-    expect(resolveDataTier(basePolicy, "C_FINANCE")).toBe("confidential");
-    expect(resolveDataTier(basePolicy, "C_PUBLIC")).toBe("public");
+    expect(resolveDataTier(basePolicy, { conversationId: "C_HR" })).toBe("restricted");
+    expect(resolveDataTier(basePolicy, { conversationId: "C_FINANCE" })).toBe("confidential");
+    expect(resolveDataTier(basePolicy, { conversationId: "C_PUBLIC" })).toBe("public");
   });
 
   it("should resolve user policy when no channel match", () => {
-    expect(resolveDataTier(basePolicy, undefined, "U_EXEC")).toBe("restricted");
-    expect(resolveDataTier(basePolicy, undefined, "U_INTERN")).toBe("public");
+    expect(resolveDataTier(basePolicy, { actorId: "U_EXEC" })).toBe("restricted");
+    expect(resolveDataTier(basePolicy, { actorId: "U_INTERN" })).toBe("public");
   });
 
   it("should prefer channel over user policy", () => {
     // Channel is public, user is restricted — channel wins
-    expect(resolveDataTier(basePolicy, "C_PUBLIC", "U_EXEC")).toBe("public");
+    expect(resolveDataTier(basePolicy, { conversationId: "C_PUBLIC", actorId: "U_EXEC" })).toBe("public");
   });
 
   it("should return default tier when no match", () => {
-    expect(resolveDataTier(basePolicy, "C_UNKNOWN", "U_UNKNOWN")).toBe("internal");
+    expect(resolveDataTier(basePolicy, { conversationId: "C_UNKNOWN", actorId: "U_UNKNOWN" })).toBe("internal");
   });
 
   it("should return default tier with no channel or user", () => {
@@ -46,7 +46,7 @@ describe("resolveDataTier", () => {
 
   it("should return default tier when channels/users arrays are empty", () => {
     const emptyPolicy: DataPolicy = { defaultTier: "restricted" };
-    expect(resolveDataTier(emptyPolicy, "C_ANY", "U_ANY")).toBe("restricted");
+    expect(resolveDataTier(emptyPolicy, { conversationId: "C_ANY", actorId: "U_ANY" })).toBe("restricted");
   });
 
   it("should handle policy with only channels", () => {
@@ -54,8 +54,8 @@ describe("resolveDataTier", () => {
       defaultTier: "public",
       channels: [{ channelId: "C1", tier: "confidential" }],
     };
-    expect(resolveDataTier(channelOnly, "C1")).toBe("confidential");
-    expect(resolveDataTier(channelOnly, undefined, "U1")).toBe("public");
+    expect(resolveDataTier(channelOnly, { conversationId: "C1" })).toBe("confidential");
+    expect(resolveDataTier(channelOnly, { actorId: "U1" })).toBe("public");
   });
 
   it("should handle policy with only users", () => {
@@ -63,8 +63,8 @@ describe("resolveDataTier", () => {
       defaultTier: "public",
       users: [{ userId: "U1", tier: "restricted" }],
     };
-    expect(resolveDataTier(userOnly, "C1")).toBe("public");
-    expect(resolveDataTier(userOnly, undefined, "U1")).toBe("restricted");
+    expect(resolveDataTier(userOnly, { conversationId: "C1" })).toBe("public");
+    expect(resolveDataTier(userOnly, { actorId: "U1" })).toBe("restricted");
   });
 });
 

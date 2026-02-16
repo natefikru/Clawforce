@@ -36,11 +36,13 @@ describe("plugins commands", () => {
     vi.mocked(parseConfig).mockReturnValue({
       name: "test",
       role: "research-agent",
-      slack: {
-        app_token: "xapp-test",
-        bot_token: "xoxb-test",
-        approval_channel: "C0123456789",
-        allowed_channels: [],
+      openclaw: {
+        channels: {
+          discord: {
+            enabled: true,
+            token: "discord-bot-token",
+          },
+        },
       },
       models: {
         primary: "anthropic/claude-sonnet-4-5",
@@ -67,7 +69,7 @@ describe("plugins commands", () => {
     vi.mocked(enabledPluginsForConfig).mockReturnValue([]);
     await expect(
       pluginsBundleCommand({ config: "./clawforce.yaml" }),
-    ).rejects.toThrow("No enabled plugins selected");
+    ).rejects.toThrow("No discovered plugins selected");
   });
 
   it("starts watch and closes on SIGINT", async () => {

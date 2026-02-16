@@ -1,12 +1,10 @@
 name: "alerts-config"
 role: "inbox-analyst"
 
-slack:
-  app_token: "xapp-1-ALERTS"
-  bot_token: "xoxb-ALERTS"
-  approval_channel: "C0123456789"
-  allowed_channels:
-    - "C9876543210"
+openclaw:
+  channels:
+    discord:
+      enabled: true
 
 models:
   primary: "anthropic/claude-sonnet-4-5"
@@ -32,9 +30,6 @@ alerts:
     auto_block_on_exceeded: true
   notifications:
     dashboard: true
-    slack:
-      enabled: true
-      webhook_url: "https://hooks.slack.com/services/T000/B000/XXXX"
     email:
       enabled: true
       smtp_host: "smtp.example.com"

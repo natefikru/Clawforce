@@ -56,7 +56,7 @@ describe("deployCommand", () => {
     expect(config.agents.defaults.model.primary).toBe(
       "anthropic/claude-sonnet-4-5",
     );
-    expect(config.channels.slack.enabled).toBe(true);
+    expect(config.channels.discord.enabled).toBe(true);
   });
 
   it("should generate docker-compose.yml", async () => {

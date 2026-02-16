@@ -15,6 +15,12 @@ import { dirname } from "node:path";
 import { parseJsonl } from "../../shared/jsonl.js";
 import type { StorageWriter } from "../../storage/writer.js";
 import { normalizeAgentId } from "../../storage/types.js";
+import { normalizeConnectorContext } from "../../connectors/normalize-context.js";
+import {
+  assertHookPermission,
+  assertPermission,
+  getPluginPermissions,
+} from "../permission-guard.js";
 
 export interface ComplianceEntry {
   ts: string;
@@ -43,6 +49,7 @@ export function activate(api: CompliancePluginApi): void {
     : "/home/node/.openclaw/data/compliance.jsonl";
 
   const writer = api.pluginConfig?.storageWriter as StorageWriter | undefined;
+  const permissions = getPluginPermissions(api.pluginConfig);
 
   api.logger.info(`Compliance logger activated (log: ${logPath})`);
 
@@ -54,6 +61,7 @@ export function activate(api: CompliancePluginApi): void {
     }
   }
 
+  assertHookPermission(api.id, permissions, "after_tool_call");
   // Log tool calls
   api.on("after_tool_call", (event, ctx) => {
     const agentId = normalizeAgentId(ctx.agentId);
@@ -67,29 +75,38 @@ export function activate(api: CompliancePluginApi): void {
     });
   });
 
+  assertHookPermission(api.id, permissions, "message_received");
   // Log received messages
   api.on("message_received", (event, ctx) => {
     const content = event.content ?? event.text ?? "";
     const agentId = normalizeAgentId(ctx.agentId);
+    const connector = normalizeConnectorContext(event, ctx);
     write({
       ts: new Date().toISOString(),
       event: "message_received",
       agentId,
-      channel: ctx.messageProvider as string | undefined,
+      provider: connector.provider,
+      conversationId: connector.conversationId,
+      actorId: connector.actorId,
       from: event.from as string | undefined,
       contentLength: typeof content === "string" ? content.length : 0,
     });
   });
 
+  assertHookPermission(api.id, permissions, "message_sent");
+  assertPermission(api.id, permissions, "storage:write", "write compliance logs");
   // Log sent messages
   api.on("message_sent", (event, ctx) => {
     const content = event.content ?? event.text ?? "";
     const agentId = normalizeAgentId(ctx.agentId);
+    const connector = normalizeConnectorContext(event, ctx);
     write({
       ts: new Date().toISOString(),
       event: "message_sent",
       agentId,
-      channel: ctx.messageProvider as string | undefined,
+      provider: connector.provider,
+      conversationId: connector.conversationId,
+      actorId: connector.actorId,
       to: event.to as string | undefined,
       contentLength: typeof content === "string" ? content.length : 0,
       model: event.model as string | undefined,

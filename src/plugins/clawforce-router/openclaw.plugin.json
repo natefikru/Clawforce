@@ -1,5 +1,24 @@
 {
   "id": "clawforce-router",
+  "version": "1.0.0",
+  "engines": {
+    "clawforce": ">=0.1.0",
+    "openclaw": ">=0.1.0"
+  },
+  "capabilities": [
+    "routing",
+    "output-filtering",
+    "alerting",
+    "policy-enforcement"
+  ],
+  "permissions": [
+    "hooks:before_agent_start",
+    "hooks:message_sending",
+    "hooks:tool_result_persist",
+    "hooks:agent_end",
+    "storage:write",
+    "alerts:dispatch"
+  ],
   "configSchema": {
     "type": "object",
     "additionalProperties": true,

@@ -15,7 +15,15 @@ describe("dispatchAlertNotifications", () => {
     vi.restoreAllMocks();
   });
 
-  it("does not throw if Slack notifier fails", async () => {
+  it("returns when email notifications are disabled", async () => {
+    await expect(
+      dispatchAlertNotifications(alert, {
+        email: { enabled: false },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does not throw if email notifier fails", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: false, status: 500 }),
@@ -23,35 +31,13 @@ describe("dispatchAlertNotifications", () => {
 
     await expect(
       dispatchAlertNotifications(alert, {
-        slack: {
-          enabled: true,
-          webhookUrl: "https://hooks.slack.com/services/T/B/X",
-        },
         email: {
-          enabled: false,
-        },
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  it("returns when all channels are disabled", async () => {
-    await expect(
-      dispatchAlertNotifications(alert, {
-        slack: { enabled: false },
-        email: { enabled: false },
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  it("does not throw if Slack webhook is configured with non-https URL", async () => {
-    await expect(
-      dispatchAlertNotifications(alert, {
-        slack: {
           enabled: true,
-          webhookUrl: "http://hooks.slack.com/services/T/B/X",
-        },
-        email: {
-          enabled: false,
+          smtpHost: "smtp.example.com",
+          username: "alerts@example.com",
+          password: "secret",
+          from: "alerts@example.com",
+          to: ["ops@example.com"],
         },
       }),
     ).resolves.toBeUndefined();

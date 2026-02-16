@@ -1,11 +1,11 @@
 ---
 name: research-agent
-description: "Takes research requests via Slack, browses the web, compiles reports, and delivers findings"
+description: "Takes research requests via configured channels, browses the web, compiles reports, and delivers findings"
 metadata:
   openclaw:
     emoji: "🔍"
     requires:
-      config: ["channels.slack"]
+      config: ["channels"]
       bins: ["chromium"]
 ---
 
@@ -64,7 +64,7 @@ structured report.
 - `browser.navigate` — Visit web pages
 - `browser.snapshot` — Capture page content
 - `web_search` — Search the web
-- `slack.send` — Deliver reports
+- `message.send` — Deliver reports
 - `read` / `write` — Save intermediate research notes
 
 ## Approval Workflow
@@ -98,7 +98,7 @@ actions, you MUST post a draft to the approval channel and wait for confirmation
 
 ### Actions That Do NOT Need Approval
 
-- Reading Slack messages
+- Reading channel messages
 - Web browsing (read-only, no form submissions)
 - Web searches
 - Generating report drafts (not sending them)

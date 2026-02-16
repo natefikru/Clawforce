@@ -36,8 +36,8 @@ describe("auditCommand", () => {
 
   it("should read and display audit entries", async () => {
     const entries = [
-      '{"ts":"2026-02-14T10:00:00Z","agent":"inbox-analyst","action":"slack.read","result":"success"}',
-      '{"ts":"2026-02-14T10:01:00Z","agent":"inbox-analyst","action":"slack.send","result":"success"}',
+      '{"ts":"2026-02-14T10:00:00Z","agent":"inbox-analyst","action":"message.read","result":"success"}',
+      '{"ts":"2026-02-14T10:01:00Z","agent":"inbox-analyst","action":"message.send","result":"success"}',
     ];
     writeFileSync(
       join(testDeployDir, "data", "audit.jsonl"),
@@ -48,8 +48,8 @@ describe("auditCommand", () => {
     await auditCommand(50);
     expect(console.log).toHaveBeenCalled();
     const allOutput = vi.mocked(console.log).mock.calls.map((c) => c.join(" ")).join("\n");
-    expect(allOutput).toContain("slack.read");
-    expect(allOutput).toContain("slack.send");
+    expect(allOutput).toContain("message.read");
+    expect(allOutput).toContain("message.send");
   });
 
   it("should handle empty audit log", async () => {
@@ -94,7 +94,7 @@ describe("auditCommand", () => {
     it("should read compliance.jsonl when source is compliance", async () => {
       const entries = [
         '{"ts":"2026-02-15T00:00:00Z","event":"tool_call","tool":"exec","success":true,"durationMs":150}',
-        '{"ts":"2026-02-15T00:01:00Z","event":"message_sent","to":"user","channel":"telegram","contentLength":42,"model":"claude-sonnet-4-5"}',
+        '{"ts":"2026-02-15T00:01:00Z","event":"message_sent","to":"user","channel":"generic","contentLength":42,"model":"claude-sonnet-4-5"}',
       ];
       writeFileSync(
         join(testDeployDir, "data", "compliance.jsonl"),

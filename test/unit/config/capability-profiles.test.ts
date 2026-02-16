@@ -7,11 +7,10 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
     role: "inbox-analyst",
-    slack: {
-      app_token: "xapp-1-TEST",
-      bot_token: "xoxb-TEST",
-      approval_channel: "C0123456789",
-      allowed_channels: [],
+    openclaw: {
+      channels: {
+        discord: { enabled: true },
+      },
     },
     models: { primary: "anthropic/claude-sonnet-4-5" },
     ...overrides,
@@ -120,7 +119,7 @@ describe("capability profiles in config generation", () => {
     const result = generateOpenClawConfig(
       makeConfig({ capabilities: "full" }),
     );
-    expect(result.channels.slack).toBeDefined();
+    expect((result.channels as Record<string, unknown>).discord).toBeDefined();
   });
 
   it("should work with both profile and router config", () => {

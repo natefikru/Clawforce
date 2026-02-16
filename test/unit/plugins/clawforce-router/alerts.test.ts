@@ -20,6 +20,14 @@ function createMockApi(
   return {
     id: "clawforce-router",
     pluginConfig: {
+      pluginPermissions: [
+        "hooks:before_agent_start",
+        "hooks:message_sending",
+        "hooks:tool_result_persist",
+        "hooks:agent_end",
+        "storage:write",
+        "alerts:dispatch",
+      ],
       healthCheck: { enabled: false },
       storageWriter: defaultWriter,
       ...pluginConfig,
@@ -39,13 +47,11 @@ function createMockApi(
 describe("router alerts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL;
     delete process.env.CLAWFORCE_ALERTS_EMAIL_PASSWORD;
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    delete process.env.CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL;
     delete process.env.CLAWFORCE_ALERTS_EMAIL_PASSWORD;
   });
 
@@ -166,40 +172,6 @@ describe("router alerts", () => {
     vi.advanceTimersByTime(61_000);
     expect(writer.writeAlert).toHaveBeenCalledWith(
       expect.objectContaining({ type: "agent_idle" }),
-    );
-  });
-
-  it("rejects legacy plaintext slack webhook configuration", () => {
-    const api = createMockApi({
-      alerts: {
-        notifications: {
-          slack: {
-            enabled: true,
-            webhookUrl: "https://hooks.slack.com/services/T000/B000/TEST",
-          },
-        },
-      },
-    });
-
-    expect(() => activate(api)).toThrow(
-      "Router alerts slack is enabled but webhook secret env is missing or empty",
-    );
-  });
-
-  it("fails closed when slack notifier env secret is missing", () => {
-    const api = createMockApi({
-      alerts: {
-        notifications: {
-          slack: {
-            enabled: true,
-            webhookUrlEnv: "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL",
-          },
-        },
-      },
-    });
-
-    expect(() => activate(api)).toThrow(
-      "Router alerts slack is enabled but webhook secret env is missing or empty",
     );
   });
 

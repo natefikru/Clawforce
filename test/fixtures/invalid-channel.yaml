@@ -1,11 +1,8 @@
 name: "test"
 role: "inbox-analyst"
 
-slack:
-  app_token: "xapp-1-TEST"
-  bot_token: "xoxb-TEST"
-  approval_channel: "not-a-channel-id"
-  allowed_channels: []
+openclaw:
+  channels: {}
 
 models:
   primary: "anthropic/claude-sonnet-4-5"
