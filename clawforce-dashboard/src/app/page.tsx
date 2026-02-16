@@ -2,6 +2,7 @@ import { AgentStatusCard } from "@/components/AgentStatusCard";
 import { CostTracker } from "@/components/CostTracker";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { TaskLog } from "@/components/TaskLog";
+import { AlertPanel } from "@/components/AlertPanel";
 import { auth, signOut } from "@/auth";
 
 export default async function Dashboard() {
@@ -50,6 +51,7 @@ export default async function Dashboard() {
         <CostTracker />
         <ActivityFeed />
         <TaskLog />
+        <AlertPanel />
       </div>
     </div>
   );

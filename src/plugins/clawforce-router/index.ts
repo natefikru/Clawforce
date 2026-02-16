@@ -11,7 +11,11 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { StorageWriter } from "../../storage/writer.js";
-import type { RoutingLogEntry } from "../../storage/types.js";
+import type {
+  AlertSeverity,
+  AlertType,
+  RoutingLogEntry,
+} from "../../storage/types.js";
 import { detectPII, detectPIITypes } from "./pii-detector.js";
 import { filterOutput } from "./output-filter.js";
 import { analyzeComplexity } from "./complexity-analyzer.js";
@@ -34,6 +38,8 @@ import {
   type HealthCheckConfig,
   type ProviderHealthState,
 } from "./health-monitor.js";
+import { IdleMonitor } from "./idle-monitor.js";
+import { dispatchAlertNotifications } from "../../alerts/dispatcher.js";
 
 export interface RouterPluginConfig {
   defaultModel?: string;
@@ -43,6 +49,77 @@ export interface RouterPluginConfig {
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
   healthCheck?: Partial<HealthCheckConfig>;
+  alerts?: RouterAlertConfig;
+}
+
+export interface RouterAlertConfig {
+  enabled?: boolean;
+  types?: {
+    modelHealth?: boolean;
+    budgetExceeded?: boolean;
+    piiViolation?: boolean;
+    agentError?: boolean;
+    agentIdle?: boolean;
+  };
+  idle?: {
+    thresholdMinutes?: number;
+    cooldownMinutes?: number;
+  };
+  budget?: {
+    cooldownMinutes?: number;
+    autoBlockOnExceeded?: boolean;
+  };
+  notifications?: {
+    dashboard?: boolean;
+    slack?: {
+      enabled?: boolean;
+      webhookUrl?: string;
+    };
+    email?: {
+      enabled?: boolean;
+      smtpHost?: string;
+      smtpPort?: number;
+      username?: string;
+      password?: string;
+      from?: string;
+      to?: string[];
+    };
+  };
+}
+
+interface ResolvedRouterAlertConfig {
+  enabled: boolean;
+  types: {
+    modelHealth: boolean;
+    budgetExceeded: boolean;
+    piiViolation: boolean;
+    agentError: boolean;
+    agentIdle: boolean;
+  };
+  idle: {
+    thresholdMinutes: number;
+    cooldownMinutes: number;
+  };
+  budget: {
+    cooldownMinutes: number;
+    autoBlockOnExceeded: boolean;
+  };
+  notifications: {
+    dashboard: boolean;
+    slack: {
+      enabled: boolean;
+      webhookUrl?: string;
+    };
+    email: {
+      enabled: boolean;
+      smtpHost?: string;
+      smtpPort: number;
+      username?: string;
+      password?: string;
+      from?: string;
+      to?: string[];
+    };
+  };
 }
 
 export interface RouterPluginApi {
@@ -80,6 +157,43 @@ const DEFAULT_HEALTH_CHECK: HealthCheckConfig = {
   failoverPolicy: "block",
   failureThreshold: 3,
   recoveryThreshold: 2,
+};
+
+const DEFAULT_ALERT_CONFIG: ResolvedRouterAlertConfig = {
+  enabled: true,
+  types: {
+    modelHealth: true,
+    budgetExceeded: true,
+    piiViolation: true,
+    agentError: true,
+    agentIdle: true,
+  },
+  idle: {
+    thresholdMinutes: 60,
+    cooldownMinutes: 30,
+  },
+  budget: {
+    cooldownMinutes: 60,
+    autoBlockOnExceeded: false,
+  },
+  notifications: {
+    dashboard: true,
+    slack: {
+      enabled: false,
+    },
+    email: {
+      enabled: false,
+      smtpPort: 587,
+    },
+  },
+};
+
+const ALERT_TYPE_TO_CONFIG_KEY: Record<AlertType, keyof ResolvedRouterAlertConfig["types"]> = {
+  model_health: "modelHealth",
+  budget_exceeded: "budgetExceeded",
+  pii_violation: "piiViolation",
+  agent_error: "agentError",
+  agent_idle: "agentIdle",
 };
 
 /** Max number of recent messages to scan for PII alongside the current prompt. */
@@ -137,6 +251,52 @@ export function parseModelRef(ref: string): {
 export function activate(api: RouterPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
   const writer = api.pluginConfig?.storageWriter as StorageWriter | undefined;
+  const alertCooldowns = new Map<string, number>();
+
+  const emitAlert = (input: {
+    type: AlertType;
+    severity: AlertSeverity;
+    message: string;
+    agentId?: string;
+    data?: Record<string, unknown>;
+    cooldownMinutes?: number;
+    cooldownKey?: string;
+  }): void => {
+    if (!writer) return;
+    if (!config.alerts.enabled) return;
+    const typeKey = ALERT_TYPE_TO_CONFIG_KEY[input.type];
+    if (!config.alerts.types[typeKey]) return;
+
+    const cooldownMinutes = input.cooldownMinutes ?? 0;
+    if (cooldownMinutes > 0) {
+      const key = input.cooldownKey ?? `${input.type}:${input.agentId ?? "_global"}`;
+      const nowMs = Date.now();
+      const last = alertCooldowns.get(key) ?? 0;
+      if (nowMs - last < cooldownMinutes * 60_000) {
+        return;
+      }
+      alertCooldowns.set(key, nowMs);
+    }
+
+    const ts = new Date().toISOString();
+    const alertEntry = {
+      ts,
+      severity: input.severity,
+      type: input.type,
+      agentId: input.agentId,
+      message: input.message,
+      data: input.data,
+    } as const;
+    writer.writeAlert(alertEntry);
+
+    void dispatchAlertNotifications(
+      alertEntry,
+      {
+        slack: config.alerts.notifications.slack,
+        email: config.alerts.notifications.email,
+      },
+    );
+  };
 
   const storageDb = api.pluginConfig?.storageDb as DatabaseSync | undefined;
   const budgetTracker = config.budget
@@ -159,10 +319,9 @@ export function activate(api: RouterPluginApi): void {
         `[health] ${change.provider} ${change.previous.status} -> ${change.current.status} ` +
           `(circuit: ${change.current.circuit})`,
       );
-      writer?.writeAlert({
-        ts: new Date().toISOString(),
-        severity: change.current.status === "down" ? "error" : "warning",
+      emitAlert({
         type: "model_health",
+        severity: change.current.status === "down" ? "error" : "warning",
         message:
           `Provider ${change.provider} health changed ` +
           `${change.previous.status}/${change.previous.circuit} -> ` +
@@ -191,6 +350,28 @@ export function activate(api: RouterPluginApi): void {
   }
   healthMonitor.start();
   registerProcessCleanup(healthMonitor);
+
+  const idleMonitor = new IdleMonitor({
+    thresholdMinutes: config.alerts.idle.thresholdMinutes,
+    cooldownMinutes: config.alerts.idle.cooldownMinutes,
+    onIdle: (event) => {
+      emitAlert({
+        type: "agent_idle",
+        severity: "warning",
+        agentId: event.agentId,
+        message: `Agent ${event.agentId} has been idle for ${event.idleMinutes} minute(s)`,
+        data: {
+          lastActivityAt: event.lastActivityAt,
+          idleMinutes: event.idleMinutes,
+          thresholdMinutes: config.alerts.idle.thresholdMinutes,
+        },
+        cooldownMinutes: config.alerts.idle.cooldownMinutes,
+        cooldownKey: `agent_idle:${event.agentId}`,
+      });
+    },
+  });
+  idleMonitor.start();
+  registerIdleCleanup(idleMonitor);
 
   function writeLog(entry: RoutingLogEntry): void {
     if (writer) {
@@ -246,6 +427,36 @@ export function activate(api: RouterPluginApi): void {
         ? budgetTracker.checkBudget(estimatedCost)
         : { withinBudget: true, remainingBudget: Infinity, dailySpent: 0 };
 
+      if (!budgetCheck.withinBudget) {
+        emitAlert({
+          type: "budget_exceeded",
+          severity: "warning",
+          agentId: ctx.agentId,
+          message: "Budget exceeded; router is applying fallback behavior",
+          data: {
+            estimatedCost,
+            dailySpent: budgetCheck.dailySpent,
+            remainingBudget: budgetCheck.remainingBudget,
+            suggestedModel: budgetCheck.suggestedModel,
+          },
+          cooldownMinutes: config.alerts.budget.cooldownMinutes,
+          cooldownKey: `budget_exceeded:${ctx.agentId ?? "_global"}`,
+        });
+        if (config.alerts.budget.autoBlockOnExceeded) {
+          emitAlert({
+            type: "agent_error",
+            severity: "error",
+            agentId: ctx.agentId,
+            message: "Request blocked: budget exceeded and auto-block is enabled",
+            data: {
+              estimatedCost,
+              dailySpent: budgetCheck.dailySpent,
+            },
+          });
+          throw new Error("Blocked request: budget exceeded and auto-block is enabled");
+        }
+      }
+
       let decision = selectModel({
         hasPII,
         complexity,
@@ -272,10 +483,9 @@ export function activate(api: RouterPluginApi): void {
           });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          writer?.writeAlert({
-            ts: new Date().toISOString(),
-            severity: hasPII ? "error" : "warning",
+          emitAlert({
             type: "model_health",
+            severity: hasPII ? "error" : "warning",
             agentId: ctx.agentId,
             message,
             data: {
@@ -286,8 +496,43 @@ export function activate(api: RouterPluginApi): void {
               failoverPolicy: config.healthCheck.failoverPolicy,
             },
           });
+          emitAlert({
+            type: "agent_error",
+            severity: "error",
+            agentId: ctx.agentId,
+            message,
+            data: {
+              selectedModel: decision.model,
+              hasPII,
+              providerStatus: healthState.status,
+            },
+          });
           throw err;
         }
+      }
+
+      if (hasPII && !isLocalModel(decision.model)) {
+        emitAlert({
+          type: "pii_violation",
+          severity: "error",
+          agentId: ctx.agentId,
+          message: "Blocked request: PII detected but final route resolved to cloud",
+          data: {
+            selectedModel: decision.model,
+            piiTypes,
+            reason: decision.reason,
+          },
+        });
+        emitAlert({
+          type: "agent_error",
+          severity: "error",
+          agentId: ctx.agentId,
+          message: "Security invariant violation: PII route attempted to non-local model",
+          data: {
+            selectedModel: decision.model,
+          },
+        });
+        throw new Error("Blocked sensitive request: resolved model is not local");
       }
 
       // Record spend after routing decision using the selected model's cost
@@ -335,6 +580,7 @@ export function activate(api: RouterPluginApi): void {
       });
 
       // Prepend routing context for the agent
+      idleMonitor.recordActivity(ctx.agentId ?? "_global");
       const contextLines = [
         `[Router] Model recommendation: ${decision.model}`,
         `[Router] Reason: ${decision.reason}`,
@@ -397,7 +643,7 @@ export function activate(api: RouterPluginApi): void {
         writeLog({
           ts: new Date().toISOString(),
           event: "tool_result_redaction",
-          toolName: event.toolName,
+          toolName: typeof event.toolName === "string" ? event.toolName : undefined,
           redactedTypes: result.redactedTypes,
           matchCount: result.matchCount,
         });
@@ -408,13 +654,14 @@ export function activate(api: RouterPluginApi): void {
 
   // Audit: log session end events for compliance trail
   api.on("agent_end", (event, ctx) => {
+    idleMonitor.recordActivity(ctx.agentId ?? "_global");
     writeLog({
       ts: new Date().toISOString(),
       event: "agent_session_end",
       agentId: ctx.agentId,
       sessionKey: ctx.sessionKey,
-      success: event.success,
-      durationMs: event.durationMs,
+      success: typeof event.success === "boolean" ? event.success : undefined,
+      durationMs: typeof event.durationMs === "number" ? event.durationMs : undefined,
       messageCount: Array.isArray(event.messages) ? event.messages.length : 0,
     });
   });
@@ -475,6 +722,7 @@ interface ResolvedRouterConfig {
   budget?: BudgetConfig;
   policy?: DataPolicy;
   healthCheck: HealthCheckConfig;
+  alerts: ResolvedRouterAlertConfig;
 }
 
 function resolveConfig(
@@ -498,6 +746,105 @@ function resolveConfig(
     policy: pluginConfig?.policy && typeof pluginConfig.policy === "object"
       ? (pluginConfig.policy as DataPolicy) : undefined,
     healthCheck: resolveHealthCheckConfig(pluginConfig?.healthCheck),
+    alerts: resolveAlertConfig(pluginConfig?.alerts),
+  };
+}
+
+function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
+  if (!value || typeof value !== "object") {
+    return {
+      ...DEFAULT_ALERT_CONFIG,
+      types: { ...DEFAULT_ALERT_CONFIG.types },
+      idle: { ...DEFAULT_ALERT_CONFIG.idle },
+      budget: { ...DEFAULT_ALERT_CONFIG.budget },
+    };
+  }
+  const cfg = value as RouterAlertConfig;
+  return {
+    enabled: typeof cfg.enabled === "boolean" ? cfg.enabled : DEFAULT_ALERT_CONFIG.enabled,
+    types: {
+      modelHealth: typeof cfg.types?.modelHealth === "boolean"
+        ? cfg.types.modelHealth
+        : DEFAULT_ALERT_CONFIG.types.modelHealth,
+      budgetExceeded: typeof cfg.types?.budgetExceeded === "boolean"
+        ? cfg.types.budgetExceeded
+        : DEFAULT_ALERT_CONFIG.types.budgetExceeded,
+      piiViolation: typeof cfg.types?.piiViolation === "boolean"
+        ? cfg.types.piiViolation
+        : DEFAULT_ALERT_CONFIG.types.piiViolation,
+      agentError: typeof cfg.types?.agentError === "boolean"
+        ? cfg.types.agentError
+        : DEFAULT_ALERT_CONFIG.types.agentError,
+      agentIdle: typeof cfg.types?.agentIdle === "boolean"
+        ? cfg.types.agentIdle
+        : DEFAULT_ALERT_CONFIG.types.agentIdle,
+    },
+    idle: {
+      thresholdMinutes:
+        typeof cfg.idle?.thresholdMinutes === "number" && cfg.idle.thresholdMinutes > 0
+          ? cfg.idle.thresholdMinutes
+          : DEFAULT_ALERT_CONFIG.idle.thresholdMinutes,
+      cooldownMinutes:
+        typeof cfg.idle?.cooldownMinutes === "number" && cfg.idle.cooldownMinutes > 0
+          ? cfg.idle.cooldownMinutes
+          : DEFAULT_ALERT_CONFIG.idle.cooldownMinutes,
+    },
+    budget: {
+      cooldownMinutes:
+        typeof cfg.budget?.cooldownMinutes === "number" && cfg.budget.cooldownMinutes > 0
+          ? cfg.budget.cooldownMinutes
+          : DEFAULT_ALERT_CONFIG.budget.cooldownMinutes,
+      autoBlockOnExceeded:
+        typeof cfg.budget?.autoBlockOnExceeded === "boolean"
+          ? cfg.budget.autoBlockOnExceeded
+          : DEFAULT_ALERT_CONFIG.budget.autoBlockOnExceeded,
+    },
+    notifications: {
+      dashboard:
+        typeof cfg.notifications?.dashboard === "boolean"
+          ? cfg.notifications.dashboard
+          : DEFAULT_ALERT_CONFIG.notifications.dashboard,
+      slack: {
+        enabled:
+          typeof cfg.notifications?.slack?.enabled === "boolean"
+            ? cfg.notifications.slack.enabled
+            : DEFAULT_ALERT_CONFIG.notifications.slack.enabled,
+        webhookUrl:
+          typeof cfg.notifications?.slack?.webhookUrl === "string"
+            ? cfg.notifications.slack.webhookUrl
+            : DEFAULT_ALERT_CONFIG.notifications.slack.webhookUrl,
+      },
+      email: {
+        enabled:
+          typeof cfg.notifications?.email?.enabled === "boolean"
+            ? cfg.notifications.email.enabled
+            : DEFAULT_ALERT_CONFIG.notifications.email.enabled,
+        smtpHost:
+          typeof cfg.notifications?.email?.smtpHost === "string"
+            ? cfg.notifications.email.smtpHost
+            : DEFAULT_ALERT_CONFIG.notifications.email.smtpHost,
+        smtpPort:
+          typeof cfg.notifications?.email?.smtpPort === "number" && cfg.notifications.email.smtpPort > 0
+            ? cfg.notifications.email.smtpPort
+            : DEFAULT_ALERT_CONFIG.notifications.email.smtpPort,
+        username:
+          typeof cfg.notifications?.email?.username === "string"
+            ? cfg.notifications.email.username
+            : DEFAULT_ALERT_CONFIG.notifications.email.username,
+        password:
+          typeof cfg.notifications?.email?.password === "string"
+            ? cfg.notifications.email.password
+            : DEFAULT_ALERT_CONFIG.notifications.email.password,
+        from:
+          typeof cfg.notifications?.email?.from === "string"
+            ? cfg.notifications.email.from
+            : DEFAULT_ALERT_CONFIG.notifications.email.from,
+        to:
+          Array.isArray(cfg.notifications?.email?.to)
+            ? cfg.notifications?.email?.to
+            : DEFAULT_ALERT_CONFIG.notifications.email.to,
+      },
+    },
   };
 }
 
@@ -560,7 +907,10 @@ function registerProcessCleanup(monitor: ModelHealthMonitor): void {
   currentHealthMonitor = monitor;
   if (cleanupHandlersRegistered) return;
 
-  const stop = () => currentHealthMonitor?.stop();
+  const stop = () => {
+    currentHealthMonitor?.stop();
+    currentIdleMonitor?.stop();
+  };
   process.once("beforeExit", stop);
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
@@ -569,6 +919,7 @@ function registerProcessCleanup(monitor: ModelHealthMonitor): void {
 
 let cleanupHandlersRegistered = false;
 let currentHealthMonitor: ModelHealthMonitor | null = null;
+let currentIdleMonitor: IdleMonitor | null = null;
 
 let routingLogDirEnsured = false;
 
@@ -577,6 +928,13 @@ function ensureRoutingLogDir(logPath: string): void {
     mkdirSync(dirname(logPath), { recursive: true });
     routingLogDirEnsured = true;
   }
+}
+
+function registerIdleCleanup(monitor: IdleMonitor): void {
+  if (currentIdleMonitor && currentIdleMonitor !== monitor) {
+    currentIdleMonitor.stop();
+  }
+  currentIdleMonitor = monitor;
 }
 
 /** Reset the directory-ensured flag. Exported for testing only. */

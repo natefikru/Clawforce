@@ -163,6 +163,7 @@ export class StorageReader {
   getAlerts(opts: {
     since?: string;
     severity?: string;
+    type?: string;
     unacknowledgedOnly?: boolean;
     limit?: number;
   }): AlertRow[] {
@@ -176,6 +177,10 @@ export class StorageReader {
     if (opts.severity) {
       conditions.push("severity = ?");
       params.push(opts.severity);
+    }
+    if (opts.type) {
+      conditions.push("type = ?");
+      params.push(opts.type);
     }
     if (opts.unacknowledgedOnly) {
       conditions.push("acknowledged = 0");

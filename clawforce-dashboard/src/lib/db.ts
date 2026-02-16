@@ -27,3 +27,18 @@ export function resetReadDb(): void {
   }
   cachedDb = null;
 }
+
+/**
+ * Open a write-capable database connection for short-lived mutations.
+ * Caller is responsible for closing the returned connection.
+ */
+export function getWriteDb(): DatabaseSync | null {
+  try {
+    const db = new DatabaseSync(DB_PATH);
+    db.exec("PRAGMA busy_timeout = 5000");
+    return db;
+  } catch (err) {
+    console.error("[db] Failed to open write database:", err);
+    return null;
+  }
+}

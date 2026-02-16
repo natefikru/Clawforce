@@ -222,6 +222,27 @@ describe("StorageReader", () => {
     });
   });
 
+  describe("getAlerts", () => {
+    it("filters by type", () => {
+      writer.writeAlert({
+        ts: "2026-02-15T10:00:00Z",
+        severity: "warning",
+        type: "budget_exceeded",
+        message: "Budget exceeded",
+      });
+      writer.writeAlert({
+        ts: "2026-02-15T10:01:00Z",
+        severity: "error",
+        type: "pii_violation",
+        message: "PII violation",
+      });
+
+      const rows = reader.getAlerts({ type: "pii_violation", limit: 10 });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].type).toBe("pii_violation");
+    });
+  });
+
   describe("getTotalEventCount", () => {
     it("returns total count without filter", () => {
       writer.writeComplianceEvent({ ts: "2026-02-15T10:00:00Z", event: "a" });

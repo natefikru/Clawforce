@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type {
   StorageConfig,
   ComplianceEntry,
+  AlertEntry,
   ComplianceEventRow,
   RoutingLogEntry,
   RoutingDecisionRow,
@@ -12,6 +13,7 @@ import type {
   ModelDistribution,
   DailySpend,
 } from "../../../src/storage/types.js";
+import { ALERT_TYPES } from "../../../src/storage/types.js";
 
 describe("storage types", () => {
   it("StorageConfig has required fields", () => {
@@ -141,6 +143,17 @@ describe("storage types", () => {
       created_at: "2026-02-15 12:00:00",
     };
     expect(row.severity).toBe("critical");
+  });
+
+  it("AlertEntry enforces known alert type values", () => {
+    const entry: AlertEntry = {
+      ts: "2026-02-15T12:00:00Z",
+      severity: "warning",
+      type: "model_health",
+      message: "Provider changed state",
+    };
+    expect(entry.type).toBe("model_health");
+    expect(ALERT_TYPES).toContain(entry.type);
   });
 
   it("UsageSummary has aggregate fields", () => {

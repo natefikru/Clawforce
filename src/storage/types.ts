@@ -7,6 +7,17 @@
 
 import type { ComplianceEntry } from "../plugins/clawforce-compliance/index.js";
 
+export const ALERT_TYPES = [
+  "model_health",
+  "budget_exceeded",
+  "pii_violation",
+  "agent_error",
+  "agent_idle",
+] as const;
+
+export type AlertType = typeof ALERT_TYPES[number];
+export type AlertSeverity = "info" | "warning" | "error";
+
 export interface StorageConfig {
   dbPath: string;
   complianceLogPath: string;
@@ -56,8 +67,8 @@ export interface RoutingLogEntry {
 
 export interface AlertEntry {
   ts: string;
-  severity: "info" | "warning" | "error";
-  type: string;
+  severity: AlertSeverity;
+  type: AlertType;
   agentId?: string;
   message: string;
   acknowledged?: boolean;

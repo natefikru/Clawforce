@@ -2,6 +2,98 @@ import { z } from "zod";
 
 const slackChannelId = z.string().regex(/^C[A-Z0-9]+$/, "Invalid Slack channel ID");
 
+const alertTypesSchema = z.object({
+  model_health: z.boolean().default(true),
+  budget_exceeded: z.boolean().default(true),
+  pii_violation: z.boolean().default(true),
+  agent_error: z.boolean().default(true),
+  agent_idle: z.boolean().default(true),
+}).default({});
+
+const alertIdleSchema = z.object({
+  threshold_minutes: z.number().int().positive().default(60),
+  cooldown_minutes: z.number().int().positive().default(30),
+}).default({});
+
+const alertBudgetSchema = z.object({
+  cooldown_minutes: z.number().int().positive().default(60),
+  auto_block_on_exceeded: z.boolean().default(false),
+}).default({});
+
+const alertSlackNotificationsSchema = z.object({
+  enabled: z.boolean().default(false),
+  webhook_url: z.string().url().optional(),
+}).superRefine((value, ctx) => {
+  if (value.enabled && !value.webhook_url) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.slack.webhook_url is required when slack is enabled",
+      path: ["webhook_url"],
+    });
+  }
+});
+
+const alertEmailNotificationsSchema = z.object({
+  enabled: z.boolean().default(false),
+  smtp_host: z.string().min(1).optional(),
+  smtp_port: z.number().int().positive().default(587),
+  username: z.string().min(1).optional(),
+  password: z.string().min(1).optional(),
+  from: z.string().email().optional(),
+  to: z.array(z.string().email()).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.enabled) return;
+  if (!value.smtp_host) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.email.smtp_host is required when email is enabled",
+      path: ["smtp_host"],
+    });
+  }
+  if (!value.username) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.email.username is required when email is enabled",
+      path: ["username"],
+    });
+  }
+  if (!value.password) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.email.password is required when email is enabled",
+      path: ["password"],
+    });
+  }
+  if (!value.from) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.email.from is required when email is enabled",
+      path: ["from"],
+    });
+  }
+  if (!value.to || value.to.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.email.to must include at least one recipient when email is enabled",
+      path: ["to"],
+    });
+  }
+});
+
+const alertNotificationsSchema = z.object({
+  dashboard: z.boolean().default(true),
+  slack: alertSlackNotificationsSchema.default({}),
+  email: alertEmailNotificationsSchema.default({}),
+}).default({});
+
+const alertsSchema = z.object({
+  enabled: z.boolean().default(true),
+  types: alertTypesSchema,
+  idle: alertIdleSchema,
+  budget: alertBudgetSchema,
+  notifications: alertNotificationsSchema,
+}).default({});
+
 export const ClawforceConfigSchema = z.object({
   name: z
     .string()
@@ -169,6 +261,8 @@ export const ClawforceConfigSchema = z.object({
         .optional(),
     })
     .optional(),
+
+  alerts: alertsSchema.optional(),
 
   capabilities: z.enum(["minimal", "standard", "full"]).optional(),
 

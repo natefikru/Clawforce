@@ -18,10 +18,10 @@ describe("parseConfig", () => {
 
     expect(config.name).toBe("test-corp");
     expect(config.role).toBe("inbox-analyst");
-    expect(config.slack.app_token).toBe("xapp-1-ABC123DEF456");
-    expect(config.slack.bot_token).toBe("xoxb-123456789-ABCDEFGHIJ");
-    expect(config.slack.approval_channel).toBe("C0123456789");
-    expect(config.slack.allowed_channels).toEqual(["C9876543210"]);
+    expect(config.slack?.app_token).toBe("xapp-1-ABC123DEF456");
+    expect(config.slack?.bot_token).toBe("xoxb-123456789-ABCDEFGHIJ");
+    expect(config.slack?.approval_channel).toBe("C0123456789");
+    expect(config.slack?.allowed_channels).toEqual(["C9876543210"]);
     expect(config.models.primary).toBe("anthropic/claude-sonnet-4-5");
     expect(config.models.local).toBe("ollama/llama3.3:8b");
     expect(config.models.api_key).toBe("sk-ant-test123");
@@ -39,7 +39,7 @@ describe("parseConfig", () => {
 
     expect(config.name).toBe("minimal");
     expect(config.role).toBe("research-agent");
-    expect(config.slack.allowed_channels).toEqual([]);
+    expect(config.slack?.allowed_channels).toEqual([]);
     expect(config.approval).toBeUndefined();
     expect(config.ollama).toBeUndefined();
   });
@@ -121,5 +121,22 @@ describe("parseConfig", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-queue-policy.yaml")),
     ).toThrow("queue is not implemented yet");
+  });
+
+  it("should parse alert configuration when provided", () => {
+    const config = parseConfig(join(fixturesDir, "full-alerts-config.yaml"));
+    expect(config.alerts?.enabled).toBe(true);
+    expect(config.alerts?.types.agent_error).toBe(false);
+    expect(config.alerts?.idle.threshold_minutes).toBe(45);
+    expect(config.alerts?.budget.auto_block_on_exceeded).toBe(true);
+    expect(config.alerts?.notifications.slack.webhook_url).toBe(
+      "https://hooks.slack.com/services/T000/B000/XXXX",
+    );
+  });
+
+  it("should reject alert slack notification without webhook URL when enabled", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-alerts-config.yaml")),
+    ).toThrow("alerts.notifications.slack.webhook_url is required");
   });
 });
