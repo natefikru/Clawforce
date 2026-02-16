@@ -1,31 +1,32 @@
 # Clawforce: Forward Roadmap
 
 **Date**: 2026-02-15
-**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3 complete)
+**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, and Phase 2A.1 complete)
 **Built On**: OpenClaw (open-source personal AI assistant)
 
 ---
 
 ## Current State (What's Shipped)
 
-All work shipped on `main` branch. 590 tests passing across 30 test files with 80% coverage enforced.
+All work shipped on `main` branch. 632 tests passing across 33 test files with 80% coverage enforced.
 
 | Component | Status | Tests | Notes |
 |-----------|--------|-------|-------|
-| CLI (deploy, status, stop, audit, route-test) | Complete | 545 | Full lifecycle management |
+| CLI (deploy, status, stop, audit, route-test, migrate) | Complete | 632 | Full lifecycle management + SQLite migration |
 | 5-Dimension Model Router | Complete | ~200 | PII, complexity, domain, budget, data policy |
 | PII Detection (11 types + adversarial defense) | Complete | ~80 | Unicode normalization, homoglyph folding |
 | Output Filtering (PII redaction) | Complete | ~30 | message_sending + tool_result_persist hooks |
-| Compliance Logger (JSONL audit trail) | Complete | ~40 | Session lifecycle via agent_end hook |
+| Compliance Logger (JSONL + SQLite dual-write) | Complete | ~40 | Session lifecycle via agent_end hook |
 | Compliance Profiles (HIPAA, PCI-DSS, GDPR, CCPA, SOX) | Complete | ~20 | Framework-specific policy enforcement |
-| Budget Tracking (daily limits) | Complete | ~20 | Auto-fallback to local models |
-| Dashboard (Status, Activity, Cost, Tasks) | Complete | 45 | Next.js 15, 4 panels, 3 cost tabs |
+| Budget Tracking (daily limits, SQLite-backed) | Complete | ~23 | Auto-fallback to local models, SQLite upsert |
+| SQLite Storage Layer | **Complete** | 87 | Dual-write, StorageWriter/Reader, migrations, migrate CLI |
+| Dashboard (Status, Activity, Cost, Tasks) | Complete | 45 | Next.js, SQLite-first queries, 4 panels, 3 cost tabs |
 | Docker Compose Generation (OpenClaw + Ollama) | Complete | ~30 | Includes SGLang/vLLM runtime options |
 | 3 Role Templates | Complete | ~10 | Inbox Analyst, Research Agent, Process Automator |
 | Config System (clawforce.yaml -> openclaw.json) | Complete | ~30 | Zod validation, capability profiles |
 | OpenClaw Plugin Integration | Complete | — | before_agent_start hook with modelOverride/providerOverride |
 
-**What's NOT built**: Queryable storage layer (SQLite), multi-agent orchestration, dashboard auth, real-time streaming, alert system, billing, onboarding wizard, health monitoring/failover, cross-tool coordination layer, expanded template library.
+**What's NOT built**: Multi-agent orchestration, dashboard auth, real-time streaming, alert system, billing, onboarding wizard, health monitoring/failover, cross-tool coordination layer, expanded template library.
 
 ---
 
@@ -61,18 +62,20 @@ The pitch shifts from "deploy an AI employee" to "deploy an AI department."
 
 These are blockers that must be resolved before putting Clawforce in front of any external user or design partner. No new features — just hardening what exists.
 
-#### 2A.1 SQLite Storage Layer (Foundation — Build First)
+#### 2A.1 SQLite Storage Layer (Foundation) — COMPLETE ✅
 - Embedded SQLite database using `node:sqlite` (built into Node.js 22+, same as OpenClaw's memory system)
 - Zero external dependencies, zero configuration for the end user
-- **Schema**: 5 tables — `compliance_events`, `routing_decisions`, `usage_metrics`, `budget_state`, `alerts`
-- **Dual-write architecture**: JSONL stays as write-ahead log (durability + SIEM export), SQLite becomes the query layer
-- `StorageWriter`: dual-writes to JSONL + SQLite on every event
-- `StorageReader`: typed query methods with SQL filtering (by agent, event type, time range, PII flag)
-- Migrate `BudgetTracker` from JSON file to `budget_state` table
-- Dashboard API routes switch from JSONL file parsing to SQLite queries
-- `clawforce migrate` command to backfill existing JSONL into SQLite
-- `usage_metrics` table starts collecting per-agent, per-model token data (foundation for Phase 3 billing)
-- **Why**: Dashboard auth, real-time streaming, alerts, multi-agent views, and billing all need queryable indexed data. Building these on top of JSONL file parsing would compound into unmanageable complexity.
+- **Schema**: 6 tables — `compliance_events`, `routing_decisions`, `usage_metrics`, `budget_state`, `alerts`, `schema_version` + 15 indexes
+- **Dual-write architecture**: JSONL stays as write-ahead log (durability + SIEM export), SQLite is the query layer
+- `StorageWriter`: dual-writes to JSONL + SQLite on every event with cached prepared statements
+- `StorageReader`: 8 typed query methods with SQL filtering (by agent, event type, time range, PII flag)
+- `BudgetTracker`: SQLite-first load with JSON fallback, dual-write save
+- Dashboard activity route: SQLite-first with JSONL fallback
+- `clawforce audit --source database` with `--since`, `--event`, `--agent`, `--pii-only` filters
+- `clawforce migrate` command to backfill existing JSONL into SQLite (byte-offset watermarking for idempotent reruns)
+- WAL mode + busy_timeout for multi-process safety
+- 87 new tests, 632 total passing
+- **Merged**: PR #3, 9 commits, 25 files, +4317/-28 lines
 - **Detailed plan**: [`docs/plans/sqlite-storage-layer.md`](docs/plans/sqlite-storage-layer.md)
 
 #### 2A.2 Dashboard Authentication
@@ -387,7 +390,7 @@ integrations:
 
 | Feature | Business Value | Technical Risk | Dependencies | Phase |
 |---------|---------------|----------------|--------------|-------|
-| SQLite Storage Layer | CRITICAL (foundation) | LOW | None | 2A.1 |
+| ~~SQLite Storage Layer~~ | ~~CRITICAL (foundation)~~ | ~~LOW~~ | ~~None~~ | ~~2A.1~~ ✅ |
 | Dashboard Auth | HIGH (security blocker) | LOW | SQLite (2A.1) | 2A.2 |
 | Real-Time Streaming | MEDIUM (demo quality) | LOW | SQLite (2A.1) | 2A.3 |
 | Model Health/Failover | HIGH (security invariant) | MEDIUM | SQLite (2A.1) | 2A.4 |
