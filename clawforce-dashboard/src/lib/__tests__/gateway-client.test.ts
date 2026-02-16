@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { WebSocketServer, type WebSocket as WsWebSocket } from "ws";
 import { gatewayRequest, isGatewayAvailable } from "../gateway-client";
 
