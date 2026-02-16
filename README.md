@@ -280,6 +280,29 @@ pnpm install
 pnpm test           # 140 tests
 ```
 
+### Plugin Build Pipeline
+
+Clawforce now bundles OpenClaw plugins to JavaScript during workspace setup/deploy.
+
+- Output directory: `clawforce-<name>/config/extensions/<plugin>/`
+- Artifacts: `index.js` and `index.js.map`
+- Raw TypeScript plugin source files are not copied to extensions output
+
+For local plugin development, use watch mode:
+
+```bash
+# Default output path uses config name:
+# ./clawforce-<name>/config/extensions
+clawforce plugins-watch -c clawforce.yaml
+
+# Optional custom output path
+clawforce plugins-watch -c clawforce.yaml --extensions-dir /path/to/extensions
+
+# Optional plugin filter
+clawforce plugins-watch -c clawforce.yaml --router
+clawforce plugins-watch -c clawforce.yaml --compliance
+```
+
 ### Test Coverage
 
 Main project enforces 80% coverage thresholds (lines, functions, statements) and 75% branch coverage.

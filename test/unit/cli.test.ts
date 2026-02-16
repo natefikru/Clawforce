@@ -68,4 +68,26 @@ describe("CLI", () => {
     expect(configOption).toBeDefined();
     expect(configOption!.defaultValue).toBe("./clawforce.yaml");
   });
+
+  it("should register plugins-watch command", () => {
+    const program = createProgram();
+    const pluginsWatch = program.commands.find((c) => c.name() === "plugins-watch");
+    expect(pluginsWatch).toBeDefined();
+    expect(pluginsWatch!.description()).toContain("watch");
+  });
+
+  it("plugins-watch command should have expected options", () => {
+    const program = createProgram();
+    const pluginsWatch = program.commands.find((c) => c.name() === "plugins-watch")!;
+    const configOption = pluginsWatch.options.find((o) => o.long === "--config");
+    const extensionsDirOption = pluginsWatch.options.find((o) => o.long === "--extensions-dir");
+    const routerOption = pluginsWatch.options.find((o) => o.long === "--router");
+    const complianceOption = pluginsWatch.options.find((o) => o.long === "--compliance");
+
+    expect(configOption).toBeDefined();
+    expect(configOption!.defaultValue).toBe("./clawforce.yaml");
+    expect(extensionsDirOption).toBeDefined();
+    expect(routerOption).toBeDefined();
+    expect(complianceOption).toBeDefined();
+  });
 });

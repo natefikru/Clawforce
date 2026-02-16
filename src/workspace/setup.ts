@@ -4,6 +4,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClawforceConfig } from "../config/types.js";
 import { generateAgentsMd } from "./agents-md.js";
+import {
+  buildPluginsToExtensions,
+  enabledPluginsForConfig,
+} from "../plugins/compiler.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatesDir = join(__dirname, "..", "..", "templates");
@@ -44,28 +48,8 @@ export function setupWorkspace(config: ClawforceConfig, deployDir: string): void
     writeFileSync(auditPath, "", "utf8");
   }
 
-  // Copy plugins to extensions directory for OpenClaw auto-discovery
+  // Build plugins to extensions directory for OpenClaw auto-discovery.
   const extensionsDir = join(configDir, "extensions");
-  copyPluginIfEnabled(config, "router", "clawforce-router", extensionsDir);
-  copyPluginIfEnabled(config, "compliance", "clawforce-compliance", extensionsDir);
-}
-
-function copyPluginIfEnabled(
-  config: ClawforceConfig,
-  configKey: "router" | "compliance",
-  pluginDirName: string,
-  extensionsDir: string,
-): void {
-  const pluginConfig = config[configKey];
-  if (!pluginConfig || pluginConfig.enabled === false) return;
-
-  const srcDir = join(__dirname, "..", "plugins", pluginDirName);
-  if (!existsSync(srcDir)) return;
-
-  const destDir = join(extensionsDir, pluginDirName);
-  mkdirSync(destDir, { recursive: true });
-  cpSync(srcDir, destDir, {
-    recursive: true,
-    filter: (src) => !src.endsWith(".test.ts") && !src.includes("__tests__"),
-  });
+  const enabledPlugins = enabledPluginsForConfig(config);
+  buildPluginsToExtensions(enabledPlugins, extensionsDir);
 }
