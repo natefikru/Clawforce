@@ -266,6 +266,16 @@ export const ClawforceConfigSchema = z.object({
         )
         .optional(),
     })
+    .superRefine((value, ctx) => {
+      if (value.enabled !== false && value.auth === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "dashboard.auth must be explicitly configured when dashboard is enabled; set auth.enabled=false to opt out",
+          path: ["auth"],
+        });
+      }
+    })
     .optional(),
 
   alerts: alertsSchema.optional(),

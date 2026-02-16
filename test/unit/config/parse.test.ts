@@ -150,4 +150,10 @@ describe("parseConfig", () => {
       parseConfig(join(fixturesDir, "invalid-gateway-bind.yaml")),
     ).toThrow("Config validation failed");
   });
+
+  it("should reject dashboard enabled without explicit auth policy", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-dashboard-auth-policy.yaml")),
+    ).toThrow("dashboard.auth must be explicitly configured");
+  });
 });

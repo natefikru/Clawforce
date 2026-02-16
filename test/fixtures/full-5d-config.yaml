@@ -51,3 +51,5 @@ compliance_frameworks:
 
 dashboard:
   enabled: true
+  auth:
+    enabled: false
