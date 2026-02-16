@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { appendFileSync } from "node:fs";
-import { activate, parseModelRef, buildScanText, type RouterPluginApi } from "../../../../src/plugins/clawforce-router/index.js";
+import {
+  activate,
+  applyFailoverPolicy,
+  parseModelRef,
+  buildScanText,
+  type RouterPluginApi,
+} from "../../../../src/plugins/clawforce-router/index.js";
 
 vi.mock("node:fs", () => ({
   appendFileSync: vi.fn(),
@@ -684,6 +690,77 @@ describe("Policy-Based Routing", () => {
     );
 
     expect(result?.providerOverride).toBe("sglang");
+  });
+});
+
+describe("applyFailoverPolicy", () => {
+  const downState = {
+    provider: "sglang",
+    status: "down",
+    circuit: "open",
+    consecutiveFailures: 3,
+    consecutiveSuccesses: 0,
+  } as const;
+
+  it("blocks sensitive requests regardless of failover policy", () => {
+    expect(() =>
+      applyFailoverPolicy({
+        decision: {
+          model: "sglang/qwen3-32b",
+          reason: "PII detected",
+        },
+        healthState: downState,
+        hasPII: true,
+        defaultModel: "anthropic/claude-sonnet-4-5",
+        failoverPolicy: "failover-safe",
+      })
+    ).toThrow("Blocked sensitive request");
+  });
+
+  it("blocks non-sensitive requests when policy is block", () => {
+    expect(() =>
+      applyFailoverPolicy({
+        decision: {
+          model: "sglang/qwen3-32b",
+          reason: "Low complexity",
+        },
+        healthState: downState,
+        hasPII: false,
+        defaultModel: "anthropic/claude-sonnet-4-5",
+        failoverPolicy: "block",
+      })
+    ).toThrow("Blocked request");
+  });
+
+  it("returns cloud fallback for non-sensitive requests in failover-safe mode", () => {
+    const result = applyFailoverPolicy({
+      decision: {
+        model: "sglang/qwen3-32b",
+        reason: "Low complexity",
+      },
+      healthState: downState,
+      hasPII: false,
+      defaultModel: "anthropic/claude-sonnet-4-5",
+      failoverPolicy: "failover-safe",
+    });
+
+    expect(result.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(result.reason).toContain("failover-safe cloud fallback");
+  });
+
+  it("throws explicit not-implemented error for queue policy", () => {
+    expect(() =>
+      applyFailoverPolicy({
+        decision: {
+          model: "sglang/qwen3-32b",
+          reason: "Low complexity",
+        },
+        healthState: downState,
+        hasPII: false,
+        defaultModel: "anthropic/claude-sonnet-4-5",
+        failoverPolicy: "queue",
+      })
+    ).toThrow("Queue policy is not implemented");
   });
 });
 

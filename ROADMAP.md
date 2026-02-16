@@ -169,6 +169,9 @@ This is the highest-value feature gap. The Calacanis team built their own Ultron
   - Budget allocation (per-agent daily limits from shared pool)
 - Leverage OpenClaw's existing multi-agent routing (8-tier priority bindings)
 - Generate one `openclaw.json` with all agents registered
+- **Per-agent budget tracking**: Extend `BudgetTracker` to pass agent IDs (schema supports it, currently hardcoded `_global`)
+- **Per-agent compliance logging**: Scope compliance events to agent ID for filtering and dashboard views
+- **Docker Compose generation for N agents**: Dynamically generate services for each configured agent
 
 ```yaml
 # clawforce.yaml - multi-agent example
@@ -296,11 +299,20 @@ integrations:
   7. Test run (verify agent responds correctly in connected channels)
 - Outputs a complete `clawforce.yaml` ready for `clawforce deploy`
 
+#### 2C.4 Dashboard Configuration & Management UX
+- **Config editing in dashboard**: Change routing rules, budget limits, model preferences from UI (not just CLI)
+- **Agent management UI**: Start/stop/restart agents from dashboard
+- **Model health status panel**: Visual indicator of local model (Ollama/SGLang/vLLM) health in dashboard
+- **Routing decision explainer**: Per-activity-item visual showing WHY a request was routed to a specific model (e.g., "routed to local: PII detected")
+- **Route-test from dashboard**: Run `clawforce route-test` equivalent from UI for testing routing decisions
+- **Why**: CLI-only config is fine for developers but blocks adoption by operations teams and design partners
+
 **Phase 2C Exit Criteria**:
 - 10+ role templates available and documented
 - At least 2 tool integrations (Google Workspace + Notion) working end-to-end
 - `clawforce init` wizard produces working configs from scratch
 - All templates include test scenarios
+- Dashboard supports basic config editing and model health visibility
 
 ---
 

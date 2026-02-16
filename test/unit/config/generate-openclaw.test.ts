@@ -195,6 +195,21 @@ describe("generateOpenClawConfig", () => {
     ).toBe("anthropic/claude-sonnet-4-5");
   });
 
+  it("should pass defaultLocalModel from models.local into router config", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        router: { enabled: true },
+        models: {
+          primary: "anthropic/claude-sonnet-4-5",
+          local: "ollama/llama3.3:8b",
+        },
+      }),
+    );
+    expect(
+      result.plugins?.entries?.["clawforce-router"].config?.defaultLocalModel,
+    ).toBe("ollama/llama3.3:8b");
+  });
+
   it("should enable compliance plugin when compliance config present", () => {
     const result = generateOpenClawConfig(
       makeConfig({
@@ -367,6 +382,35 @@ describe("generateOpenClawConfig", () => {
       expect(budget.dailyLimit).toBe(10);
       expect(budget.perRequestCap).toBe(0.5);
       expect(budget.fallbackModel).toBe("ollama/llama3.3:8b");
+    });
+
+    it("should pass router health_check through to plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: {
+            enabled: true,
+            health_check: {
+              enabled: true,
+              interval_seconds: 5,
+              timeout_seconds: 2,
+              stale_after_seconds: 20,
+              failover_policy: "failover-safe",
+              failure_threshold: 4,
+              recovery_threshold: 2,
+            },
+          },
+        }),
+      );
+
+      const health = result.plugins?.entries?.["clawforce-router"].config
+        ?.healthCheck as Record<string, unknown>;
+      expect(health.enabled).toBe(true);
+      expect(health.intervalSeconds).toBe(5);
+      expect(health.timeoutSeconds).toBe(2);
+      expect(health.staleAfterSeconds).toBe(20);
+      expect(health.failoverPolicy).toBe("failover-safe");
+      expect(health.failureThreshold).toBe(4);
+      expect(health.recoveryThreshold).toBe(2);
     });
   });
 });

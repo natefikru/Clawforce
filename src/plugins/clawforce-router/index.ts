@@ -29,6 +29,11 @@ import {
   isLocalModel,
   estimateRequestCost,
 } from "./budget-tracker.js";
+import {
+  ModelHealthMonitor,
+  type HealthCheckConfig,
+  type ProviderHealthState,
+} from "./health-monitor.js";
 
 export interface RouterPluginConfig {
   defaultModel?: string;
@@ -37,6 +42,7 @@ export interface RouterPluginConfig {
   logPath?: string;
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
+  healthCheck?: Partial<HealthCheckConfig>;
 }
 
 export interface RouterPluginApi {
@@ -66,6 +72,15 @@ export interface RouterPluginApi {
 // Default token estimates for cost estimation before routing
 const ESTIMATED_INPUT_TOKENS = 500;
 const ESTIMATED_OUTPUT_TOKENS = 1000;
+const DEFAULT_HEALTH_CHECK: HealthCheckConfig = {
+  enabled: true,
+  intervalSeconds: 10,
+  timeoutSeconds: 3,
+  staleAfterSeconds: 30,
+  failoverPolicy: "block",
+  failureThreshold: 3,
+  recoveryThreshold: 2,
+};
 
 /** Max number of recent messages to scan for PII alongside the current prompt. */
 const DEFAULT_HISTORY_SCAN_DEPTH = 5;
@@ -127,6 +142,55 @@ export function activate(api: RouterPluginApi): void {
   const budgetTracker = config.budget
     ? new BudgetTracker(config.budget, undefined, storageDb)
     : null;
+  const healthMonitor = new ModelHealthMonitor({
+    config: config.healthCheck,
+    onState: (state) => {
+      writer?.writeModelHealthState({
+        provider: state.provider,
+        status: state.status,
+        circuit: state.circuit,
+        lastCheckedAt: state.lastCheckedAt,
+        lastHealthyAt: state.lastHealthyAt,
+        lastError: state.lastError,
+      });
+    },
+    onChange: (change) => {
+      api.logger.warn(
+        `[health] ${change.provider} ${change.previous.status} -> ${change.current.status} ` +
+          `(circuit: ${change.current.circuit})`,
+      );
+      writer?.writeAlert({
+        ts: new Date().toISOString(),
+        severity: change.current.status === "down" ? "error" : "warning",
+        type: "model_health",
+        message:
+          `Provider ${change.provider} health changed ` +
+          `${change.previous.status}/${change.previous.circuit} -> ` +
+          `${change.current.status}/${change.current.circuit}`,
+        data: {
+          provider: change.provider,
+          previousStatus: change.previous.status,
+          currentStatus: change.current.status,
+          previousCircuit: change.previous.circuit,
+          currentCircuit: change.current.circuit,
+          error: change.current.lastError,
+        },
+      });
+      writeLog({
+        ts: new Date().toISOString(),
+        event: "model_health_transition",
+        modelProvider: change.provider,
+        healthStatus: change.current.status,
+        healthCircuit: change.current.circuit,
+        healthError: change.current.lastError,
+      });
+    },
+  });
+  for (const model of collectConfiguredLocalModels(config)) {
+    healthMonitor.trackModel(model);
+  }
+  healthMonitor.start();
+  registerProcessCleanup(healthMonitor);
 
   function writeLog(entry: RoutingLogEntry): void {
     if (writer) {
@@ -182,7 +246,7 @@ export function activate(api: RouterPluginApi): void {
         ? budgetTracker.checkBudget(estimatedCost)
         : { withinBudget: true, remainingBudget: Infinity, dailySpent: 0 };
 
-      const decision = selectModel({
+      let decision = selectModel({
         hasPII,
         complexity,
         domain: domainSignals.domain,
@@ -193,6 +257,38 @@ export function activate(api: RouterPluginApi): void {
         defaultLocalModel: config.defaultLocalModel,
         priority: config.priority,
       });
+
+      // Health gate for selected local models.
+      healthMonitor.trackModel(decision.model);
+      const healthState = healthMonitor.getStateForModel(decision.model);
+      if (healthState && (healthState.status === "down" || healthState.circuit === "open")) {
+        try {
+          decision = applyFailoverPolicy({
+            decision,
+            healthState,
+            hasPII,
+            defaultModel: config.defaultModel,
+            failoverPolicy: config.healthCheck.failoverPolicy,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          writer?.writeAlert({
+            ts: new Date().toISOString(),
+            severity: hasPII ? "error" : "warning",
+            type: "model_health",
+            agentId: ctx.agentId,
+            message,
+            data: {
+              selectedModel: decision.model,
+              hasPII,
+              providerStatus: healthState.status,
+              providerCircuit: healthState.circuit,
+              failoverPolicy: config.healthCheck.failoverPolicy,
+            },
+          });
+          throw err;
+        }
+      }
 
       // Record spend after routing decision using the selected model's cost
       if (budgetTracker && !isLocalModel(decision.model)) {
@@ -210,7 +306,10 @@ export function activate(api: RouterPluginApi): void {
           (hasPII ? ` [PII: ${piiTypes.join(", ")}]` : "") +
           ` [complexity: ${complexity}]` +
           ` [domain: ${domainSignals.domain}]` +
-          (decision.dimension ? ` [dimension: ${decision.dimension}]` : ""),
+          (decision.dimension ? ` [dimension: ${decision.dimension}]` : "") +
+          (healthState
+            ? ` [health: ${healthState.status}/${healthState.circuit}]`
+            : ""),
       );
 
       // Write routing decision to log
@@ -231,6 +330,8 @@ export function activate(api: RouterPluginApi): void {
         dataTier,
         budgetSpent: budgetCheck.dailySpent,
         budgetRemaining: budgetCheck.remainingBudget,
+        healthStatus: healthState?.status,
+        healthCircuit: healthState?.circuit,
       });
 
       // Prepend routing context for the agent
@@ -319,6 +420,51 @@ export function activate(api: RouterPluginApi): void {
   });
 }
 
+export function applyFailoverPolicy(input: {
+  decision: ReturnType<typeof selectModel>;
+  healthState: ProviderHealthState;
+  hasPII: boolean;
+  defaultModel: string;
+  failoverPolicy: HealthCheckConfig["failoverPolicy"];
+}): ReturnType<typeof selectModel> {
+  const { decision, healthState, hasPII, defaultModel, failoverPolicy } = input;
+
+  // Security invariant: sensitive requests fail closed when local runtime is not healthy.
+  if (hasPII) {
+    throw new Error(
+      `Blocked sensitive request: local model provider is ${healthState.status} (${healthState.circuit})`,
+    );
+  }
+
+  if (failoverPolicy === "queue") {
+    // Queue infrastructure is not implemented in 2A.4.
+    // Fail closed with an explicit error so operators do not assume deferred execution.
+    throw new Error(
+      `Queue policy is not implemented: local model provider is ${healthState.status} (${healthState.circuit})`,
+    );
+  }
+
+  if (failoverPolicy === "block") {
+    throw new Error(
+      `Blocked request: local model provider is ${healthState.status} (${healthState.circuit})`,
+    );
+  }
+
+  // failover-safe: only non-sensitive requests may go cloud.
+  if (!isLocalModel(defaultModel)) {
+    return {
+      ...decision,
+      model: defaultModel,
+      reason:
+        `${decision.reason}; local model unhealthy (${healthState.status}) -> failover-safe cloud fallback`,
+    };
+  }
+
+  throw new Error(
+    `Blocked request: failover-safe configured but default model is local (${defaultModel})`,
+  );
+}
+
 interface ResolvedRouterConfig {
   defaultModel: string;
   defaultLocalModel?: string;
@@ -328,6 +474,7 @@ interface ResolvedRouterConfig {
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
   policy?: DataPolicy;
+  healthCheck: HealthCheckConfig;
 }
 
 function resolveConfig(
@@ -350,8 +497,75 @@ function resolveConfig(
       ? (pluginConfig.budget as BudgetConfig) : undefined,
     policy: pluginConfig?.policy && typeof pluginConfig.policy === "object"
       ? (pluginConfig.policy as DataPolicy) : undefined,
+    healthCheck: resolveHealthCheckConfig(pluginConfig?.healthCheck),
   };
 }
+
+function resolveHealthCheckConfig(value: unknown): HealthCheckConfig {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_HEALTH_CHECK };
+  }
+  const cfg = value as Partial<HealthCheckConfig>;
+  return {
+    enabled: typeof cfg.enabled === "boolean"
+      ? cfg.enabled
+      : DEFAULT_HEALTH_CHECK.enabled,
+    intervalSeconds: typeof cfg.intervalSeconds === "number" && cfg.intervalSeconds > 0
+      ? cfg.intervalSeconds
+      : DEFAULT_HEALTH_CHECK.intervalSeconds,
+    timeoutSeconds: typeof cfg.timeoutSeconds === "number" && cfg.timeoutSeconds > 0
+      ? cfg.timeoutSeconds
+      : DEFAULT_HEALTH_CHECK.timeoutSeconds,
+    staleAfterSeconds:
+      typeof cfg.staleAfterSeconds === "number" && cfg.staleAfterSeconds > 0
+        ? cfg.staleAfterSeconds
+        : DEFAULT_HEALTH_CHECK.staleAfterSeconds,
+    failoverPolicy:
+      cfg.failoverPolicy === "block" ||
+        cfg.failoverPolicy === "queue" ||
+        cfg.failoverPolicy === "failover-safe"
+        ? cfg.failoverPolicy
+        : DEFAULT_HEALTH_CHECK.failoverPolicy,
+    failureThreshold:
+      typeof cfg.failureThreshold === "number" && cfg.failureThreshold > 0
+        ? cfg.failureThreshold
+        : DEFAULT_HEALTH_CHECK.failureThreshold,
+    recoveryThreshold:
+      typeof cfg.recoveryThreshold === "number" && cfg.recoveryThreshold > 0
+        ? cfg.recoveryThreshold
+        : DEFAULT_HEALTH_CHECK.recoveryThreshold,
+  };
+}
+
+function collectConfiguredLocalModels(config: ResolvedRouterConfig): string[] {
+  const models = new Set<string>();
+  if (config.defaultLocalModel) {
+    models.add(config.defaultLocalModel);
+  }
+  for (const rule of config.rules) {
+    if (isLocalModel(rule.model)) {
+      models.add(rule.model);
+    }
+  }
+  if (config.budget?.fallbackModel && isLocalModel(config.budget.fallbackModel)) {
+    models.add(config.budget.fallbackModel);
+  }
+  return [...models];
+}
+
+function registerProcessCleanup(monitor: ModelHealthMonitor): void {
+  currentHealthMonitor = monitor;
+  if (cleanupHandlersRegistered) return;
+
+  const stop = () => currentHealthMonitor?.stop();
+  process.once("beforeExit", stop);
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  cleanupHandlersRegistered = true;
+}
+
+let cleanupHandlersRegistered = false;
+let currentHealthMonitor: ModelHealthMonitor | null = null;
 
 let routingLogDirEnsured = false;
 

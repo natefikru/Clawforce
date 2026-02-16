@@ -10,7 +10,11 @@ import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ComplianceEntry } from "../plugins/clawforce-compliance/index.js";
-import type { RoutingLogEntry } from "./types.js";
+import type {
+  AlertEntry,
+  ModelHealthStateEntry,
+  RoutingLogEntry,
+} from "./types.js";
 import { isLocalModel } from "../shared/pricing.js";
 
 export class StorageWriter {
@@ -22,6 +26,8 @@ export class StorageWriter {
   private stmtCompliance: StatementSync | null;
   private stmtRouting: StatementSync | null;
   private stmtBudget: StatementSync | null;
+  private stmtAlert: StatementSync | null;
+  private stmtModelHealthState: StatementSync | null;
 
   constructor(
     db: DatabaseSync,
@@ -50,10 +56,28 @@ export class StorageWriter {
            request_count = excluded.request_count,
            updated_at = datetime('now')`,
       );
+      this.stmtAlert = db.prepare(
+        `INSERT INTO alerts (ts, severity, type, agent_id, message, acknowledged, data)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      this.stmtModelHealthState = db.prepare(
+        `INSERT INTO model_health_state
+           (provider, status, circuit, last_checked_at, last_healthy_at, last_error, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(provider) DO UPDATE SET
+           status = excluded.status,
+           circuit = excluded.circuit,
+           last_checked_at = excluded.last_checked_at,
+           last_healthy_at = excluded.last_healthy_at,
+           last_error = excluded.last_error,
+           updated_at = datetime('now')`,
+      );
     } catch (err) {
       this.stmtCompliance = null;
       this.stmtRouting = null;
       this.stmtBudget = null;
+      this.stmtAlert = null;
+      this.stmtModelHealthState = null;
       process.stderr.write(
         `[storage] Failed to prepare SQLite statements: ${String(err)}\n`,
       );
@@ -117,6 +141,47 @@ export class StorageWriter {
     } catch (err) {
       process.stderr.write(
         `[storage] SQLite budget upsert failed: ${String(err)}\n`,
+      );
+    }
+  }
+
+  writeAlert(entry: AlertEntry): void {
+    this.appendJsonl(this.complianceLogPath, {
+      ...entry,
+      event: "alert",
+    });
+    if (!this.stmtAlert) return;
+    try {
+      this.stmtAlert.run(
+        entry.ts,
+        entry.severity,
+        entry.type,
+        entry.agentId ?? null,
+        entry.message,
+        entry.acknowledged ? 1 : 0,
+        entry.data ? JSON.stringify(entry.data) : null,
+      );
+    } catch (err) {
+      process.stderr.write(
+        `[storage] SQLite alert insert failed: ${String(err)}\n`,
+      );
+    }
+  }
+
+  writeModelHealthState(entry: ModelHealthStateEntry): void {
+    if (!this.stmtModelHealthState) return;
+    try {
+      this.stmtModelHealthState.run(
+        entry.provider,
+        entry.status,
+        entry.circuit,
+        entry.lastCheckedAt ?? null,
+        entry.lastHealthyAt ?? null,
+        entry.lastError ?? null,
+      );
+    } catch (err) {
+      process.stderr.write(
+        `[storage] SQLite model_health_state upsert failed: ${String(err)}\n`,
       );
     }
   }

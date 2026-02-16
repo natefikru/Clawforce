@@ -116,4 +116,10 @@ describe("parseConfig", () => {
     expect(config.runtime).toBeUndefined();
     expect(config.compliance_frameworks).toBeUndefined();
   });
+
+  it("should reject unsupported queue failover policy", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-queue-policy.yaml")),
+    ).toThrow("queue is not implemented yet");
+  });
 });
