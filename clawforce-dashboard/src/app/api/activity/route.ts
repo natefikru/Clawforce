@@ -1,25 +1,11 @@
 import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import { parseJsonl, getLatestEntries } from "@/lib/log-parser";
+import { getReadDb, resetReadDb } from "@/lib/db";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
-const DB_PATH = `${DATA_DIR}/clawforce.db`;
-
-// Cached singleton — opened once, reused across requests
-let cachedDb: DatabaseSync | null = null;
-
-function getReadDb(): DatabaseSync | null {
-  if (cachedDb) return cachedDb;
-  try {
-    cachedDb = new DatabaseSync(DB_PATH, { readOnly: true });
-    return cachedDb;
-  } catch {
-    return null; // DB doesn't exist or can't be opened
-  }
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -31,7 +17,7 @@ export async function GET(request: Request) {
   if (db) {
     try {
       const conditions: string[] = [];
-      const params: unknown[] = [];
+      const params: (string | number)[] = [];
 
       if (eventFilter) {
         conditions.push("event = ?");
@@ -53,7 +39,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ entries, total: countRow.total });
     } catch {
       // Reset cached DB so next request retries the connection
-      cachedDb = null;
+      resetReadDb();
       // Fall through to JSONL
     }
   }

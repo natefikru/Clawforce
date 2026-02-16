@@ -15,3 +15,15 @@ export function getReadDb(): DatabaseSync | null {
     return null;
   }
 }
+
+/** Reset the cached connection. Call this when a query fails to allow reconnection on next request. */
+export function resetReadDb(): void {
+  if (cachedDb) {
+    try {
+      cachedDb.close();
+    } catch {
+      // Already closed
+    }
+  }
+  cachedDb = null;
+}
