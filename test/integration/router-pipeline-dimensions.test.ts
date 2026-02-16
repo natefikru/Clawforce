@@ -328,6 +328,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "failover-safe",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 
@@ -357,6 +359,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "failover-safe",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 
@@ -381,6 +385,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "block",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 
@@ -405,6 +411,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "failover-safe",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 

@@ -70,6 +70,8 @@ describe("model health failover integration", () => {
         failoverPolicy: "failover-safe",
         failureThreshold: 1,
         recoveryThreshold: 1,
+        retryAttempts: 0,
+        retryDelayMs: 0,
       },
     });
 
@@ -97,6 +99,8 @@ describe("model health failover integration", () => {
         failoverPolicy: "failover-safe",
         failureThreshold: 1,
         recoveryThreshold: 1,
+        retryAttempts: 0,
+        retryDelayMs: 0,
       },
     });
 
