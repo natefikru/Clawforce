@@ -153,7 +153,7 @@ export function generateCompose(config: ClawforceConfig): string {
       applyGpuConfig(svc, rt.gpu);
       compose.services[serviceName] = svc;
     } else {
-      // runtime.engine === "ollama" — use same logic as legacy ollama section
+      // runtime.engine === "ollama" — provision managed Ollama sidecar
       addOllamaService(compose, containerPrefix, config.name, rt.model ?? "llama3.3:8b", rt.gpu);
     }
   } else if (config.ollama?.enabled) {

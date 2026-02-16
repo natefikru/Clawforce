@@ -92,7 +92,7 @@ describe("parseConfig", () => {
     expect(config.dashboard?.port).toBe(3001);
   });
 
-  it("should allow config without Phase 1 fields (backward compatible)", () => {
+  it("should allow config without Phase 1 fields", () => {
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
     expect(config.router).toBeUndefined();
     expect(config.compliance).toBeUndefined();
@@ -141,7 +141,7 @@ describe("parseConfig", () => {
     });
   });
 
-  it("should allow config without runtime (backward compatible)", () => {
+  it("should allow config without runtime", () => {
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
     expect(config.runtime).toBeUndefined();
     expect(config.compliance_frameworks).toBeUndefined();

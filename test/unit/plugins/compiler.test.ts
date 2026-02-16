@@ -120,7 +120,7 @@ describe("plugin compiler", () => {
     });
   });
 
-  it("selects all discovered plugins regardless of legacy plugin toggles", () => {
+  it("selects all discovered plugins regardless of plugin toggles", () => {
     const pluginsRootDir = makeTempDir("clawforce-plugins-root-");
     const routerDir = join(pluginsRootDir, "router");
     const complianceDir = join(pluginsRootDir, "compliance");

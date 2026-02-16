@@ -8,8 +8,8 @@
  * pattern matching.
  *
  * The primary API is scanForPII() which returns PIIMatch objects with
- * type, confidence, position, and matchedText. The legacy detectPII()
- * and detectPIITypes() functions are backward-compatible wrappers.
+ * type, confidence, position, and matchedText. detectPII() and
+ * detectPIITypes() provide convenience wrappers.
  */
 
 export interface PIIDetectorOptions {
@@ -166,12 +166,12 @@ export function scanForPII(
   return matches;
 }
 
-/** Backward-compatible boolean PII check. */
+/** Convenience boolean PII check. */
 export function detectPII(text: string, options?: PIIDetectorOptions): boolean {
   return scanForPII(text, options).length > 0;
 }
 
-/** Backward-compatible PII type list. */
+/** Convenience PII type list. */
 export function detectPIITypes(
   text: string,
   options?: PIIDetectorOptions,

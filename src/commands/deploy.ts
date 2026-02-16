@@ -96,8 +96,8 @@ export async function deployCommand(configPath: string): Promise<void> {
   const runtimeLocation = config.runtime?.location ?? "container";
   const usesContainerOllamaRuntime =
     runtimeEngine === "ollama" && runtimeLocation === "container";
-  const usesLegacyOllamaSection = config.ollama?.enabled === true;
-  const shouldPullOllamaModel = usesContainerOllamaRuntime || usesLegacyOllamaSection;
+  const usesOllamaSection = config.ollama?.enabled === true;
+  const shouldPullOllamaModel = usesContainerOllamaRuntime || usesOllamaSection;
   const ollamaModelToPull = usesContainerOllamaRuntime
     ? (config.runtime?.model ?? "llama3.3:8b")
     : config.ollama?.model;

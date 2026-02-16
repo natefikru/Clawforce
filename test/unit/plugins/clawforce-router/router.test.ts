@@ -470,7 +470,7 @@ describe("multi-dimensional routing", () => {
     });
   });
 
-  describe("backward compatibility", () => {
+  describe("default optional field behavior", () => {
     it("should work without domain field", () => {
       const result = selectModel({
         hasPII: false,

@@ -68,18 +68,18 @@ describe("StorageReader", () => {
     expect(events[0].agentId).toBe("_global");
   });
 
-  it("treats legacy NULL agent_id rows as _global when filtering", () => {
+  it("treats NULL agent_id rows as _global when filtering", () => {
     const payload = JSON.stringify({
       ts: "2026-02-15T10:00:00Z",
-      event: "legacy_event",
+      event: "null_agent_event",
     });
     db.prepare(
       "INSERT INTO compliance_events (ts, event, agent_id, channel, data) VALUES (?, ?, NULL, NULL, ?)",
-    ).run("2026-02-15T10:00:00Z", "legacy_event", payload);
+    ).run("2026-02-15T10:00:00Z", "null_agent_event", payload);
 
     const events = reader.getRecentEvents({ limit: 10, agentId: "_global" });
     expect(events).toHaveLength(1);
-    expect(events[0].event).toBe("legacy_event");
+    expect(events[0].event).toBe("null_agent_event");
     expect(events[0].agentId).toBe("_global");
   });
 

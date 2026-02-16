@@ -71,12 +71,12 @@ describe("ClawforceConfigSchema — alerts", () => {
         notifications: {
           dashboard: true,
           email: { enabled: false },
-          legacy_connector: { enabled: true, endpoint: "https://example.com/hook" },
+          unsupported_connector: { enabled: true, endpoint: "https://example.com/hook" },
         },
       }),
     );
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect((result.data.alerts?.notifications as Record<string, unknown>).legacy_connector).toBeUndefined();
+    expect((result.data.alerts?.notifications as Record<string, unknown>).unsupported_connector).toBeUndefined();
   });
 });

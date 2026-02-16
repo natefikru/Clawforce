@@ -536,7 +536,7 @@ describe("generateOpenClawConfig", () => {
       });
     });
 
-    it("should not include legacy notification keys", () => {
+    it("should not include unsupported notification keys", () => {
       const result = generateOpenClawConfig(
         makeConfig({
           router: { enabled: true },
@@ -553,8 +553,8 @@ describe("generateOpenClawConfig", () => {
       const alerts = result.plugins?.entries?.["clawforce-router"].config
         ?.alerts as Record<string, unknown>;
       const notifications = alerts.notifications as Record<string, unknown>;
-      expect(notifications.legacyConnectorA).toBeUndefined();
-      expect(notifications.legacyConnectorB).toBeUndefined();
+      expect(notifications.unsupportedConnectorA).toBeUndefined();
+      expect(notifications.unsupportedConnectorB).toBeUndefined();
       expect(notifications.webhook_url).toBeUndefined();
     });
   });
