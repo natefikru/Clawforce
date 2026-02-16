@@ -49,3 +49,21 @@ describe("getReadDb", () => {
     db1?.close();
   });
 });
+
+describe("getWriteDb", () => {
+  it("returns a write-capable DatabaseSync instance", async () => {
+    const db = new DatabaseSync(join(tmpDir, "clawforce.db"));
+    db.exec("CREATE TABLE alerts (id INTEGER PRIMARY KEY, acknowledged INTEGER)");
+    db.close();
+
+    const { getWriteDb } = await import("@/lib/db");
+    const writeDb = getWriteDb();
+    expect(writeDb).not.toBeNull();
+
+    writeDb?.prepare("INSERT INTO alerts (id, acknowledged) VALUES (?, ?)").run(1, 0);
+    const row = writeDb?.prepare("SELECT acknowledged FROM alerts WHERE id = 1").get() as { acknowledged: number };
+    expect(row.acknowledged).toBe(0);
+
+    writeDb?.close();
+  });
+});

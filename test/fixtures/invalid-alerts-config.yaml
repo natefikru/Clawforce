@@ -1,0 +1,16 @@
+name: "invalid-alerts"
+role: "research-agent"
+
+slack:
+  app_token: "xapp-1-INVALID"
+  bot_token: "xoxb-INVALID"
+  approval_channel: "C0123456789"
+  allowed_channels: []
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+
+alerts:
+  notifications:
+    slack:
+      enabled: true

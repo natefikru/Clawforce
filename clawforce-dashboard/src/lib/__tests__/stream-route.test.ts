@@ -36,6 +36,17 @@ function createTestDb(): DatabaseSync {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (agent_id, date)
     );
+    CREATE TABLE alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      type TEXT NOT NULL,
+      agent_id TEXT,
+      message TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0,
+      data TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
   return db;
 }
@@ -179,5 +190,25 @@ describe("SSE stream integration", () => {
     expect(formatted).toContain("event: activity\n");
     expect(formatted).toContain("data: ");
     expect(formatted).not.toBe(`data: ${JSON.stringify(entry)}\n\n`); // Must have event: field
+  });
+
+  it("can format alert events for SSE stream", () => {
+    const alert = {
+      id: 1,
+      ts: "2025-01-01T00:00:00Z",
+      severity: "warning",
+      type: "budget_exceeded",
+      message: "Budget exceeded",
+      acknowledged: 0,
+    };
+    const formatted = formatSSE({
+      event: "alert",
+      id: "a-1",
+      data: JSON.stringify(alert),
+    });
+
+    expect(formatted).toContain("event: alert\n");
+    expect(formatted).toContain("id: a-1");
+    expect(formatted).toContain("budget_exceeded");
   });
 });

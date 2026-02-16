@@ -8,7 +8,7 @@ export interface ModelPricing {
   outputPerMillion: number;
 }
 
-export const DEFAULT_PRICING: Record<string, ModelPricing> = {
+const DEFAULT_PRICING: Record<string, ModelPricing> = {
   "anthropic/claude-sonnet-4-5": {
     inputPerMillion: 3.0,
     outputPerMillion: 15.0,
@@ -42,8 +42,7 @@ export function isLocalModel(model: string): boolean {
 
 const warnedModels = new Set<string>();
 
-/** Reset the warned-models cache. Exported for testing only. */
-export function clearWarningCache(): void {
+function clearWarningCache(): void {
   warnedModels.clear();
 }
 

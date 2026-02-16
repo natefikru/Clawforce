@@ -1,0 +1,45 @@
+name: "alerts-config"
+role: "inbox-analyst"
+
+slack:
+  app_token: "xapp-1-ALERTS"
+  bot_token: "xoxb-ALERTS"
+  approval_channel: "C0123456789"
+  allowed_channels:
+    - "C9876543210"
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
+
+router:
+  enabled: true
+
+alerts:
+  enabled: true
+  types:
+    model_health: true
+    budget_exceeded: true
+    pii_violation: true
+    agent_error: false
+    agent_idle: true
+  idle:
+    threshold_minutes: 45
+    cooldown_minutes: 15
+  budget:
+    cooldown_minutes: 120
+    auto_block_on_exceeded: true
+  notifications:
+    dashboard: true
+    slack:
+      enabled: true
+      webhook_url: "https://hooks.slack.com/services/T000/B000/XXXX"
+    email:
+      enabled: true
+      smtp_host: "smtp.example.com"
+      smtp_port: 587
+      username: "alerts@example.com"
+      password: "secret-password"
+      from: "alerts@example.com"
+      to:
+        - "ops@example.com"

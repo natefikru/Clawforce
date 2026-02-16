@@ -412,5 +412,104 @@ describe("generateOpenClawConfig", () => {
       expect(health.failureThreshold).toBe(4);
       expect(health.recoveryThreshold).toBe(2);
     });
+
+    it("should include default alerts config in router plugin config when alerts are omitted", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+        }),
+      );
+      const alerts = result.plugins?.entries?.["clawforce-router"].config
+        ?.alerts as Record<string, unknown>;
+      expect(alerts.enabled).toBe(true);
+      expect(alerts.types).toEqual({
+        modelHealth: true,
+        budgetExceeded: true,
+        piiViolation: true,
+        agentError: true,
+        agentIdle: true,
+      });
+      expect(alerts.idle).toEqual({
+        thresholdMinutes: 60,
+        cooldownMinutes: 30,
+      });
+    });
+
+    it("should pass configured alerts into router plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          alerts: {
+            enabled: true,
+            types: {
+              model_health: true,
+              budget_exceeded: true,
+              pii_violation: true,
+              agent_error: false,
+              agent_idle: true,
+            },
+            idle: {
+              threshold_minutes: 45,
+              cooldown_minutes: 10,
+            },
+            budget: {
+              cooldown_minutes: 120,
+              auto_block_on_exceeded: true,
+            },
+            notifications: {
+              dashboard: true,
+              slack: {
+                enabled: true,
+                webhook_url: "https://hooks.slack.com/services/T000/B000/TEST",
+              },
+              email: {
+                enabled: true,
+                smtp_host: "smtp.example.com",
+                smtp_port: 2525,
+                username: "alerts@example.com",
+                password: "secret",
+                from: "alerts@example.com",
+                to: ["ops@example.com"],
+              },
+            },
+          },
+        }),
+      );
+
+      const alerts = result.plugins?.entries?.["clawforce-router"].config
+        ?.alerts as Record<string, unknown>;
+      expect(alerts.enabled).toBe(true);
+      expect(alerts.types).toEqual({
+        modelHealth: true,
+        budgetExceeded: true,
+        piiViolation: true,
+        agentError: false,
+        agentIdle: true,
+      });
+      expect(alerts.idle).toEqual({
+        thresholdMinutes: 45,
+        cooldownMinutes: 10,
+      });
+      expect(alerts.budget).toEqual({
+        cooldownMinutes: 120,
+        autoBlockOnExceeded: true,
+      });
+      expect(alerts.notifications).toEqual({
+        dashboard: true,
+        slack: {
+          enabled: true,
+          webhookUrl: "https://hooks.slack.com/services/T000/B000/TEST",
+        },
+        email: {
+          enabled: true,
+          smtpHost: "smtp.example.com",
+          smtpPort: 2525,
+          username: "alerts@example.com",
+          password: "secret",
+          from: "alerts@example.com",
+          to: ["ops@example.com"],
+        },
+      });
+    });
   });
 });

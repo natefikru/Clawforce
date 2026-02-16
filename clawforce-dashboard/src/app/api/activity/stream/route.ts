@@ -26,6 +26,7 @@ import { createPollingStream, formatSSE } from "@/lib/sse";
 import { createActivityPoller, getBackfill } from "@/lib/activity-poller";
 import { createCostPoller } from "@/lib/cost-poller";
 import { createStatusPoller } from "@/lib/status-poller";
+import { createAlertPoller, getAlertBackfill } from "@/lib/alert-poller";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
@@ -42,8 +43,9 @@ export async function GET(req: NextRequest) {
   if (db) {
     try {
       const backfill = getBackfill(db, lastEventId);
+      const alertBackfill = getAlertBackfill(db);
 
-      const initialMessages = [...backfill.events];
+      const initialMessages = [...backfill.events, ...alertBackfill.events];
 
       // If reconnection was truncated, send a sync event so client knows to reset
       if (backfill.truncated) {
@@ -57,6 +59,7 @@ export async function GET(req: NextRequest) {
         createActivityPoller(db, backfill.cursor),
         createCostPoller(db),
         createStatusPoller(),
+        createAlertPoller(db, alertBackfill.cursor),
       ];
 
       const stream = createPollingStream(sources, req.signal, {
@@ -98,10 +101,11 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
           const entries = parseJsonl(content);
           const recent = entries.slice(-INITIAL_ENTRIES);
           for (const entry of recent) {
+            const eventName = entry?.event === "alert" ? "alert" : "activity";
             // MF-2 fix: emit named events so client addEventListener("activity", ...) works
             controller.enqueue(
               encoder.encode(
-                formatSSE({ event: "activity", data: JSON.stringify(entry) }),
+                formatSSE({ event: eventName, data: JSON.stringify(entry) }),
               ),
             );
           }
@@ -133,11 +137,12 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
 
             const newEntries = parseJsonl(newContent);
             for (const entry of newEntries) {
+              const eventName = entry?.event === "alert" ? "alert" : "activity";
               // MF-2 fix: emit named events for JSONL fallback too
               controller.enqueue(
                 encoder.encode(
                   formatSSE({
-                    event: "activity",
+                    event: eventName,
                     data: JSON.stringify(entry),
                   }),
                 ),

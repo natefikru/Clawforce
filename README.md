@@ -105,9 +105,10 @@ Pre-built profiles for common regulatory frameworks:
 
 ### Activity Dashboard
 
-Next.js dashboard with 4 panels:
+Next.js dashboard with 5 panels:
 - **Agent Status** — Container health, uptime, and local model health state
 - **Activity Feed** — Real-time event streaming from compliance log
+- **Alerts** — Real-time operational alerts with acknowledge workflow (budget, PII, health, errors, idle agents)
 - **Cost Tracker** — Gateway-sourced cost data with Summary, Timeline, and What-If analysis tabs
 - **Task Log** — Recent agent runs with duration and outcome
 
@@ -197,6 +198,36 @@ ollama:
 
 capabilities: full               # minimal | standard | full
 
+# Alerting and notifications
+alerts:
+  enabled: true
+  types:
+    model_health: true
+    budget_exceeded: true
+    pii_violation: true
+    agent_error: true
+    agent_idle: true
+  idle:
+    threshold_seconds: 900
+    cooldown_seconds: 3600
+  budget:
+    cooldown_seconds: 3600
+    auto_block: false
+  notifications:
+    dashboard:
+      enabled: true
+    slack:
+      enabled: false
+      webhook_url: ""
+    email:
+      enabled: false
+      from: ""
+      to: []
+      smtp_host: ""
+      smtp_port: 587
+      username: ""
+      password: ""
+
 # Direct OpenClaw config passthrough
 openclaw:
   agents:
@@ -237,16 +268,16 @@ The router plugin hooks into `before_agent_start` to override model selection, `
 ```bash
 git clone https://github.com/natefikru/clawforce.git
 cd clawforce
-npm install
-npm test           # 693 tests
+pnpm install
+pnpm test           # 712 tests
 ```
 
 Dashboard:
 
 ```bash
 cd clawforce-dashboard
-npm install
-npm test           # 127 tests
+pnpm install
+pnpm test           # 140 tests
 ```
 
 ### Test Coverage

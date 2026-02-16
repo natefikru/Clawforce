@@ -49,5 +49,6 @@ describe("main dashboard page", () => {
     expect(source).toContain("CostTracker");
     expect(source).toContain("ActivityFeed");
     expect(source).toContain("TaskLog");
+    expect(source).toContain("AlertPanel");
   });
 });

@@ -1,4 +1,4 @@
-export function SkeletonLine({ width = "100%", height = "h-4" }: { width?: string; height?: string }) {
+function SkeletonLine({ width = "100%", height = "h-4" }: { width?: string; height?: string }) {
   return (
     <div
       className={`${height} rounded bg-gray-700 animate-pulse`}
@@ -7,7 +7,7 @@ export function SkeletonLine({ width = "100%", height = "h-4" }: { width?: strin
   );
 }
 
-export function SkeletonCircle({ size = "h-3 w-3" }: { size?: string }) {
+function SkeletonCircle({ size = "h-3 w-3" }: { size?: string }) {
   return <div className={`${size} rounded-full bg-gray-700 animate-pulse`} />;
 }
 

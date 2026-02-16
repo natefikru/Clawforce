@@ -8,6 +8,65 @@ import { resolveProfile } from "./capability-profiles.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatesDir = join(__dirname, "..", "..", "templates");
 
+interface RouterAlertsConfig {
+  enabled: boolean;
+  types: {
+    modelHealth: boolean;
+    budgetExceeded: boolean;
+    piiViolation: boolean;
+    agentError: boolean;
+    agentIdle: boolean;
+  };
+  idle: {
+    thresholdMinutes: number;
+    cooldownMinutes: number;
+  };
+  budget: {
+    cooldownMinutes: number;
+    autoBlockOnExceeded: boolean;
+  };
+  notifications: {
+    dashboard: boolean;
+    slack: {
+      enabled: boolean;
+      webhookUrl?: string;
+    };
+    email: {
+      enabled: boolean;
+      smtpHost?: string;
+      smtpPort: number;
+      username?: string;
+      password?: string;
+      from?: string;
+      to?: string[];
+    };
+  };
+}
+
+const DEFAULT_ROUTER_ALERTS_CONFIG: RouterAlertsConfig = {
+  enabled: true,
+  types: {
+    modelHealth: true,
+    budgetExceeded: true,
+    piiViolation: true,
+    agentError: true,
+    agentIdle: true,
+  },
+  idle: {
+    thresholdMinutes: 60,
+    cooldownMinutes: 30,
+  },
+  budget: {
+    cooldownMinutes: 60,
+    autoBlockOnExceeded: false,
+  },
+  notifications: {
+    dashboard: true,
+    slack: { enabled: false },
+    email: { enabled: false, smtpPort: 587 },
+  },
+};
+
 export interface OpenClawConfig {
   gateway?: {
     mode: string;
@@ -161,6 +220,7 @@ export function generateOpenClawConfig(
     const routerConfig: Record<string, unknown> = {
       defaultModel: config.models.primary,
       ...(config.models.local ? { defaultLocalModel: config.models.local } : {}),
+      alerts: mapRouterAlertsConfig(config),
     };
     if (config.router.rules) {
       routerConfig.rules = config.router.rules;
@@ -230,6 +290,73 @@ export function generateOpenClawConfig(
   }
 
   return result;
+}
+
+function mapRouterAlertsConfig(config: ClawforceConfig): RouterAlertsConfig {
+  const alerts = config.alerts;
+  return {
+    enabled: alerts?.enabled ?? DEFAULT_ROUTER_ALERTS_CONFIG.enabled,
+    types: {
+      modelHealth:
+        alerts?.types?.model_health ?? DEFAULT_ROUTER_ALERTS_CONFIG.types.modelHealth,
+      budgetExceeded:
+        alerts?.types?.budget_exceeded ?? DEFAULT_ROUTER_ALERTS_CONFIG.types.budgetExceeded,
+      piiViolation:
+        alerts?.types?.pii_violation ?? DEFAULT_ROUTER_ALERTS_CONFIG.types.piiViolation,
+      agentError:
+        alerts?.types?.agent_error ?? DEFAULT_ROUTER_ALERTS_CONFIG.types.agentError,
+      agentIdle:
+        alerts?.types?.agent_idle ?? DEFAULT_ROUTER_ALERTS_CONFIG.types.agentIdle,
+    },
+    idle: {
+      thresholdMinutes:
+        alerts?.idle?.threshold_minutes ?? DEFAULT_ROUTER_ALERTS_CONFIG.idle.thresholdMinutes,
+      cooldownMinutes:
+        alerts?.idle?.cooldown_minutes ?? DEFAULT_ROUTER_ALERTS_CONFIG.idle.cooldownMinutes,
+    },
+    budget: {
+      cooldownMinutes:
+        alerts?.budget?.cooldown_minutes ?? DEFAULT_ROUTER_ALERTS_CONFIG.budget.cooldownMinutes,
+      autoBlockOnExceeded:
+        alerts?.budget?.auto_block_on_exceeded
+        ?? DEFAULT_ROUTER_ALERTS_CONFIG.budget.autoBlockOnExceeded,
+    },
+    notifications: {
+      dashboard:
+        alerts?.notifications?.dashboard ?? DEFAULT_ROUTER_ALERTS_CONFIG.notifications.dashboard,
+      slack: {
+        enabled:
+          alerts?.notifications?.slack?.enabled
+          ?? DEFAULT_ROUTER_ALERTS_CONFIG.notifications.slack.enabled,
+        ...(alerts?.notifications?.slack?.webhook_url
+          ? { webhookUrl: alerts.notifications.slack.webhook_url }
+          : {}),
+      },
+      email: {
+        enabled:
+          alerts?.notifications?.email?.enabled
+          ?? DEFAULT_ROUTER_ALERTS_CONFIG.notifications.email.enabled,
+        smtpPort:
+          alerts?.notifications?.email?.smtp_port
+          ?? DEFAULT_ROUTER_ALERTS_CONFIG.notifications.email.smtpPort,
+        ...(alerts?.notifications?.email?.smtp_host
+          ? { smtpHost: alerts.notifications.email.smtp_host }
+          : {}),
+        ...(alerts?.notifications?.email?.username
+          ? { username: alerts.notifications.email.username }
+          : {}),
+        ...(alerts?.notifications?.email?.password
+          ? { password: alerts.notifications.email.password }
+          : {}),
+        ...(alerts?.notifications?.email?.from
+          ? { from: alerts.notifications.email.from }
+          : {}),
+        ...(alerts?.notifications?.email?.to
+          ? { to: alerts.notifications.email.to }
+          : {}),
+      },
+    },
+  };
 }
 
 function mergeInto(
