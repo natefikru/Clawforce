@@ -431,5 +431,101 @@ describe("StorageWriter", () => {
 
       stderrSpy.mockRestore();
     });
+
+    it("SQLite failure does not prevent JSONL write for routing decisions", () => {
+      const brokenDb = createTestDatabase();
+      const brokenWriter = new StorageWriter(
+        brokenDb,
+        "/tmp/c.jsonl",
+        "/tmp/r.jsonl",
+      );
+      brokenDb.close();
+
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      const entry: RoutingLogEntry = {
+        ts: "2026-02-15T12:00:00Z",
+        event: "routing_decision",
+        model: "ollama/llama3.3:8b",
+      };
+
+      expect(() => brokenWriter.writeRoutingDecision(entry)).not.toThrow();
+      expect(mockAppendFileSync).toHaveBeenCalledWith(
+        "/tmp/r.jsonl",
+        expect.stringContaining("routing_decision"),
+        "utf8",
+      );
+
+      stderrSpy.mockRestore();
+    });
+
+    it("both SQLite and JSONL fail without throwing", () => {
+      const brokenDb = createTestDatabase();
+      const brokenWriter = new StorageWriter(
+        brokenDb,
+        "/tmp/c.jsonl",
+        "/tmp/r.jsonl",
+      );
+      brokenDb.close();
+
+      mockAppendFileSync.mockImplementation(() => {
+        throw new Error("disk full");
+      });
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      const entry: ComplianceEntry = {
+        ts: "2026-02-15T12:00:00Z",
+        event: "tool_call",
+      };
+
+      // Should not throw even when both fail (best-effort)
+      expect(() => brokenWriter.writeComplianceEvent(entry)).not.toThrow();
+
+      stderrSpy.mockRestore();
+    });
+
+    it("writeAlert continues JSONL write when SQLite fails", () => {
+      const brokenDb = createTestDatabase();
+      const brokenWriter = new StorageWriter(
+        brokenDb,
+        "/tmp/c.jsonl",
+        "/tmp/r.jsonl",
+      );
+      brokenDb.close();
+
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      expect(() => brokenWriter.writeAlert({
+        ts: "2026-02-15T12:00:00Z",
+        severity: "error",
+        type: "pii_violation",
+        message: "PII violation",
+      })).not.toThrow();
+
+      // JSONL write should have happened
+      expect(mockAppendFileSync).toHaveBeenCalled();
+
+      stderrSpy.mockRestore();
+    });
+
+    it("writeModelHealthState handles closed DB gracefully", () => {
+      const brokenDb = createTestDatabase();
+      const brokenWriter = new StorageWriter(
+        brokenDb,
+        "/tmp/c.jsonl",
+        "/tmp/r.jsonl",
+      );
+      brokenDb.close();
+
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      expect(() => brokenWriter.writeModelHealthState({
+        provider: "sglang",
+        status: "healthy",
+        circuit: "closed",
+      })).not.toThrow();
+
+      stderrSpy.mockRestore();
+    });
   });
 });
