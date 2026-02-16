@@ -3,18 +3,32 @@ import { join } from "node:path";
 import { logger } from "../utils/logger.js";
 import { findDeployDir } from "./status.js";
 import { exec } from "../docker/exec.js";
+import { StorageReader } from "../storage/reader.js";
 
-export type AuditSource = "container" | "compliance";
+export type AuditSource = "container" | "compliance" | "database";
+
+export interface AuditOptions {
+  since?: string;
+  event?: string;
+  agent?: string;
+  piiOnly?: boolean;
+}
 
 export async function auditCommand(
   tailLines: number,
   source: AuditSource = "container",
+  opts?: AuditOptions,
 ): Promise<void> {
   logger.header("Clawforce Audit Log");
 
   const deployDir = findDeployDir();
   if (!deployDir) {
     logger.error("No deployment found in current directory.");
+    return;
+  }
+
+  if (source === "database") {
+    await readFromDatabase(deployDir, tailLines, opts);
     return;
   }
 
@@ -176,6 +190,68 @@ function formatComplianceDetails(
       return `→ ${entry.model} (${entry.reason})`;
     default:
       return JSON.stringify(entry);
+  }
+}
+
+async function readFromDatabase(
+  deployDir: string,
+  tailLines: number,
+  opts?: AuditOptions,
+): Promise<void> {
+  const dbPath = join(deployDir, "data", "clawforce.db");
+
+  if (!existsSync(dbPath)) {
+    logger.warn("No database found. Try --source compliance or --source container.");
+    return;
+  }
+
+  let db: import("node:sqlite").DatabaseSync | null = null;
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    db = new DatabaseSync(dbPath, { readOnly: true });
+    const reader = new StorageReader(db);
+
+    const entries = reader.getRecentEvents({
+      limit: tailLines,
+      event: opts?.event,
+      agentId: opts?.agent,
+      since: opts?.since,
+    });
+
+    if (entries.length === 0) {
+      logger.info("No events found matching the criteria.");
+      return;
+    }
+
+    for (const entry of entries) {
+      const details = formatComplianceDetails(entry as Record<string, unknown>);
+      logger.info(`${entry.ts} [${entry.event}] ${details}`);
+    }
+
+    const total = reader.getTotalEventCount(opts?.event);
+    logger.info("");
+    logger.info(`Showing ${entries.length} of ${total} entries (source: database)`);
+
+    if (opts?.piiOnly) {
+      const piiDecisions = reader.getRoutingDecisions({
+        piiOnly: true,
+        since: opts?.since,
+        agentId: opts?.agent,
+        limit: tailLines,
+      });
+      if (piiDecisions.length > 0) {
+        logger.info("");
+        logger.info(`PII routing decisions: ${piiDecisions.length}`);
+        for (const d of piiDecisions) {
+          const piiTypes = d.pii_types ? JSON.parse(d.pii_types) : [];
+          logger.info(`  ${d.ts} → ${d.selected_model} [PII: ${piiTypes.join(", ")}]`);
+        }
+      }
+    }
+  } catch (err) {
+    logger.error(`Failed to read database: ${String(err)}`);
+  } finally {
+    db?.close();
   }
 }
 

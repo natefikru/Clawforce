@@ -6,6 +6,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { isLocalModel, estimateRequestCost } from "../../shared/pricing.js";
 
 export interface BudgetConfig {
@@ -32,11 +33,13 @@ const DEFAULT_STATE_PATH = "/home/node/.openclaw/data/budget-state.json";
 export class BudgetTracker {
   private config: BudgetConfig;
   private statePath: string;
+  private db: DatabaseSync | null;
   private state: BudgetState;
 
-  constructor(config: BudgetConfig, statePath?: string) {
+  constructor(config: BudgetConfig, statePath?: string, db?: DatabaseSync) {
     this.config = config;
     this.statePath = statePath ?? DEFAULT_STATE_PATH;
+    this.db = db ?? null;
     this.state = this.loadState();
   }
 
@@ -110,6 +113,21 @@ export class BudgetTracker {
   }
 
   private loadState(): BudgetState {
+    // Try SQLite first when available
+    if (this.db) {
+      try {
+        const row = this.db.prepare(
+          "SELECT spent, request_count FROM budget_state WHERE agent_id = '_global' AND date = ?",
+        ).get(todayString()) as { spent: number; request_count: number } | undefined;
+        if (row) {
+          return { date: todayString(), spent: row.spent, requestCount: row.request_count };
+        }
+      } catch {
+        // Fall through to JSON file
+      }
+    }
+
+    // JSON file fallback
     try {
       const raw = readFileSync(this.statePath, "utf8");
       const parsed = JSON.parse(raw) as BudgetState;
@@ -123,6 +141,21 @@ export class BudgetTracker {
   }
 
   private saveState(): void {
+    // SQLite upsert (primary when available)
+    if (this.db) {
+      try {
+        this.db.prepare(
+          `INSERT INTO budget_state (agent_id, date, spent, request_count, updated_at)
+           VALUES ('_global', ?, ?, ?, datetime('now'))
+           ON CONFLICT(agent_id, date) DO UPDATE SET
+             spent = excluded.spent, request_count = excluded.request_count, updated_at = datetime('now')`,
+        ).run(this.state.date, this.state.spent, this.state.requestCount);
+      } catch {
+        // Best-effort SQLite persistence
+      }
+    }
+
+    // JSON file fallback (always write for backward compat)
     try {
       mkdirSync(dirname(this.statePath), { recursive: true });
       writeFileSync(this.statePath, JSON.stringify(this.state), "utf8");

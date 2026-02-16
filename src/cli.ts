@@ -6,6 +6,7 @@ import { deployCommand } from "./commands/deploy.js";
 import { statusCommand } from "./commands/status.js";
 import { stopCommand } from "./commands/stop.js";
 import { auditCommand } from "./commands/audit.js";
+import { migrateCommand } from "./commands/migrate.js";
 import { routeTestCommand } from "./commands/route-test.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -58,10 +59,42 @@ export function createProgram(): Command {
     .command("audit")
     .description("View audit log")
     .option("-n, --tail <lines>", "Number of lines to tail", "50")
-    .option("-s, --source <source>", "Log source: container or compliance", "container")
-    .action(async (options: { tail: string; source: string }) => {
-      const source = options.source === "compliance" ? "compliance" : "container";
-      await auditCommand(parseInt(options.tail, 10), source);
+    .option("-s, --source <source>", "Log source: container, compliance, or database", "container")
+    .option("--since <timestamp>", "Filter events since ISO timestamp (database source)")
+    .option("--event <type>", "Filter by event type (database source)")
+    .option("--agent <id>", "Filter by agent ID (database source)")
+    .option("--pii-only", "Show only PII-related routing decisions (database source)")
+    .action(async (options: { tail: string; source: string; since?: string; event?: string; agent?: string; piiOnly?: boolean }) => {
+      const validSources = ["container", "compliance", "database"] as const;
+      const source = validSources.includes(options.source as typeof validSources[number])
+        ? (options.source as typeof validSources[number])
+        : "container";
+      await auditCommand(parseInt(options.tail, 10), source, {
+        since: options.since,
+        event: options.event,
+        agent: options.agent,
+        piiOnly: options.piiOnly,
+      });
+    });
+
+  program
+    .command("migrate")
+    .description("Migrate existing JSONL logs into SQLite database")
+    .option("-d, --data-dir <dir>", "Data directory containing JSONL files", "./data")
+    .option("--dry-run", "Report counts without inserting data")
+    .action(async (options: { dataDir: string; dryRun?: boolean }) => {
+      try {
+        await migrateCommand({
+          dataDir: options.dataDir,
+          dryRun: options.dryRun,
+        });
+      } catch (error) {
+        console.error(
+          "Migration failed:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
     });
 
   program

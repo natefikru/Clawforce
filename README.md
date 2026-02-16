@@ -70,11 +70,14 @@ Outbound messages and tool results are scanned for PII before leaving the agent.
 
 ### Compliance Logging
 
-Every agent action is captured as structured JSONL:
+Every agent action is captured as structured JSONL and SQLite:
 - Tool executions (name, success, duration)
 - Messages received and sent (channel, content length, model used)
 - Routing decisions (model, reason, PII types, dimension)
 - Session lifecycle events
+- Budget state tracking (daily spend, request counts)
+
+Data is dual-written: JSONL files remain the source of truth for durability and SIEM export, while SQLite provides fast indexed queries for the dashboard and audit CLI.
 
 ### Compliance Framework Profiles
 
@@ -108,7 +111,12 @@ clawforce status                        # Check container health
 clawforce stop                          # Stop deployment
 clawforce audit                         # View container logs
 clawforce audit --source compliance     # View structured compliance log
+clawforce audit --source database       # Query SQLite database directly
+clawforce audit --source database --event tool_call --since 2026-02-15T00:00:00Z
+clawforce audit --source database --pii-only  # PII routing decisions only
 clawforce audit -n 100                  # Last 100 entries
+clawforce migrate --data-dir ./data     # Backfill JSONL logs into SQLite
+clawforce migrate --dry-run             # Preview migration without writing
 clawforce route-test "your prompt"      # Test routing decision without deploying
 ```
 
@@ -182,7 +190,7 @@ clawforce deploy
       v
 +------------------+     +------------------+     +------------------+
 |   Router Plugin  |     | Compliance Plugin|     |    Dashboard     |
-|   (5-dim routing)|     | (JSONL logging)  |     |   (Next.js)      |
+|   (5-dim routing)|     | (JSONL + SQLite) |     |   (Next.js)      |
 +--------+---------+     +--------+---------+     +--------+---------+
          |                        |                        |
          v                        v                        v
@@ -190,12 +198,12 @@ clawforce deploy
 |                     OpenClaw Gateway                              |
 |          (agent runtime, tools, channels, sandbox)               |
 +------------------------------------------------------------------+
-         |                                          |
-         v                                          v
-+------------------+                    +------------------+
-|  Local Models    |                    |  Cloud Models    |
-|  SGLang / Ollama |                    |  Anthropic, etc  |
-+------------------+                    +------------------+
+         |                        |                        |
+         v                        v                        v
++------------------+    +------------------+    +------------------+
+|  Local Models    |    |  Cloud Models    |    |  SQLite Storage  |
+|  SGLang / Ollama |    |  Anthropic, etc  |    |  (clawforce.db)  |
++------------------+    +------------------+    +------------------+
 ```
 
 The router plugin hooks into `before_agent_start` to override model selection, `message_sending` and `tool_result_persist` to redact PII from outputs, and `agent_end` for session audit logging.
@@ -206,7 +214,7 @@ The router plugin hooks into `before_agent_start` to override model selection, `
 git clone https://github.com/natefikru/clawforce.git
 cd clawforce
 npm install
-npm test           # 545 tests
+npm test           # 632 tests
 ```
 
 Dashboard:
@@ -223,7 +231,7 @@ Main project enforces 80% coverage thresholds (lines, functions, statements) and
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22+ (required for built-in `node:sqlite`)
 - Docker and Docker Compose
 - GPU recommended for local models (NVIDIA or AMD)
 
