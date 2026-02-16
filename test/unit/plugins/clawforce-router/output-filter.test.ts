@@ -115,4 +115,42 @@ describe("filterOutput", () => {
     expect(result.content).not.toContain("4321");
     expect(result.matchCount).toBe(2);
   });
+
+  it("should not redact IP when threshold is above IP confidence", () => {
+    const result = filterOutput("Server 192.168.1.100 responded.", {
+      threshold: 0.8,
+    });
+    expect(result.redacted).toBe(false);
+    expect(result.content).toBe("Server 192.168.1.100 responded.");
+    expect(result.matchCount).toBe(0);
+    expect(result.redactedTypes).toEqual([]);
+  });
+
+  it("should redact SSN when threshold is below SSN confidence", () => {
+    const result = filterOutput("The SSN is 123-45-6789 on file.", {
+      threshold: 0.8,
+    });
+    expect(result.redacted).toBe(true);
+    expect(result.content).toBe("The SSN is [SSN_REDACTED] on file.");
+    expect(result.matchCount).toBe(1);
+    expect(result.redactedTypes).toContain("ssn");
+  });
+
+  it("should apply pattern threshold overrides for output redaction", () => {
+    const result = filterOutput(
+      "Server 192.168.1.100 and SSN 123-45-6789",
+      {
+        threshold: 0.9,
+        patternThresholds: {
+          ip_address: 0.5,
+        },
+      },
+    );
+
+    expect(result.redacted).toBe(true);
+    expect(result.content).toContain("[IP_ADDRESS_REDACTED]");
+    expect(result.content).toContain("[SSN_REDACTED]");
+    expect(result.redactedTypes).toContain("ip_address");
+    expect(result.redactedTypes).toContain("ssn");
+  });
 });

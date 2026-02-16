@@ -253,7 +253,16 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
       failoverPolicy: config.router.health_check.failover_policy,
       failureThreshold: config.router.health_check.failure_threshold,
       recoveryThreshold: config.router.health_check.recovery_threshold,
+      retryAttempts: config.router.health_check.retry_attempts,
+      retryDelayMs: config.router.health_check.retry_delay_ms,
     };
+  }
+
+  if (config.sensitivity?.pii_confidence_threshold !== undefined) {
+    routerConfig.piiThreshold = config.sensitivity.pii_confidence_threshold;
+  }
+  if (config.sensitivity?.pii_pattern_thresholds) {
+    routerConfig.piiPatternThresholds = config.sensitivity.pii_pattern_thresholds;
   }
 
   return routerConfig;

@@ -13,6 +13,8 @@ const BASE_CONFIG: HealthCheckConfig = {
   failoverPolicy: "block",
   failureThreshold: 2,
   recoveryThreshold: 2,
+  retryAttempts: 0,
+  retryDelayMs: 100,
 };
 
 describe("parseLocalProvider", () => {
@@ -127,6 +129,106 @@ describe("ModelHealthMonitor", () => {
     expect(state?.circuit).toBe("closed");
     expect(state?.status).toBe("healthy");
     monitor.stop();
+  });
+
+  describe("probe retry", () => {
+    const RETRY_CONFIG: HealthCheckConfig = {
+      ...BASE_CONFIG,
+      retryAttempts: 2,
+      retryDelayMs: 100,
+    };
+
+    it("succeeds on retry after initial failure", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false })
+        .mockResolvedValueOnce({ ok: true });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const monitor = new ModelHealthMonitor({ config: RETRY_CONFIG });
+      monitor.trackModel("ollama/llama3.3:8b");
+      monitor.start();
+
+      await vi.advanceTimersByTimeAsync(0);
+      // Advance past retry delay
+      await vi.advanceTimersByTimeAsync(200);
+
+      const state = monitor.getStateForModel("ollama/llama3.3:8b");
+      expect(state?.status).toBe("healthy");
+      expect(state?.consecutiveFailures).toBe(0);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      monitor.stop();
+    });
+
+    it("fails after exhausting all retry attempts", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const monitor = new ModelHealthMonitor({ config: RETRY_CONFIG });
+      monitor.trackModel("ollama/llama3.3:8b");
+      monitor.start();
+
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(500);
+
+      const state = monitor.getStateForModel("ollama/llama3.3:8b");
+      expect(state?.consecutiveFailures).toBe(1);
+      // 1 initial + 2 retries = 3 fetch calls
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      monitor.stop();
+    });
+
+    it("does not retry when retryAttempts is 0", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const monitor = new ModelHealthMonitor({ config: BASE_CONFIG });
+      monitor.trackModel("ollama/llama3.3:8b");
+      monitor.start();
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Only 1 fetch call — no retries
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      monitor.stop();
+    });
+
+    it("retries on network error then succeeds", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("ECONNREFUSED"))
+        .mockResolvedValueOnce({ ok: true });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const monitor = new ModelHealthMonitor({ config: RETRY_CONFIG });
+      monitor.trackModel("ollama/llama3.3:8b");
+      monitor.start();
+
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(200);
+
+      const state = monitor.getStateForModel("ollama/llama3.3:8b");
+      expect(state?.status).toBe("healthy");
+      expect(state?.consecutiveFailures).toBe(0);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      monitor.stop();
+    });
+
+    it("retryAttempts: 1 produces exactly 2 fetch calls on failure", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const config: HealthCheckConfig = { ...BASE_CONFIG, retryAttempts: 1, retryDelayMs: 50 };
+      const monitor = new ModelHealthMonitor({ config });
+      monitor.trackModel("ollama/llama3.3:8b");
+      monitor.start();
+
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      monitor.stop();
+    });
   });
 
   it("marks state unknown when stale", async () => {

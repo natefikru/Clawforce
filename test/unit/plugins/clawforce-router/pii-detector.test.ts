@@ -513,3 +513,103 @@ describe("scanForPII", () => {
     expect(blocklistMatches[1].position.start).toBe(13);
   });
 });
+
+describe("PII confidence threshold filtering", () => {
+  const TEXT_WITH_MIXED_CONFIDENCE =
+    "SSN: 123-45-6789, email: user@example.com, IP: 192.168.1.1";
+
+  it("threshold: 0 returns all matches (backward compat)", () => {
+    const matches = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, { threshold: 0 });
+    expect(matches.length).toBeGreaterThan(0);
+    const types = matches.map((m) => m.type);
+    expect(types).toContain("ssn");
+    expect(types).toContain("email");
+    expect(types).toContain("ip_address");
+  });
+
+  it("no threshold returns all matches", () => {
+    const matches = scanForPII(TEXT_WITH_MIXED_CONFIDENCE);
+    const types = matches.map((m) => m.type);
+    expect(types).toContain("ssn");
+    expect(types).toContain("email");
+    expect(types).toContain("ip_address");
+  });
+
+  it("threshold: 0.90 filters out email (0.85), IP (0.75)", () => {
+    const matches = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, { threshold: 0.90 });
+    const types = matches.map((m) => m.type);
+    expect(types).toContain("ssn"); // 0.95 >= 0.90
+    expect(types).not.toContain("email"); // 0.85 < 0.90
+    expect(types).not.toContain("ip_address"); // 0.75 < 0.90
+  });
+
+  it("threshold: 1.0 filters out everything", () => {
+    const matches = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, { threshold: 1.0 });
+    expect(matches).toEqual([]);
+  });
+
+  it("per-pattern override lowers threshold for specific type", () => {
+    const matches = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, {
+      threshold: 0.90,
+      patternThresholds: { ip_address: 0.50 },
+    });
+    const types = matches.map((m) => m.type);
+    expect(types).toContain("ssn"); // 0.95 >= 0.90
+    expect(types).toContain("ip_address"); // 0.75 >= 0.50 (per-pattern override)
+    expect(types).not.toContain("email"); // 0.85 < 0.90 (global threshold)
+  });
+
+  it("per-pattern override raises threshold for specific type", () => {
+    const matches = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, {
+      threshold: 0.50,
+      patternThresholds: { email: 0.90 },
+    });
+    const types = matches.map((m) => m.type);
+    expect(types).toContain("ssn"); // 0.95 >= 0.50
+    expect(types).toContain("ip_address"); // 0.75 >= 0.50
+    expect(types).not.toContain("email"); // 0.85 < 0.90 (per-pattern override)
+  });
+
+  it("blocklist matches filtered when below threshold", () => {
+    const matches = scanForPII("secret password here, ssn: 123-45-6789", {
+      blocklist: ["secret"],
+      threshold: 0.80,
+    });
+    const types = matches.map((m) => m.type);
+    expect(types).toContain("ssn"); // 0.95 >= 0.80
+    expect(types).not.toContain("blocklist"); // 0.70 < 0.80
+  });
+
+  it("per-pattern override exceeding hardcoded confidence filters match", () => {
+    const matches = scanForPII("SSN: 123-45-6789", {
+      patternThresholds: { ssn: 0.99 },
+    });
+    expect(matches).toEqual([]); // 0.95 < 0.99
+  });
+
+  it("empty patternThresholds behaves identically to no overrides", () => {
+    const matchesWithEmpty = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, {
+      threshold: 0.90,
+      patternThresholds: {},
+    });
+    const matchesWithout = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, {
+      threshold: 0.90,
+    });
+    expect(matchesWithEmpty.map((m) => m.type)).toEqual(
+      matchesWithout.map((m) => m.type),
+    );
+  });
+
+  it("detectPII respects threshold option", () => {
+    // IP only — low confidence (0.75)
+    expect(detectPII("192.168.1.1", { threshold: 0.90 })).toBe(false);
+    expect(detectPII("192.168.1.1", { threshold: 0.50 })).toBe(true);
+  });
+
+  it("detectPIITypes respects threshold option", () => {
+    const types = detectPIITypes(TEXT_WITH_MIXED_CONFIDENCE, { threshold: 0.90 });
+    expect(types).toContain("ssn");
+    expect(types).not.toContain("email");
+    expect(types).not.toContain("ip_address");
+  });
+});

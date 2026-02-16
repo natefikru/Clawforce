@@ -33,6 +33,8 @@ A Clawforce deployment has two main components:
 
 **Key insight**: The gateway and local model inference can (and often should) run on separate machines. The gateway is CPU-bound and lightweight. Local model inference is GPU-bound and resource-intensive.
 
+NOTE: Some sections in this document describe target-state infrastructure (Phase 2C+ / 3+). Where behavior is not first-class in current `clawforce.yaml`, this guide now calls out manual workarounds explicitly.
+
 ---
 
 ## Deployment Options
@@ -169,23 +171,17 @@ Gateway on a cheap VPS, local models on a dedicated GPU server. Most flexible an
 1. **Scale independently** — add more GPU servers without touching the gateway
 2. **Cost optimize** — gateway runs 24/7 cheap, GPU server can be spot/preemptible for 60-80% savings
 3. **Maintenance** — update models without gateway downtime
-4. **Multi-agent ready** — Clawforce's router can load-balance across multiple inference endpoints
+4. **Multi-agent ready** — You can scale GPU inference independently and place a load balancer in front of inference nodes
 5. **Hybrid routing** — PII-sensitive requests go to local GPU, everything else to cloud APIs
 
-**Connection:** Clawforce configures Ollama/vLLM endpoints in `clawforce.yaml`:
+**Connection (today):** Remote inference endpoints are not first-class in `clawforce.yaml` yet. Configure them by editing generated Compose env vars on `openclaw-gateway` (`OLLAMA_HOST`, `SGLANG_HOST`, `VLLM_HOST`) to point to your inference service or load balancer.
 ```yaml
-models:
-  local:
-    provider: ollama
-    endpoint: http://gpu-server:11434
-    models:
-      - ollama/llama3.3:8b
-      - ollama/qwen3:32b
-  cloud:
-    provider: anthropic
-    models:
-      - anthropic/claude-sonnet-4-5
-      - anthropic/claude-haiku-4-5
+# Generated clawforce-<name>/docker-compose.yml (openclaw-gateway env)
+environment:
+  - OLLAMA_HOST=http://gpu-lb.internal:11434
+  # or:
+  # - SGLANG_HOST=http://gpu-lb.internal:30000
+  # - VLLM_HOST=http://gpu-lb.internal:8000
 ```
 
 **Best for:** Production deployments, multi-agent orchestration (Phase 2B+), regulated industries.
@@ -276,7 +272,7 @@ Cloud GPU costs drop 60-80% with spot pricing:
 - AWS Spot g5.xlarge: ~$250/mo (vs ~$750 on-demand)
 - GCP Preemptible a2-highgpu: ~$300/mo (vs ~$900 on-demand)
 
-**Trade-off:** Instances can be reclaimed with 30s-2min notice. The split architecture handles this gracefully — gateway keeps running, just falls back to cloud models until GPU is back.
+**Trade-off:** Instances can be reclaimed with 30s-2min notice. The gateway can keep running, and non-PII traffic can fail over to cloud only when `failover_policy=failover-safe` with a cloud default model. PII traffic remains fail-closed by design.
 
 ### 3. Model Quantization
 
@@ -308,7 +304,7 @@ Phase 2B (Multi-Agent Orchestration) introduces the "Ultron" supervisory pattern
 - Multiple agents making simultaneous requests to local models
 - vLLM handles concurrent requests better than Ollama for multi-agent (built-in batching)
 - Consider SGLang for highest throughput multi-agent scenarios
-- May need multiple GPU instances behind a load balancer
+- May need multiple GPU instances behind an external load balancer (current code does not do endpoint fan-out internally)
 
 ### Recommended Phase 2B Infrastructure
 

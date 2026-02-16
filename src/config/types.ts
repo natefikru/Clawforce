@@ -146,6 +146,8 @@ export const ClawforceConfigSchema = z.object({
     .object({
       blocklist: z.array(z.string()).optional(),
       pii_detection: z.boolean().optional(),
+      pii_confidence_threshold: z.number().min(0).max(1).optional(),
+      pii_pattern_thresholds: z.record(z.string(), z.number().min(0).max(1)).optional(),
     })
     .optional(),
 
@@ -208,6 +210,8 @@ export const ClawforceConfigSchema = z.object({
           failover_policy: z.enum(["block", "queue", "failover-safe"]).default("block"),
           failure_threshold: z.number().int().positive().default(3),
           recovery_threshold: z.number().int().positive().default(2),
+          retry_attempts: z.number().int().min(0).max(5).default(2),
+          retry_delay_ms: z.number().int().min(0).max(5000).default(500),
         })
         .superRefine((value, ctx) => {
           if (value.failover_policy === "queue") {

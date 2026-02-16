@@ -15,6 +15,10 @@
 export interface PIIDetectorOptions {
   /** Additional keywords that indicate sensitive content */
   blocklist?: string[];
+  /** Minimum confidence threshold (0.0-1.0). Matches below this are filtered out. Default: 0 (all matches). */
+  threshold?: number;
+  /** Per-pattern threshold overrides. Keys are pattern names (e.g., "ip_address", "email"). */
+  patternThresholds?: Record<string, number>;
 }
 
 export interface PIIMatch {
@@ -147,6 +151,16 @@ export function scanForPII(
         searchFrom = idx + keyword.length;
       }
     }
+  }
+
+  const globalThreshold = options?.threshold ?? 0;
+  const patternThresholds = options?.patternThresholds;
+
+  if (globalThreshold > 0 || patternThresholds) {
+    return matches.filter((m) => {
+      const effectiveThreshold = patternThresholds?.[m.type] ?? globalThreshold;
+      return m.confidence >= effectiveThreshold;
+    });
   }
 
   return matches;

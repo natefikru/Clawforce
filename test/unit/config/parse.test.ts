@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { parseConfig } from "../../../src/config/parse.js";
+import { generateOpenClawConfig } from "../../../src/config/generate-openclaw.js";
 import { join } from "node:path";
 
 const fixturesDir = join(import.meta.dirname, "../../fixtures");
@@ -110,6 +111,26 @@ describe("parseConfig", () => {
   it("should parse compliance_frameworks array", () => {
     const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
     expect(config.compliance_frameworks).toEqual(["hipaa", "pci-dss"]);
+  });
+
+  it("should parse sensitivity threshold configuration", () => {
+    const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
+    expect(config.sensitivity?.pii_detection).toBe(true);
+    expect(config.sensitivity?.pii_confidence_threshold).toBe(0.8);
+    expect(config.sensitivity?.pii_pattern_thresholds).toEqual({
+      ip_address: 0.5,
+    });
+  });
+
+  it("should carry parsed sensitivity thresholds into generated router config", () => {
+    const parsed = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
+    const generated = generateOpenClawConfig(parsed);
+    const routerConfig = generated.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+
+    expect(routerConfig.piiThreshold).toBe(0.8);
+    expect(routerConfig.piiPatternThresholds).toEqual({
+      ip_address: 0.5,
+    });
   });
 
   it("should allow config without runtime (backward compatible)", () => {

@@ -142,6 +142,18 @@ router:
   health_check:
     enabled: true
     failover_policy: block      # block | failover-safe
+    retry_attempts: 2           # probe retries before marking failure
+    retry_delay_ms: 500         # delay between probe retries
+```
+
+PII confidence filtering is configurable globally and per pattern:
+
+```yaml
+sensitivity:
+  pii_detection: true
+  pii_confidence_threshold: 0.80
+  pii_pattern_thresholds:
+    ip_address: 0.50
 ```
 
 ### Output Filtering
@@ -263,6 +275,14 @@ router:
   health_check:
     enabled: true
     failover_policy: block       # block | failover-safe (queue not implemented)
+    retry_attempts: 2            # 0..5, default 2
+    retry_delay_ms: 500          # 0..5000, default 500
+
+sensitivity:
+  pii_detection: true
+  pii_confidence_threshold: 0.80 # 0.0..1.0 global minimum confidence
+  pii_pattern_thresholds:        # Optional per-pattern overrides
+    ip_address: 0.50
 
 compliance:
   enabled: true
@@ -356,7 +376,7 @@ The router plugin hooks into `before_agent_start` to override model selection, `
 git clone https://github.com/natefikru/clawforce.git
 cd clawforce
 pnpm install
-pnpm test           # 878 tests
+pnpm test
 ```
 
 Dashboard:

@@ -212,6 +212,36 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
     });
   });
 
+  // ─── Sensitivity Thresholds ─────────────────────────────────────────────
+
+  describe("Sensitivity threshold routing", () => {
+    const THRESHOLD_CONFIG = {
+      priority: ["sensitivity"],
+      rules: [{ condition: "pii_detected", model: "sglang/qwen3-32b" }],
+      piiThreshold: 0.9,
+    };
+
+    it("high threshold skips IP-only prompt and falls through to default model", () => {
+      const pipeline = createPluginPipeline(THRESHOLD_CONFIG);
+      const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
+        "My server is at 192.168.1.1",
+      );
+
+      expect(effectiveProvider).toBe("anthropic");
+      expect(effectiveModel).toBe("claude-sonnet-4-5");
+    });
+
+    it("high threshold still catches SSN prompt and routes local", () => {
+      const pipeline = createPluginPipeline(THRESHOLD_CONFIG);
+      const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
+        "My ssn is 123-45-6789",
+      );
+
+      expect(effectiveProvider).toBe("sglang");
+      expect(effectiveModel).toBe("qwen3-32b");
+    });
+  });
+
   // ─── Budget Dimension ──────────────────────────────────────────────────
 
   describe("Budget dimension — full pipeline", () => {
@@ -328,6 +358,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "failover-safe",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 
@@ -357,6 +389,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "failover-safe",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 
@@ -381,6 +415,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "block",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 
@@ -405,6 +441,8 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
           failoverPolicy: "failover-safe",
           failureThreshold: 1,
           recoveryThreshold: 1,
+          retryAttempts: 0,
+          retryDelayMs: 0,
         },
       });
 

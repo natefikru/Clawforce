@@ -13,6 +13,8 @@ export interface HealthCheckConfig {
   failoverPolicy: FailoverPolicy;
   failureThreshold: number;
   recoveryThreshold: number;
+  retryAttempts: number;
+  retryDelayMs: number;
 }
 
 export interface ProviderHealthState {
@@ -129,7 +131,12 @@ export class ModelHealthMonitor {
     next.lastCheckedAt = now;
 
     try {
-      const ok = await probeProvider(provider, this.config.timeoutSeconds);
+      const ok = await probeProviderWithRetry(
+        provider,
+        this.config.timeoutSeconds,
+        this.config.retryAttempts,
+        this.config.retryDelayMs,
+      );
       if (ok) {
         next.consecutiveFailures = 0;
         next.consecutiveSuccesses = previous.consecutiveSuccesses + 1;
@@ -206,7 +213,28 @@ function applyStaleness(
   };
 }
 
-async function probeProvider(
+async function probeProviderWithRetry(
+  provider: LocalProvider,
+  timeoutSeconds: number,
+  retryAttempts: number,
+  retryDelayMs: number,
+): Promise<boolean> {
+  const maxAttempts = 1 + retryAttempts;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const ok = await probeProviderOnce(provider, timeoutSeconds);
+      if (ok) return true;
+    } catch {
+      // Network error or timeout — fall through to retry
+    }
+    if (attempt < maxAttempts - 1 && retryDelayMs > 0) {
+      await sleep(retryDelayMs);
+    }
+  }
+  return false;
+}
+
+async function probeProviderOnce(
   provider: LocalProvider,
   timeoutSeconds: number,
 ): Promise<boolean> {
@@ -227,6 +255,10 @@ async function probeProvider(
   const healthOk = await probe(`${host}/health`, timeout);
   if (healthOk) return true;
   return probe(`${host}/v1/models`, timeout);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function probe(url: string, timeoutMs: number): Promise<boolean> {
