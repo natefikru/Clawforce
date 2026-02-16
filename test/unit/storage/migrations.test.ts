@@ -30,7 +30,7 @@ describe("migrations", () => {
       const db = freshDb();
       runMigrations(db);
 
-      expect(getCurrentVersion(db)).toBe(1);
+      expect(getCurrentVersion(db)).toBeGreaterThanOrEqual(1);
 
       // Verify all tables from v1
       const tables = db
@@ -50,7 +50,7 @@ describe("migrations", () => {
       const db = freshDb();
       runMigrations(db);
       expect(() => runMigrations(db)).not.toThrow();
-      expect(getCurrentVersion(db)).toBe(1);
+      expect(getCurrentVersion(db)).toBe(2);
       db.close();
     });
 
@@ -83,7 +83,7 @@ describe("migrations", () => {
         version: number;
         applied_at: string;
       }[];
-      expect(rows).toHaveLength(1);
+      expect(rows).toHaveLength(2);
       expect(rows[0].version).toBe(1);
       expect(rows[0].applied_at).toBeTruthy();
 
@@ -105,7 +105,7 @@ describe("migrations", () => {
     it("returns correct version after migrations", () => {
       const db = freshDb();
       runMigrations(db);
-      expect(getCurrentVersion(db)).toBe(1);
+      expect(getCurrentVersion(db)).toBe(2);
       db.close();
     });
   });
@@ -192,6 +192,141 @@ describe("migrations", () => {
           "INSERT INTO routing_decisions (ts, selected_model, data) VALUES (?, ?, ?)",
         ).run("2026-01-01", null, "{}");
       }).toThrow();
+
+      db.close();
+    });
+  });
+
+  describe("v2 — dashboard_users", () => {
+    it("applies version 2 migration", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      expect(getCurrentVersion(db)).toBe(2);
+
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all() as { name: string }[];
+      const names = tables.map((t) => t.name);
+      expect(names).toContain("dashboard_users");
+
+      db.close();
+    });
+
+    it("dashboard_users has correct columns", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      const columns = db.prepare("PRAGMA table_info(dashboard_users)").all() as {
+        name: string;
+        type: string;
+        notnull: number;
+      }[];
+      const colNames = columns.map((c) => c.name);
+
+      expect(colNames).toContain("id");
+      expect(colNames).toContain("username");
+      expect(colNames).toContain("password_hash");
+      expect(colNames).toContain("role");
+      expect(colNames).toContain("created_at");
+      expect(colNames).toContain("updated_at");
+
+      const username = columns.find((c) => c.name === "username");
+      const passwordHash = columns.find((c) => c.name === "password_hash");
+      const role = columns.find((c) => c.name === "role");
+      expect(username?.notnull).toBe(1);
+      expect(passwordHash?.notnull).toBe(1);
+      expect(role?.notnull).toBe(1);
+
+      db.close();
+    });
+
+    it("dashboard_users has username index", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      const indexes = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='dashboard_users'",
+        )
+        .all() as { name: string }[];
+      const indexNames = indexes.map((i) => i.name);
+      expect(indexNames).toContain("idx_dashboard_users_username");
+
+      db.close();
+    });
+
+    it("dashboard_users enforces unique username", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      db.prepare(
+        "INSERT INTO dashboard_users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+      ).run("u1", "admin", "$2a$10$hash1", "admin");
+
+      expect(() => {
+        db.prepare(
+          "INSERT INTO dashboard_users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+        ).run("u2", "admin", "$2a$10$hash2", "viewer");
+      }).toThrow();
+
+      db.close();
+    });
+
+    it("dashboard_users role defaults to viewer", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      db.prepare(
+        "INSERT INTO dashboard_users (id, username, password_hash) VALUES (?, ?, ?)",
+      ).run("u1", "testuser", "$2a$10$hash");
+
+      const user = db.prepare("SELECT role FROM dashboard_users WHERE id = ?").get("u1") as {
+        role: string;
+      };
+      expect(user.role).toBe("viewer");
+
+      db.close();
+    });
+
+    it("upgrades from v1 to v2 without losing data", () => {
+      const db = freshDb();
+
+      // Simulate v1 already applied
+      db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER NOT NULL,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(1);
+      db.exec(`
+        CREATE TABLE compliance_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts TEXT NOT NULL,
+          event TEXT NOT NULL,
+          agent_id TEXT,
+          channel TEXT,
+          data TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      db.prepare(
+        "INSERT INTO compliance_events (ts, event, data) VALUES (?, ?, ?)",
+      ).run("2026-01-01", "test", "{}");
+
+      // Run migrations — should only apply v2
+      runMigrations(db);
+
+      expect(getCurrentVersion(db)).toBe(2);
+
+      const count = db
+        .prepare("SELECT COUNT(*) as c FROM compliance_events")
+        .get() as { c: number };
+      expect(count.c).toBe(1);
+
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all() as { name: string }[];
+      expect(tables.map((t) => t.name)).toContain("dashboard_users");
 
       db.close();
     });
