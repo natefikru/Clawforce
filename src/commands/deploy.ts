@@ -13,6 +13,7 @@ import { exec } from "../docker/exec.js";
 import { waitForHealthy } from "../docker/health.js";
 import { getDatabase, closeDatabase } from "../storage/database.js";
 import { logger } from "../utils/logger.js";
+import { runSecurityAudit } from "../openclaw/security-audit.js";
 
 export async function deployCommand(configPath: string): Promise<void> {
   logger.header("Clawforce Deploy");
@@ -124,6 +125,31 @@ export async function deployCommand(configPath: string): Promise<void> {
     throw new Error(
       "Container failed to start after 30s. Check logs with: docker compose logs",
     );
+  }
+
+  // 11. Run OpenClaw security audit gate
+  const skipSecurityAudit = process.env.CLAWFORCE_SKIP_SECURITY_AUDIT === "1";
+  if (skipSecurityAudit) {
+    logger.warn(
+      "Skipping OpenClaw security audit because CLAWFORCE_SKIP_SECURITY_AUDIT=1 is set.",
+    );
+  } else {
+    logger.step("Running OpenClaw security audit...");
+  }
+
+  const auditResult = await runSecurityAudit({
+    deployDir,
+    skip: skipSecurityAudit,
+  });
+
+  if (auditResult.hasCriticalFindings) {
+    throw new Error(
+      "Security audit failed: critical findings detected. Fix findings or set CLAWFORCE_SKIP_SECURITY_AUDIT=1 for local-only testing.",
+    );
+  }
+
+  if (!auditResult.skipped) {
+    logger.success("Security audit passed (no critical findings)");
   }
 
   logger.header("Deployment successful!");
