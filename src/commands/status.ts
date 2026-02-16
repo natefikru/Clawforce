@@ -93,7 +93,7 @@ function resolveHealthDbPathCandidates(deployDir: string): string[] {
 function readModelHealth(dbPaths: string[]): ModelHealthSummary[] {
   for (const dbPath of dbPaths) {
     if (!existsSync(dbPath)) continue;
-    const db = new DatabaseSync(dbPath, { readonly: true });
+    const db = new DatabaseSync(dbPath, { readOnly: true });
     try {
       const stateRows = db
         .prepare(

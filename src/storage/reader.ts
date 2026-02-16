@@ -5,7 +5,7 @@
  * All methods accept optional filters and return typed results.
  */
 
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type {
   ComplianceEntry,
   RoutingDecisionRow,
@@ -33,7 +33,7 @@ export class StorageReader {
     if (opts.limit <= 0) return [];
 
     const conditions: string[] = [];
-    const params: unknown[] = [];
+    const params: SQLInputValue[] = [];
 
     if (opts.event) {
       conditions.push("event = ?");
@@ -68,7 +68,7 @@ export class StorageReader {
     limit?: number;
   }): RoutingDecisionRow[] {
     const conditions: string[] = [];
-    const params: unknown[] = [];
+    const params: SQLInputValue[] = [];
 
     if (opts.since) {
       conditions.push("ts >= ?");
@@ -91,7 +91,7 @@ export class StorageReader {
       .prepare(
         `SELECT * FROM routing_decisions ${where} ORDER BY ts DESC LIMIT ?`,
       )
-      .all(...params) as RoutingDecisionRow[];
+      .all(...params) as unknown as RoutingDecisionRow[];
   }
 
   getUsageSummary(opts: { days: number; agentId?: string }): UsageSummary {
@@ -100,7 +100,7 @@ export class StorageReader {
     const since = sinceDate.toISOString();
 
     const conditions = ["ts >= ?"];
-    const params: unknown[] = [since];
+    const params: SQLInputValue[] = [since];
 
     if (opts.agentId) {
       conditions.push("agent_id = ?");
@@ -168,7 +168,7 @@ export class StorageReader {
     limit?: number;
   }): AlertRow[] {
     const conditions: string[] = [];
-    const params: unknown[] = [];
+    const params: SQLInputValue[] = [];
 
     if (opts.since) {
       conditions.push("ts >= ?");
@@ -193,7 +193,7 @@ export class StorageReader {
 
     return this.db
       .prepare(`SELECT * FROM alerts ${where} ORDER BY ts DESC LIMIT ?`)
-      .all(...params) as AlertRow[];
+      .all(...params) as unknown as AlertRow[];
   }
 
   getModelHealthStates(): ModelHealthStateRow[] {
@@ -201,7 +201,7 @@ export class StorageReader {
       .prepare(
         `SELECT * FROM model_health_state ORDER BY updated_at DESC`,
       )
-      .all() as ModelHealthStateRow[];
+      .all() as unknown as ModelHealthStateRow[];
   }
 
   getModelDistribution(opts: {
@@ -213,7 +213,7 @@ export class StorageReader {
     const since = sinceDate.toISOString();
 
     const conditions = ["ts >= ?"];
-    const params: unknown[] = [since];
+    const params: SQLInputValue[] = [since];
 
     if (opts.agentId) {
       conditions.push("agent_id = ?");
@@ -240,7 +240,7 @@ export class StorageReader {
 
   getDailySpend(opts: { days: number; agentId?: string }): DailySpend[] {
     const conditions: string[] = [];
-    const params: unknown[] = [];
+    const params: SQLInputValue[] = [];
 
     if (opts.agentId) {
       conditions.push("agent_id = ?");

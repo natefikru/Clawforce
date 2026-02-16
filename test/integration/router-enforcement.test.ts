@@ -81,7 +81,7 @@ function createPluginPipeline(pluginConfig?: Record<string, unknown>) {
       .filter((h) => h.hookName === "before_agent_start")
       .sort((a, b) => b.priority - a.priority);
 
-    let hookResult: HookResult | void;
+    let hookResult: HookResult | void = undefined;
     for (const hook of hooks) {
       const result = hook.handler({ prompt, messages }, ctx);
       if (result) {

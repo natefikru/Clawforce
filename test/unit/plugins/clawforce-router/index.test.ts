@@ -925,7 +925,10 @@ describe("agent_end hook", () => {
     const mockedAppend = vi.mocked(appendFileSync);
     const lastCall = mockedAppend.mock.calls.at(-1);
     expect(lastCall).toBeDefined();
-    const logEntry = JSON.parse(lastCall[1].trim());
+    const payload = typeof lastCall?.[1] === "string"
+      ? lastCall[1]
+      : Buffer.from(lastCall?.[1] ?? []).toString("utf8");
+    const logEntry = JSON.parse(payload.trim());
     expect(logEntry.event).toBe("agent_session_end");
     expect(logEntry.agentId).toBe("main");
     expect(logEntry.success).toBe(true);
