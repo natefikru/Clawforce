@@ -67,7 +67,7 @@ describe("plugins commands", () => {
     vi.mocked(enabledPluginsForConfig).mockReturnValue([]);
     await expect(
       pluginsBundleCommand({ config: "./clawforce.yaml" }),
-    ).rejects.toThrow("No enabled plugins selected");
+    ).rejects.toThrow("No discovered plugins selected");
   });
 
   it("starts watch and closes on SIGINT", async () => {

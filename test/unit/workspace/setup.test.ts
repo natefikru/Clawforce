@@ -10,11 +10,10 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
     role: "inbox-analyst",
-    slack: {
-      app_token: "xapp-1-TEST",
-      bot_token: "xoxb-TEST",
-      approval_channel: "C0123456789",
-      allowed_channels: ["C9876543210"],
+    openclaw: {
+      channels: {
+        discord: { enabled: true },
+      },
     },
     models: { primary: "anthropic/claude-sonnet-4-5" },
     approval: {
@@ -146,19 +145,21 @@ describe("setupWorkspace", () => {
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 
-  it("should not copy router plugin when explicitly disabled", () => {
+  it("should still copy router plugin when explicitly disabled", () => {
     setupWorkspace(
       makeConfig({ router: { enabled: false } }),
       testDir,
     );
     const pluginDir = join(testDir, "config/extensions/clawforce-router");
-    expect(existsSync(pluginDir)).toBe(false);
+    expect(existsSync(pluginDir)).toBe(true);
   });
 
-  it("should not copy plugins when not configured", () => {
+  it("should copy discovered plugins when plugin config is not present", () => {
     setupWorkspace(makeConfig(), testDir);
     const extensionsDir = join(testDir, "config/extensions");
-    expect(existsSync(extensionsDir)).toBe(false);
+    expect(existsSync(extensionsDir)).toBe(true);
+    expect(existsSync(join(extensionsDir, "clawforce-router"))).toBe(true);
+    expect(existsSync(join(extensionsDir, "clawforce-compliance"))).toBe(true);
   });
 
   it("should write auth-profile metadata when credential mode is auth_profile", () => {

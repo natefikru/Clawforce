@@ -38,7 +38,17 @@ function createPluginPipeline(pluginConfig?: Record<string, unknown>) {
 
   const api: RouterPluginApi = {
     id: "clawforce-router",
-    pluginConfig,
+    pluginConfig: {
+      pluginPermissions: [
+        "hooks:before_agent_start",
+        "hooks:message_sending",
+        "hooks:tool_result_persist",
+        "hooks:agent_end",
+        "storage:write",
+        "alerts:dispatch",
+      ],
+      ...pluginConfig,
+    },
     logger: {
       info: vi.fn(),
       warn: vi.fn(),

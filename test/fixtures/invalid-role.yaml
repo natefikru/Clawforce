@@ -1,6 +1,11 @@
 name: "test"
 role: "nonexistent-role"
 
+openclaw:
+  channels:
+    discord:
+      enabled: true
+
 slack:
   app_token: "xapp-1-TEST"
   bot_token: "xoxb-TEST"
@@ -9,3 +14,4 @@ slack:
 
 models:
   primary: "anthropic/claude-sonnet-4-5"
+  api_key: "${ANTHROPIC_API_KEY}"

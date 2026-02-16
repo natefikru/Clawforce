@@ -1,3 +1,5 @@
+import type { ConnectorContext } from "../../connectors/types.js";
+
 /**
  * Policy-based data classification and tier resolution.
  *
@@ -35,9 +37,11 @@ export interface DataPolicy {
  */
 export function resolveDataTier(
   policy: DataPolicy,
-  channelId?: string,
-  userId?: string,
+  connector?: ConnectorContext,
 ): DataTier {
+  const channelId = connector?.conversationId;
+  const userId = connector?.actorId;
+
   if (channelId) {
     const match = policy.channels?.find((c) => c.channelId === channelId);
     if (match) return match.tier;

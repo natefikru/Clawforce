@@ -37,7 +37,17 @@ function createMockApi(
 
   return {
     id: "clawforce-router",
-    pluginConfig,
+    pluginConfig: {
+      pluginPermissions: [
+        "hooks:before_agent_start",
+        "hooks:message_sending",
+        "hooks:tool_result_persist",
+        "hooks:agent_end",
+        "storage:write",
+        "alerts:dispatch",
+      ],
+      ...pluginConfig,
+    },
     logger: {
       info: vi.fn(),
       warn: vi.fn(),
@@ -68,6 +78,50 @@ describe("Router Plugin", () => {
       "before_agent_start",
       expect.any(Function),
       { priority: 10 },
+    );
+  });
+
+  it("should fail activation when required hook permission is missing", () => {
+    const api = createMockApi({
+      pluginPermissions: [
+        "hooks:before_agent_start",
+        "hooks:message_sending",
+        "hooks:agent_end",
+      ],
+    });
+
+    expect(() => activate(api)).toThrow(
+      'cannot register hook "tool_result_persist" without permission "hooks:tool_result_persist"',
+    );
+  });
+
+  it("should fail activation when storage permission is missing", () => {
+    const api = createMockApi({
+      pluginPermissions: [
+        "hooks:before_agent_start",
+        "hooks:message_sending",
+        "hooks:tool_result_persist",
+        "hooks:agent_end",
+        "alerts:dispatch",
+      ],
+    });
+    expect(() => activate(api)).toThrow(
+      'cannot write routing and alert logs without permission "storage:write"',
+    );
+  });
+
+  it("should fail activation when alerts permission is missing", () => {
+    const api = createMockApi({
+      pluginPermissions: [
+        "hooks:before_agent_start",
+        "hooks:message_sending",
+        "hooks:tool_result_persist",
+        "hooks:agent_end",
+        "storage:write",
+      ],
+    });
+    expect(() => activate(api)).toThrow(
+      'cannot dispatch alerts without permission "alerts:dispatch"',
     );
   });
 

@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-const slackChannelId = z.string().regex(/^C[A-Z0-9]+$/, "Invalid Slack channel ID");
 const localModelPrefixes = ["ollama/", "local/", "sglang/", "vllm/"] as const;
 
 function modelRequiresProviderApiKey(model: string): boolean {
@@ -24,26 +23,6 @@ const alertBudgetSchema = z.object({
   cooldown_minutes: z.number().int().positive().default(60),
   auto_block_on_exceeded: z.boolean().default(false),
 }).default({});
-
-const alertSlackNotificationsSchema = z.object({
-  enabled: z.boolean().default(false),
-  webhook_url: z.string().url().optional(),
-}).superRefine((value, ctx) => {
-  if (value.enabled && !value.webhook_url) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "alerts.notifications.slack.webhook_url is required when slack is enabled",
-      path: ["webhook_url"],
-    });
-  }
-  if (value.enabled && value.webhook_url && !value.webhook_url.startsWith("https://")) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "alerts.notifications.slack.webhook_url must use https",
-      path: ["webhook_url"],
-    });
-  }
-});
 
 const alertEmailNotificationsSchema = z.object({
   enabled: z.boolean().default(false),
@@ -101,7 +80,6 @@ const alertEmailNotificationsSchema = z.object({
 
 const alertNotificationsSchema = z.object({
   dashboard: z.boolean().default(true),
-  slack: alertSlackNotificationsSchema.default({}),
   email: alertEmailNotificationsSchema.default({}),
 }).default({});
 
@@ -121,19 +99,6 @@ export const ClawforceConfigSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Name must be lowercase alphanumeric with hyphens"),
 
   role: z.enum(["inbox-analyst", "research-agent", "process-automator"]),
-
-  slack: z.object({
-    app_token: z.string().startsWith("xapp-", "Slack app token must start with xapp-"),
-    bot_token: z.string().startsWith("xoxb-", "Slack bot token must start with xoxb-"),
-    approval_channel: slackChannelId,
-    allowed_channels: z.array(slackChannelId),
-  }).optional(),
-
-  telegram: z.object({
-    bot_token: z.string().min(1, "Telegram bot token is required"),
-    dm_policy: z.enum(["open", "pairing", "allowlist", "disabled"]).optional(),
-    allow_from: z.array(z.union([z.string(), z.number()])).optional(),
-  }).optional(),
 
   models: z.object({
     primary: z.string().min(1),
@@ -326,8 +291,20 @@ export const ClawforceConfigSchema = z.object({
 
   openclaw: z.record(z.unknown()).optional(),
 }).refine(
-  (data) => data.slack || data.telegram,
-  { message: "At least one channel (slack or telegram) must be configured" },
+  (data) => {
+    const openclaw = data.openclaw;
+    if (!openclaw || typeof openclaw !== "object") return false;
+    const channels = (openclaw as Record<string, unknown>).channels;
+    return !!(
+      channels &&
+      typeof channels === "object" &&
+      Object.keys(channels as Record<string, unknown>).length > 0
+    );
+  },
+  {
+    message:
+      "At least one connector must be configured via openclaw.channels",
+  },
 );
 
 export type ClawforceConfig = z.infer<typeof ClawforceConfigSchema>;

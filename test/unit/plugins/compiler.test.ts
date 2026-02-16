@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -20,11 +20,10 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
     role: "inbox-analyst",
-    slack: {
-      app_token: "xapp-1-TEST",
-      bot_token: "xoxb-TEST",
-      approval_channel: "C0123456789",
-      allowed_channels: ["C9876543210"],
+    openclaw: {
+      channels: {
+        discord: { enabled: true },
+      },
     },
     models: {
       primary: "anthropic/claude-sonnet-4-5",
@@ -51,20 +50,74 @@ describe("plugin compiler", () => {
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 
-  it("returns plugins enabled by config", () => {
-    const bothEnabled = enabledPluginsForConfig(
-      makeConfig({
-        router: { enabled: true },
-        compliance: { enabled: true },
+  it("selects all discovered plugins regardless of legacy plugin toggles", () => {
+    const pluginsRootDir = makeTempDir("clawforce-plugins-root-");
+    const routerDir = join(pluginsRootDir, "router");
+    const complianceDir = join(pluginsRootDir, "compliance");
+    mkdirSync(routerDir, { recursive: true });
+    mkdirSync(complianceDir, { recursive: true });
+    writeFileSync(join(routerDir, "index.ts"), "export function activate() {}", "utf8");
+    writeFileSync(join(complianceDir, "index.ts"), "export function activate() {}", "utf8");
+    writeFileSync(
+      join(routerDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        id: "clawforce-router",
+        version: "1.0.0",
+        engines: { clawforce: ">=0.1.0", openclaw: ">=0.1.0" },
+        capabilities: ["routing"],
+        permissions: ["hooks:before_agent_start"],
+        configSchema: { type: "object" },
       }),
+      "utf8",
     );
-    expect(bothEnabled).toEqual(["clawforce-router", "clawforce-compliance"]);
+    writeFileSync(
+      join(complianceDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        id: "clawforce-compliance",
+        version: "1.0.0",
+        engines: { clawforce: ">=0.1.0", openclaw: ">=0.1.0" },
+        capabilities: ["compliance"],
+        permissions: ["hooks:message_sent"],
+        configSchema: { type: "object" },
+      }),
+      "utf8",
+    );
 
-    const onlyRouter = enabledPluginsForConfig(
+    const selected = enabledPluginsForConfig(
+      makeConfig({
+        router: { enabled: false },
+        compliance: { enabled: false },
+      }),
+      { pluginsRootDir },
+    );
+    expect(selected).toEqual(["clawforce-compliance", "clawforce-router"]);
+  });
+
+  it("includes discovered non-core plugins automatically", () => {
+    const pluginsRootDir = makeTempDir("clawforce-plugins-root-");
+    const pluginDir = join(pluginsRootDir, "acme-tooling");
+    mkdirSync(pluginDir, { recursive: true });
+    writeFileSync(join(pluginDir, "index.ts"), "export function activate() {}", "utf8");
+    writeFileSync(
+      join(pluginDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        id: "acme-tooling",
+        version: "1.0.0",
+        engines: { clawforce: ">=0.1.0", openclaw: ">=0.1.0" },
+        capabilities: ["tooling"],
+        permissions: ["hooks:message_sent"],
+        configSchema: { type: "object" },
+      }),
+      "utf8",
+    );
+
+    const selected = enabledPluginsForConfig(
       makeConfig({
         router: { enabled: true },
       }),
+      { pluginsRootDir },
     );
-    expect(onlyRouter).toEqual(["clawforce-router"]);
+
+    expect(selected).toEqual(["acme-tooling"]);
   });
 });

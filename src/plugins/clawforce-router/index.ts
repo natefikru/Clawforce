@@ -40,6 +40,12 @@ import {
 } from "./health-monitor.js";
 import { IdleMonitor } from "./idle-monitor.js";
 import { dispatchAlertNotifications } from "../../alerts/dispatcher.js";
+import { normalizeConnectorContext } from "../../connectors/normalize-context.js";
+import {
+  assertHookPermission,
+  assertPermission,
+  getPluginPermissions,
+} from "../permission-guard.js";
 
 export interface RouterPluginConfig {
   defaultModel?: string;
@@ -251,6 +257,7 @@ export function parseModelRef(ref: string): {
 export function activate(api: RouterPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
   const writer = api.pluginConfig?.storageWriter as StorageWriter | undefined;
+  const permissions = getPluginPermissions(api.pluginConfig);
   const alertCooldowns = new Map<string, number>();
 
   const emitAlert = (input: {
@@ -386,6 +393,7 @@ export function activate(api: RouterPluginApi): void {
       (budgetTracker ? `, budget: $${config.budget!.dailyLimit}/day` : ""),
   );
 
+  assertHookPermission(api.id, permissions, "before_agent_start");
   api.on(
     "before_agent_start",
     (event, ctx) => {
@@ -409,12 +417,9 @@ export function activate(api: RouterPluginApi): void {
       const domainSignals = detectDomain(prompt);
 
       // Dimension 0: Policy check (channel/user data tier)
+      const connector = normalizeConnectorContext(event, ctx);
       const dataTier = config.policy
-        ? resolveDataTier(
-            config.policy,
-            ctx.channelId as string | undefined,
-            ctx.userId as string | undefined,
-          )
+        ? resolveDataTier(config.policy, connector)
         : undefined;
 
       // Dimension 4: Budget check
@@ -600,6 +605,7 @@ export function activate(api: RouterPluginApi): void {
   );
 
   // Output filter: scan outbound messages for PII and redact before sending
+  assertHookPermission(api.id, permissions, "message_sending");
   api.on(
     "message_sending",
     (event) => {
@@ -627,6 +633,7 @@ export function activate(api: RouterPluginApi): void {
   );
 
   // Tool result filter: scan tool outputs for PII before they persist in conversation
+  assertHookPermission(api.id, permissions, "tool_result_persist");
   api.on(
     "tool_result_persist",
     (event) => {
@@ -653,6 +660,11 @@ export function activate(api: RouterPluginApi): void {
   );
 
   // Audit: log session end events for compliance trail
+  assertHookPermission(api.id, permissions, "agent_end");
+  assertPermission(api.id, permissions, "storage:write", "write routing and alert logs");
+  if (config.alerts.enabled) {
+    assertPermission(api.id, permissions, "alerts:dispatch", "dispatch alerts");
+  }
   api.on("agent_end", (event, ctx) => {
     idleMonitor.recordActivity(ctx.agentId ?? "_global");
     writeLog({

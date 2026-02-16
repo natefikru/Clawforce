@@ -1,6 +1,11 @@
 name: "minimal"
 role: "research-agent"
 
+openclaw:
+  channels:
+    discord:
+      enabled: true
+
 slack:
   app_token: "xapp-1-MINIMAL"
   bot_token: "xoxb-MINIMAL"

@@ -20,6 +20,14 @@ function createMockApi(
   return {
     id: "clawforce-router",
     pluginConfig: {
+      pluginPermissions: [
+        "hooks:before_agent_start",
+        "hooks:message_sending",
+        "hooks:tool_result_persist",
+        "hooks:agent_end",
+        "storage:write",
+        "alerts:dispatch",
+      ],
       healthCheck: { enabled: false },
       storageWriter: defaultWriter,
       ...pluginConfig,

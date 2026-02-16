@@ -32,7 +32,15 @@ function createMockApi(
 
   return {
     id: "clawforce-compliance",
-    pluginConfig,
+    pluginConfig: {
+      pluginPermissions: [
+        "hooks:after_tool_call",
+        "hooks:message_received",
+        "hooks:message_sent",
+        "storage:write",
+      ],
+      ...pluginConfig,
+    },
     logger: {
       info: vi.fn(),
       warn: vi.fn(),
@@ -65,6 +73,28 @@ describe("Compliance Logger Plugin", () => {
     expect(api.hooks.has("after_tool_call")).toBe(true);
     expect(api.hooks.has("message_received")).toBe(true);
     expect(api.hooks.has("message_sent")).toBe(true);
+  });
+
+  it("should fail activation when required hook permission is missing", () => {
+    const api = createMockApi({
+      pluginPermissions: ["hooks:after_tool_call", "hooks:message_sent"],
+    });
+    expect(() => activate(api)).toThrow(
+      'cannot register hook "message_received" without permission "hooks:message_received"',
+    );
+  });
+
+  it("should fail activation when storage permission is missing", () => {
+    const api = createMockApi({
+      pluginPermissions: [
+        "hooks:after_tool_call",
+        "hooks:message_received",
+        "hooks:message_sent",
+      ],
+    });
+    expect(() => activate(api)).toThrow(
+      'cannot write compliance logs without permission "storage:write"',
+    );
   });
 
   it("should log activation message", () => {
@@ -112,7 +142,9 @@ describe("Compliance Logger Plugin", () => {
     ) as ComplianceEntry;
     expect(logged.event).toBe("message_received");
     expect(logged.agentId).toBe("main");
-    expect(logged.channel).toBe("telegram");
+    expect(logged.provider).toBe("telegram");
+    expect(logged.conversationId).toBeUndefined();
+    expect(logged.actorId).toBe("user123");
     expect(logged.from).toBe("user123");
     expect(logged.contentLength).toBe(11);
   });
@@ -133,6 +165,7 @@ describe("Compliance Logger Plugin", () => {
     ) as ComplianceEntry;
     expect(logged.event).toBe("message_sent");
     expect(logged.agentId).toBe("main");
+    expect(logged.provider).toBe("telegram");
     expect(logged.to).toBe("user123");
     expect(logged.contentLength).toBe(9);
     expect(logged.model).toBe("claude-sonnet-4-5");

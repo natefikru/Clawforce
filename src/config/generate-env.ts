@@ -40,10 +40,6 @@ export function generateEnv(config: ClawforceConfig): string {
     lines.push(`AUTH_SECRET=${authSecret}`);
   }
 
-  if (config.alerts?.notifications?.slack?.webhook_url) {
-    lines.push(`CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL=${config.alerts.notifications.slack.webhook_url}`);
-  }
-
   if (config.alerts?.notifications?.email?.password) {
     lines.push(`CLAWFORCE_ALERTS_EMAIL_PASSWORD=${config.alerts.notifications.email.password}`);
   }

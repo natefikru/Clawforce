@@ -1,5 +1,20 @@
 {
   "id": "clawforce-compliance",
+  "version": "1.0.0",
+  "engines": {
+    "clawforce": ">=0.1.0",
+    "openclaw": ">=0.1.0"
+  },
+  "capabilities": [
+    "compliance-logging",
+    "audit-events"
+  ],
+  "permissions": [
+    "hooks:after_tool_call",
+    "hooks:message_received",
+    "hooks:message_sent",
+    "storage:write"
+  ],
   "configSchema": {
     "type": "object",
     "additionalProperties": true,

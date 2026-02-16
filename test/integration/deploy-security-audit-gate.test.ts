@@ -29,7 +29,7 @@ describe("Deploy security audit integration", () => {
     delete process.env.CI;
     delete process.env.NODE_ENV;
     if (existsSync(deployDir)) {
-      rmSync(deployDir, { recursive: true });
+      rmSync(deployDir, { recursive: true, force: true });
     }
   });
 
@@ -39,7 +39,7 @@ describe("Deploy security audit integration", () => {
     delete process.env.CI;
     delete process.env.NODE_ENV;
     if (existsSync(deployDir)) {
-      rmSync(deployDir, { recursive: true });
+      rmSync(deployDir, { recursive: true, force: true });
     }
   });
 

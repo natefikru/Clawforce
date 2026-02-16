@@ -21,14 +21,14 @@ describe("Deploy Lifecycle Integration", () => {
   beforeAll(() => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-integration-test";
     if (existsSync(testDeployDir)) {
-      rmSync(testDeployDir, { recursive: true });
+      rmSync(testDeployDir, { recursive: true, force: true });
     }
   });
 
   afterAll(() => {
     delete process.env.ANTHROPIC_API_KEY;
     if (existsSync(testDeployDir)) {
-      rmSync(testDeployDir, { recursive: true });
+      rmSync(testDeployDir, { recursive: true, force: true });
     }
   });
 
@@ -87,10 +87,7 @@ describe("Deploy Lifecycle Integration", () => {
     expect(oc.agents.defaults.model.fallbacks).toContain(
       "ollama/llama3.3:8b",
     );
-    expect(oc.channels.slack.enabled).toBe(true);
-    expect(oc.channels.slack.channels["C0123456789"].requireMention).toBe(
-      false,
-    );
+    expect(oc.channels.discord.enabled).toBe(true);
     expect(oc.cron.enabled).toBe(true);
     expect(oc.hooks.enabled).toBe(true);
 
@@ -161,7 +158,7 @@ describe("Deploy Lifecycle Integration", () => {
       expect(existsSync(join(minDir, "data/cron/jobs.json"))).toBe(false);
     } finally {
       if (existsSync(minDir)) {
-        rmSync(minDir, { recursive: true });
+        rmSync(minDir, { recursive: true, force: true });
       }
     }
   });

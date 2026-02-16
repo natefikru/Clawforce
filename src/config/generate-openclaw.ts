@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClawforceConfig } from "./types.js";
 import { resolveProfile } from "./capability-profiles.js";
+import { discoverPlugins } from "../plugins/registry.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatesDir = join(__dirname, "..", "..", "templates");
@@ -27,10 +28,6 @@ interface RouterAlertsConfig {
   };
   notifications: {
     dashboard: boolean;
-    slack: {
-      enabled: boolean;
-      webhookUrlEnv?: string;
-    };
     email: {
       enabled: boolean;
       smtpHost?: string;
@@ -43,7 +40,6 @@ interface RouterAlertsConfig {
   };
 }
 
-const ALERT_SLACK_WEBHOOK_ENV = "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL";
 const ALERT_EMAIL_PASSWORD_ENV = "CLAWFORCE_ALERTS_EMAIL_PASSWORD";
 
 const DEFAULT_ROUTER_ALERTS_CONFIG: RouterAlertsConfig = {
@@ -65,7 +61,6 @@ const DEFAULT_ROUTER_ALERTS_CONFIG: RouterAlertsConfig = {
   },
   notifications: {
     dashboard: true,
-    slack: { enabled: false },
     email: { enabled: false, smtpPort: 587 },
   },
 };
@@ -86,23 +81,7 @@ export interface OpenClawConfig {
     };
   };
   channels: {
-    slack?: {
-      enabled: boolean;
-      mode: string;
-      appToken: string;
-      botToken: string;
-      groupPolicy: string;
-      dm?: { policy: string };
-      channels: Record<string, { requireMention: boolean }>;
-    };
-    telegram?: {
-      enabled: boolean;
-      botToken: string;
-      dmPolicy: string;
-      groupPolicy: string;
-      allowFrom?: Array<string | number>;
-    };
-  };
+  } & Record<string, unknown>;
   cron?: {
     enabled: boolean;
     store?: string;
@@ -156,44 +135,6 @@ export function generateOpenClawConfig(
     },
   };
 
-  // Channel config — at least one of slack or telegram is required
-  if (config.slack) {
-    const slackChannels: Record<string, { requireMention: boolean }> = {};
-
-    // Approval channel: bot responds without being mentioned
-    slackChannels[config.slack.approval_channel] = { requireMention: false };
-
-    // Allowed channels: require @mention
-    for (const channelId of config.slack.allowed_channels) {
-      slackChannels[channelId] = { requireMention: true };
-    }
-
-    result.channels.slack = {
-      enabled: true,
-      mode: "socket",
-      appToken: config.slack.app_token,
-      botToken: config.slack.bot_token,
-      groupPolicy: "allowlist",
-      dm: {
-        policy: "pairing",
-      },
-      channels: slackChannels,
-    };
-  }
-
-  if (config.telegram) {
-    const dmPolicy = config.telegram.dm_policy ?? "open";
-    const allowFrom = config.telegram.allow_from
-      ?? (dmPolicy === "open" ? ["*"] : undefined);
-    result.channels.telegram = {
-      enabled: true,
-      botToken: config.telegram.bot_token,
-      dmPolicy,
-      groupPolicy: "disabled",
-      ...(allowFrom ? { allowFrom } : {}),
-    };
-  }
-
   // Load and merge role-specific config partial
   const rolePartialPath = join(
     templatesDir,
@@ -220,61 +161,10 @@ export function generateOpenClawConfig(
     );
   }
 
-  // Enable plugins (router, compliance) if configured
-  const pluginEntries: Record<
-    string,
-    { enabled: boolean; config?: Record<string, unknown> }
-  > = {};
-
-  if (config.router && config.router.enabled !== false) {
-    const routerConfig: Record<string, unknown> = {
-      defaultModel: config.models.primary,
-      ...(config.models.local ? { defaultLocalModel: config.models.local } : {}),
-      alerts: mapRouterAlertsConfig(config),
-    };
-    if (config.router.rules) {
-      routerConfig.rules = config.router.rules;
-    }
-    if (config.router.sensitivity_keywords) {
-      routerConfig.sensitivityKeywords = config.router.sensitivity_keywords;
-    }
-    if (config.router.priority) {
-      routerConfig.priority = config.router.priority;
-    }
-    if (config.router.budget) {
-      routerConfig.budget = {
-        dailyLimit: config.router.budget.daily_limit,
-        perRequestCap: config.router.budget.per_request_cap,
-        fallbackModel: config.router.budget.fallback_model,
-      };
-    }
-    if (config.router.health_check) {
-      routerConfig.healthCheck = {
-        enabled: config.router.health_check.enabled,
-        intervalSeconds: config.router.health_check.interval_seconds,
-        timeoutSeconds: config.router.health_check.timeout_seconds,
-        staleAfterSeconds: config.router.health_check.stale_after_seconds,
-        failoverPolicy: config.router.health_check.failover_policy,
-        failureThreshold: config.router.health_check.failure_threshold,
-        recoveryThreshold: config.router.health_check.recovery_threshold,
-      };
-    }
-    pluginEntries["clawforce-router"] = {
-      enabled: true,
-      config: routerConfig,
-    };
-  }
-
-  if (config.compliance && config.compliance.enabled !== false) {
-    pluginEntries["clawforce-compliance"] = { enabled: true };
-  }
-
-  if (Object.keys(pluginEntries).length > 0) {
-    result.plugins = {
-      enabled: true,
-      entries: pluginEntries,
-    };
-  }
+  result.plugins = {
+    enabled: true,
+    entries: buildPluginEntries(config),
+  };
 
   // Enable command-logger hook for audit trail
   const hooksToken = randomBytes(32).toString("hex");
@@ -300,6 +190,73 @@ export function generateOpenClawConfig(
   }
 
   return result;
+}
+
+function buildPluginEntries(
+  config: ClawforceConfig,
+): Record<string, { enabled: boolean; config?: Record<string, unknown> }> {
+  const discovered = discoverPlugins();
+  const entries: Record<string, { enabled: boolean; config?: Record<string, unknown> }> = {};
+
+  for (const plugin of discovered) {
+    if (plugin.id === "clawforce-router") {
+      entries[plugin.id] = {
+        enabled: true,
+        config: {
+          ...buildRouterPluginConfig(config),
+          pluginPermissions: plugin.manifest.permissions,
+        },
+      };
+      continue;
+    }
+
+    entries[plugin.id] = {
+      enabled: true,
+      config: {
+        pluginPermissions: plugin.manifest.permissions,
+      },
+    };
+  }
+
+  return entries;
+}
+
+function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknown> {
+  const routerConfig: Record<string, unknown> = {
+    defaultModel: config.models.primary,
+    ...(config.models.local ? { defaultLocalModel: config.models.local } : {}),
+    alerts: mapRouterAlertsConfig(config),
+  };
+
+  if (config.router?.rules) {
+    routerConfig.rules = config.router.rules;
+  }
+  if (config.router?.sensitivity_keywords) {
+    routerConfig.sensitivityKeywords = config.router.sensitivity_keywords;
+  }
+  if (config.router?.priority) {
+    routerConfig.priority = config.router.priority;
+  }
+  if (config.router?.budget) {
+    routerConfig.budget = {
+      dailyLimit: config.router.budget.daily_limit,
+      perRequestCap: config.router.budget.per_request_cap,
+      fallbackModel: config.router.budget.fallback_model,
+    };
+  }
+  if (config.router?.health_check) {
+    routerConfig.healthCheck = {
+      enabled: config.router.health_check.enabled,
+      intervalSeconds: config.router.health_check.interval_seconds,
+      timeoutSeconds: config.router.health_check.timeout_seconds,
+      staleAfterSeconds: config.router.health_check.stale_after_seconds,
+      failoverPolicy: config.router.health_check.failover_policy,
+      failureThreshold: config.router.health_check.failure_threshold,
+      recoveryThreshold: config.router.health_check.recovery_threshold,
+    };
+  }
+
+  return routerConfig;
 }
 
 function mapRouterAlertsConfig(config: ClawforceConfig): RouterAlertsConfig {
@@ -334,14 +291,6 @@ function mapRouterAlertsConfig(config: ClawforceConfig): RouterAlertsConfig {
     notifications: {
       dashboard:
         alerts?.notifications?.dashboard ?? DEFAULT_ROUTER_ALERTS_CONFIG.notifications.dashboard,
-      slack: {
-        enabled:
-          alerts?.notifications?.slack?.enabled
-          ?? DEFAULT_ROUTER_ALERTS_CONFIG.notifications.slack.enabled,
-        ...(alerts?.notifications?.slack?.webhook_url
-          ? { webhookUrlEnv: ALERT_SLACK_WEBHOOK_ENV }
-          : {}),
-      },
       email: {
         enabled:
           alerts?.notifications?.email?.enabled
