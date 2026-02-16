@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { ClawforceConfig } from "./types.js";
+import { getRuntimeEngineAdapter } from "./engines/registry.js";
 
 export function generateEnv(config: ClawforceConfig): string {
   const gatewayToken = randomBytes(32).toString("hex");
@@ -50,27 +51,13 @@ export function generateEnv(config: ClawforceConfig): string {
   }
 
   if (config.runtime?.location === "host") {
+    const adapter = getRuntimeEngineAdapter(config.runtime.engine);
     lines.push("");
     lines.push("# Host runtime endpoint");
-    if (config.runtime.engine === "ollama") {
-      lines.push(`OLLAMA_HOST=${resolveHostRuntimeUrl(config)}`);
-    } else if (config.runtime.engine === "vllm") {
-      lines.push(`VLLM_HOST=${resolveHostRuntimeUrl(config)}`);
-    } else {
-      lines.push(`SGLANG_HOST=${resolveHostRuntimeUrl(config)}`);
-    }
+    lines.push(`${adapter.hostEnvVarName}=${adapter.resolveHostRuntimeUrl(config.runtime)}`);
   }
 
   return lines.join("\n") + "\n";
-}
-
-function resolveHostRuntimeUrl(config: ClawforceConfig): string {
-  const runtime = config.runtime;
-  if (!runtime) return "";
-  if (runtime.host_url) return runtime.host_url;
-  if (runtime.engine === "ollama") return "http://host.docker.internal:11434";
-  if (runtime.engine === "vllm") return `http://host.docker.internal:${runtime.port ?? 8000}`;
-  return `http://host.docker.internal:${runtime.port ?? 30000}`;
 }
 
 function toProviderApiKeyEnvName(provider: string): string {

@@ -1,5 +1,6 @@
 import { stringify as stringifyYaml } from "yaml";
 import type { ClawforceConfig } from "./types.js";
+import { getRuntimeEngineAdapter } from "./engines/registry.js";
 
 interface ComposeService {
   image: string;
@@ -48,7 +49,12 @@ export function generateCompose(config: ClawforceConfig): string {
   if (credentialMode === "auth_profile") {
     gatewayEnv.push("OPENCLAW_AUTH_PROFILE=${OPENCLAW_AUTH_PROFILE}");
   } else {
-    gatewayEnv.push("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
+    const providerKeys = Object.keys(config.models.provider_keys ?? {}).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    for (const provider of providerKeys) {
+      gatewayEnv.push(`${toProviderApiKeyEnvName(provider)}=\${${toProviderApiKeyEnvName(provider)}}`);
+    }
   }
 
   if (config.alerts?.notifications?.email?.password) {
@@ -85,76 +91,40 @@ export function generateCompose(config: ClawforceConfig): string {
   if (config.runtime) {
     const rt = config.runtime;
     const engine = rt.engine ?? "sglang";
-    const serviceName = engine === "ollama" ? "ollama" : engine;
+    const adapter = getRuntimeEngineAdapter(engine);
     const runtimeLocation = rt.location ?? "container";
-    const hostRuntimeUrl = resolveHostRuntimeUrl(rt);
 
     if (runtimeLocation === "host") {
+      const hostRuntimeUrl = adapter.resolveHostRuntimeUrl(rt);
       if (hostRuntimeUrl.includes("host.docker.internal")) {
         compose.services["openclaw-gateway"].extra_hosts = [
           ...(compose.services["openclaw-gateway"].extra_hosts ?? []),
           "host.docker.internal:host-gateway",
         ];
       }
-      if (engine === "sglang") {
-        compose.services["openclaw-gateway"].environment!.push(
-          `SGLANG_HOST=${hostRuntimeUrl}`,
-        );
-      } else if (engine === "vllm") {
-        compose.services["openclaw-gateway"].environment!.push(
-          `VLLM_HOST=${hostRuntimeUrl}`,
-        );
-      } else {
-        compose.services["openclaw-gateway"].environment!.push(
-          `OLLAMA_HOST=${hostRuntimeUrl}`,
-        );
-      }
-    } else if (engine === "sglang") {
-      const port = rt.port ?? 30000;
-      compose.services["openclaw-gateway"].depends_on = {
-        [serviceName]: { condition: "service_started" },
-      };
-      compose.services["openclaw-gateway"].environment!.push(
-        `SGLANG_HOST=http://${serviceName}:${port}`,
-      );
-
-      const svc: ComposeService = {
-        image: "lmsysorg/sglang:latest",
-        container_name: `${containerPrefix}-sglang`,
-        restart: "unless-stopped",
-        ports: [`${port}:${port}`],
-        command: [
-          "python3", "-m", "sglang.launch_server",
-          "--model-path", rt.model ?? "qwen3-32b",
-          "--port", String(port),
-          ...(rt.quantization ? ["--quantization", rt.quantization] : []),
-        ],
-      };
-
-      applyGpuConfig(svc, rt.gpu);
-      compose.services[serviceName] = svc;
-    } else if (engine === "vllm") {
-      const port = rt.port ?? 8000;
-      compose.services["openclaw-gateway"].depends_on = {
-        [serviceName]: { condition: "service_started" },
-      };
-      compose.services["openclaw-gateway"].environment!.push(
-        `VLLM_HOST=http://${serviceName}:${port}`,
-      );
-
-      const svc: ComposeService = {
-        image: "vllm/vllm-openai:latest",
-        container_name: `${containerPrefix}-vllm`,
-        restart: "unless-stopped",
-        ports: [`${port}:${port}`],
-        command: ["--model", rt.model ?? "qwen3-32b", "--port", String(port)],
-      };
-
-      applyGpuConfig(svc, rt.gpu);
-      compose.services[serviceName] = svc;
     } else {
-      // runtime.engine === "ollama" — provision managed Ollama sidecar
-      addOllamaService(compose, containerPrefix, config.name, rt.model ?? "llama3.3:8b", rt.gpu);
+      const runtimeService = adapter.buildContainerService({
+        containerPrefix,
+        configName: config.name,
+        runtime: rt,
+      });
+      compose.services["openclaw-gateway"].depends_on = {
+        [runtimeService.serviceName]: { condition: runtimeService.dependsOnCondition },
+      };
+      compose.services[runtimeService.serviceName] = runtimeService.service as ComposeService;
+      compose.volumes = {
+        ...(compose.volumes ?? {}),
+        ...(runtimeService.volumes ?? {}),
+      };
+      compose.services["openclaw-gateway"].environment!.push(
+        `${adapter.hostEnvVarName}=${runtimeService.gatewayRuntimeHost}`,
+      );
+    }
+
+    if (runtimeLocation === "host") {
+      compose.services["openclaw-gateway"].environment!.push(
+        `${adapter.hostEnvVarName}=${adapter.resolveHostRuntimeUrl(rt)}`,
+      );
     }
   }
 
@@ -192,68 +162,6 @@ export function generateCompose(config: ClawforceConfig): string {
   return stringifyYaml(compose, { lineWidth: 0 });
 }
 
-function applyGpuConfig(svc: ComposeService, gpu?: string): void {
-  if (gpu === "nvidia") {
-    svc.deploy = {
-      resources: {
-        reservations: {
-          devices: [{ driver: "nvidia", count: "all", capabilities: ["gpu"] }],
-        },
-      },
-    };
-  } else if (gpu === "amd") {
-    svc.devices = ["/dev/kfd", "/dev/dri"];
-  }
-}
-
-function addOllamaService(
-  compose: ComposeConfig,
-  containerPrefix: string,
-  configName: string,
-  _model?: string,
-  gpu?: string,
-): void {
-  const volumeName = `${configName}-ollama-data`;
-
-  compose.services["openclaw-gateway"].depends_on = {
-    ollama: { condition: "service_healthy" },
-  };
-
-  compose.services["openclaw-gateway"].environment!.push(
-    "OLLAMA_HOST=http://ollama:11434",
-  );
-
-  const svc: ComposeService = {
-    image: "ollama/ollama:latest",
-    container_name: `${containerPrefix}-ollama`,
-    restart: "unless-stopped",
-    ports: ["11434:11434"],
-    volumes: [`${volumeName}:/root/.ollama`],
-    healthcheck: {
-      test: ["CMD", "curl", "-sf", "http://127.0.0.1:11434/api/tags"],
-      interval: "10s",
-      timeout: "5s",
-      retries: 5,
-    },
-  };
-
-  applyGpuConfig(svc, gpu);
-  compose.services.ollama = svc;
-  compose.volumes = { ...compose.volumes, [volumeName]: {} };
-}
-
-function resolveHostRuntimeUrl(
-  runtime: NonNullable<ClawforceConfig["runtime"]>,
-): string {
-  if (runtime.host_url) {
-    return runtime.host_url;
-  }
-
-  if (runtime.engine === "ollama") {
-    return "http://host.docker.internal:11434";
-  }
-  if (runtime.engine === "vllm") {
-    return `http://host.docker.internal:${runtime.port ?? 8000}`;
-  }
-  return `http://host.docker.internal:${runtime.port ?? 30000}`;
+function toProviderApiKeyEnvName(provider: string): string {
+  return `${provider.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY`;
 }

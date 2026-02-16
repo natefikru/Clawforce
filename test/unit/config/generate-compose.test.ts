@@ -12,12 +12,32 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
         discord: { enabled: true },
       },
     },
-    models: { primary: "anthropic/claude-sonnet-4-5" },
+    models: {
+      primary: "anthropic/claude-sonnet-4-5",
+      provider_keys: {
+        anthropic: "sk-ant-test123",
+      },
+    },
     ...overrides,
   };
 }
 
 describe("generateCompose", () => {
+  it("should reject unsupported runtime engines", () => {
+    expect(() =>
+      generateCompose(
+        makeConfig({
+          runtime: {
+            engine: "custom-engine",
+            location: "container",
+            model: "custom/model",
+            port: 9999,
+          },
+        }),
+      ),
+    ).toThrow('Unsupported runtime engine "custom-engine"');
+  });
+
   it("should generate valid YAML", () => {
     const yaml = generateCompose(makeConfig());
     const parsed = parseYaml(yaml);

@@ -22,6 +22,21 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
 }
 
 describe("generateEnv", () => {
+  it("should reject unsupported host runtime engines", () => {
+    expect(() =>
+      generateEnv(
+        makeConfig({
+          runtime: {
+            engine: "custom-engine",
+            location: "host",
+            model: "custom/model",
+            port: 9999,
+          },
+        }),
+      ),
+    ).toThrow('Unsupported runtime engine "custom-engine"');
+  });
+
   it("should include gateway token", () => {
     const env = generateEnv(makeConfig());
     expect(env).toContain("GATEWAY_TOKEN=");
