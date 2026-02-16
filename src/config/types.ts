@@ -36,6 +36,13 @@ const alertSlackNotificationsSchema = z.object({
       path: ["webhook_url"],
     });
   }
+  if (value.enabled && value.webhook_url && !value.webhook_url.startsWith("https://")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.slack.webhook_url must use https",
+      path: ["webhook_url"],
+    });
+  }
 });
 
 const alertEmailNotificationsSchema = z.object({
@@ -81,6 +88,13 @@ const alertEmailNotificationsSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "alerts.notifications.email.to must include at least one recipient when email is enabled",
       path: ["to"],
+    });
+  }
+  if (value.smtp_port !== 465 && value.smtp_port !== 587) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "alerts.notifications.email.smtp_port must be 465 or 587",
+      path: ["smtp_port"],
     });
   }
 });

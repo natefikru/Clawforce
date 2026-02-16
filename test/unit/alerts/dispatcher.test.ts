@@ -42,4 +42,18 @@ describe("dispatchAlertNotifications", () => {
       }),
     ).resolves.toBeUndefined();
   });
+
+  it("does not throw if Slack webhook is configured with non-https URL", async () => {
+    await expect(
+      dispatchAlertNotifications(alert, {
+        slack: {
+          enabled: true,
+          webhookUrl: "http://hooks.slack.com/services/T/B/X",
+        },
+        email: {
+          enabled: false,
+        },
+      }),
+    ).resolves.toBeUndefined();
+  });
 });
