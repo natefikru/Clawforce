@@ -440,6 +440,34 @@ describe("generateOpenClawConfig", () => {
       });
     });
 
+    it("should pass policy config through to router plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          policy: {
+            default_tier: "internal",
+            channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+          },
+        }),
+      );
+      const pluginConfig = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+      expect(pluginConfig.policy).toEqual({
+        default_tier: "internal",
+        channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+      });
+    });
+
+    it("should pass compliance frameworks through to router plugin config", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          compliance_frameworks: ["hipaa", "pci-dss"],
+        }),
+      );
+      const pluginConfig = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+      expect(pluginConfig.complianceFrameworks).toEqual(["hipaa", "pci-dss"]);
+    });
+
     it("should pass router health_check through to plugin config", () => {
       const result = generateOpenClawConfig(
         makeConfig({

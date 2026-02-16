@@ -247,6 +247,10 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
     defaultModel: config.models.primary,
     ...(config.models.local ? { defaultLocalModel: config.models.local } : {}),
     alerts: mapRouterAlertsConfig(config),
+    ...(config.policy ? { policy: config.policy } : {}),
+    ...(config.compliance_frameworks
+      ? { complianceFrameworks: config.compliance_frameworks }
+      : {}),
   };
 
   if (config.router?.rules) {

@@ -775,6 +775,39 @@ describe("Policy-Based Routing", () => {
 
     expect(result?.providerOverride).toBe("sglang");
   });
+
+  it("compliance minimum tier enforces local routing without explicit policy", () => {
+    const api = createMockApi({
+      complianceFrameworks: ["pci-dss"],
+    });
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "Write a complex distributed systems architecture document with microservices" },
+      { agentId: "main", channelId: "C_PUBLIC" },
+    );
+
+    expect(result?.providerOverride).toBe("sglang");
+    expect(result?.prependContext).toContain("policy");
+  });
+
+  it("compliance required patterns stay active despite high global pii threshold", () => {
+    const api = createMockApi({
+      piiThreshold: 0.95,
+      complianceFrameworks: ["gdpr"],
+    });
+    activate(api);
+
+    const hook = api.hooks.get("before_agent_start")!;
+    const result = hook.handler(
+      { prompt: "Email me at alice@example.com for details." },
+      { agentId: "main" },
+    );
+
+    expect(result?.providerOverride).toBe("sglang");
+    expect(result?.prependContext).toContain("PII detected");
+  });
 });
 
 describe("applyFailoverPolicy", () => {
