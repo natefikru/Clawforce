@@ -34,6 +34,21 @@ interface ComposeConfig {
 
 export function generateCompose(config: ClawforceConfig): string {
   const containerPrefix = `clawforce-${config.name}`;
+  const gatewayBind = config.gateway?.bind ?? "loopback";
+  const credentialMode = config.models.credential_mode ?? "env";
+  const gatewayEnv = [
+    "HOME=/home/node",
+    "TERM=xterm-256color",
+    "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
+    `OPENCLAW_GATEWAY_BIND=${gatewayBind}`,
+    "NODE_ENV=production",
+  ];
+
+  if (credentialMode === "auth_profile") {
+    gatewayEnv.push("OPENCLAW_AUTH_PROFILE=${OPENCLAW_AUTH_PROFILE}");
+  } else {
+    gatewayEnv.push("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
+  }
 
   const compose: ComposeConfig = {
     services: {
@@ -43,14 +58,7 @@ export function generateCompose(config: ClawforceConfig): string {
         restart: "unless-stopped",
         init: true,
         ports: ["18789:18789"],
-        environment: [
-          "HOME=/home/node",
-          "TERM=xterm-256color",
-          "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
-          "OPENCLAW_GATEWAY_BIND=lan",
-          "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}",
-          "NODE_ENV=production",
-        ],
+        environment: gatewayEnv,
         volumes: [
           "./config:/home/node/.openclaw",
           "./workspace:/home/node/.openclaw/workspace",
@@ -61,7 +69,7 @@ export function generateCompose(config: ClawforceConfig): string {
           "dist/index.js",
           "gateway",
           "--bind",
-          "lan",
+          gatewayBind,
           "--port",
           "18789",
         ],

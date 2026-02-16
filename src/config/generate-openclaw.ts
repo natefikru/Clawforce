@@ -70,10 +70,12 @@ const DEFAULT_ROUTER_ALERTS_CONFIG: RouterAlertsConfig = {
 export interface OpenClawConfig {
   gateway?: {
     mode: string;
+    bind?: "loopback" | "lan";
   };
   agents: {
     defaults: {
       workspace: string;
+      authProfile?: string;
       model: {
         primary: string;
         fallbacks?: string[];
@@ -128,10 +130,15 @@ export function generateOpenClawConfig(
   const result: OpenClawConfig = {
     gateway: {
       mode: "local",
+      bind: config.gateway?.bind ?? "loopback",
     },
     agents: {
       defaults: {
         workspace: "/home/node/.openclaw/workspace",
+        ...(config.models.credential_mode === "auth_profile" &&
+        config.models.auth_profile
+          ? { authProfile: config.models.auth_profile }
+          : {}),
         model: {
           primary: config.models.primary,
           ...(config.models.local

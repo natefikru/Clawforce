@@ -132,10 +132,11 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - **Merged**: PR #7
 - **Why**: Operators need visibility into failures without watching the dashboard constantly.
 
-#### 2A.6 Plugin TypeScript Compilation Pipeline
+#### 2A.6 Plugin TypeScript Compilation Pipeline — COMPLETE ✅
 - Build `.ts` -> `.js` before copying to OpenClaw extensions directory
 - Source maps for debugging
 - Watch mode for development
+- **Merged**: PR #8
 - **Why**: Currently copies raw `.ts` files. OpenClaw expects compiled JavaScript.
 
 **Phase 2A Dependency Graph**:
@@ -154,7 +155,18 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - ~~Activity feed updates in real-time without polling~~ ✅
 - ~~Local model failure does NOT cascade PII to cloud~~ ✅
 - ~~Alerts fire for all critical conditions~~ ✅
-- Plugins are compiled before deployment
+- ~~Plugins are compiled before deployment~~ ✅
+
+### 2B Readiness Hardening Gates (Must Pass Before 2B Build-Out)
+
+- ✅ Gateway bind defaults to loopback with explicit LAN opt-in.
+- ✅ Dashboard auth policy must be explicit when dashboard is enabled.
+- ✅ Deploy flow runs OpenClaw security audit and blocks on critical findings.
+- ✅ Router budget tracking supports per-agent state in SQLite.
+- ✅ Compliance storage/read paths normalize and filter by agent scope.
+- ✅ Credential strategy supports `env` and `auth_profile` modes.
+- ✅ Final smoke verification and docs consistency checks completed.
+- ✅ Deploy lifecycle integration coverage now includes security-audit gate behavior.
 
 ---
 

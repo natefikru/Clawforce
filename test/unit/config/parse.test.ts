@@ -139,4 +139,46 @@ describe("parseConfig", () => {
       parseConfig(join(fixturesDir, "invalid-alerts-config.yaml")),
     ).toThrow("alerts.notifications.slack.webhook_url is required");
   });
+
+  it("should parse explicit gateway bind override", () => {
+    const config = parseConfig(join(fixturesDir, "valid-gateway-bind.yaml"));
+    expect(config.gateway?.bind).toBe("lan");
+  });
+
+  it("should reject invalid gateway bind value", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-gateway-bind.yaml")),
+    ).toThrow("Config validation failed");
+  });
+
+  it("should reject dashboard enabled without explicit auth policy", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-dashboard-auth-policy.yaml")),
+    ).toThrow("dashboard.auth must be explicitly configured");
+  });
+
+  it("should parse auth_profile credential mode when profile is provided", () => {
+    const config = parseConfig(join(fixturesDir, "valid-auth-profile-config.yaml"));
+    expect(config.models.credential_mode).toBe("auth_profile");
+    expect(config.models.auth_profile).toBe("corp-prod");
+  });
+
+  it("should reject auth_profile credential mode without profile", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-auth-profile-config.yaml")),
+    ).toThrow("models.auth_profile is required when models.credential_mode=auth_profile");
+  });
+
+  it("should reject env credential mode without api_key for cloud models", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-env-cloud-without-api-key.yaml")),
+    ).toThrow("models.api_key is required when models.credential_mode=env");
+  });
+
+  it("should allow env credential mode without api_key for local models", () => {
+    const config = parseConfig(join(fixturesDir, "valid-env-local-without-api-key.yaml"));
+    expect(config.models.credential_mode).toBe("env");
+    expect(config.models.api_key).toBeUndefined();
+    expect(config.models.primary).toBe("ollama/llama3.3:8b");
+  });
 });

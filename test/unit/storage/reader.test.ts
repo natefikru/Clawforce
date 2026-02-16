@@ -61,6 +61,28 @@ describe("StorageReader", () => {
       expect(events).toHaveLength(2);
     });
 
+  it("normalizes missing agent ID to _global in returned entries", () => {
+    writer.writeComplianceEvent({ ts: "2026-02-15T10:00:00Z", event: "a" });
+    const events = reader.getRecentEvents({ limit: 10 });
+    expect(events).toHaveLength(1);
+    expect(events[0].agentId).toBe("_global");
+  });
+
+  it("treats legacy NULL agent_id rows as _global when filtering", () => {
+    const payload = JSON.stringify({
+      ts: "2026-02-15T10:00:00Z",
+      event: "legacy_event",
+    });
+    db.prepare(
+      "INSERT INTO compliance_events (ts, event, agent_id, channel, data) VALUES (?, ?, NULL, NULL, ?)",
+    ).run("2026-02-15T10:00:00Z", "legacy_event", payload);
+
+    const events = reader.getRecentEvents({ limit: 10, agentId: "_global" });
+    expect(events).toHaveLength(1);
+    expect(events[0].event).toBe("legacy_event");
+    expect(events[0].agentId).toBe("_global");
+  });
+
     it("respects limit", () => {
       for (let i = 0; i < 10; i++) {
         writer.writeComplianceEvent({ ts: `2026-02-15T${String(i).padStart(2, "0")}:00:00Z`, event: "x" });
@@ -184,6 +206,25 @@ describe("StorageReader", () => {
       const dist = reader.getModelDistribution({ days: 1 });
       expect(dist).toEqual([]);
     });
+
+    it("isolates model distribution by agent ID", () => {
+      writer.writeRoutingDecision({
+        ts: new Date().toISOString(),
+        event: "routing_decision",
+        agentId: "agent-1",
+        model: "ollama/llama3.3:8b",
+      });
+      writer.writeRoutingDecision({
+        ts: new Date().toISOString(),
+        event: "routing_decision",
+        agentId: "agent-2",
+        model: "anthropic/claude-sonnet-4-5",
+      });
+
+      const dist = reader.getModelDistribution({ days: 1, agentId: "agent-1" });
+      expect(dist).toHaveLength(1);
+      expect(dist[0].model).toBe("ollama/llama3.3:8b");
+    });
   });
 
   describe("getDailySpend", () => {
@@ -196,6 +237,16 @@ describe("StorageReader", () => {
       expect(spend[0].date).toBe("2026-02-15"); // most recent first
       expect(spend[0].spent).toBe(2.0);
       expect(spend[0].requestCount).toBe(10);
+    });
+
+    it("isolates daily spend by agent ID", () => {
+      writer.writeBudgetState("agent-1", "2026-02-15", 4.0, 6);
+      writer.writeBudgetState("agent-2", "2026-02-15", 9.0, 11);
+
+      const spend = reader.getDailySpend({ days: 7, agentId: "agent-1" });
+      expect(spend).toHaveLength(1);
+      expect(spend[0].spent).toBe(4.0);
+      expect(spend[0].requestCount).toBe(6);
     });
   });
 

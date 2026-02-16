@@ -52,4 +52,23 @@ export function setupWorkspace(config: ClawforceConfig, deployDir: string): void
   const extensionsDir = join(configDir, "extensions");
   const enabledPlugins = enabledPluginsForConfig(config);
   buildPluginsToExtensions(enabledPlugins, extensionsDir);
+
+  // Persist auth-profile metadata for auth_profile credential mode.
+  if (
+    config.models.credential_mode === "auth_profile" &&
+    config.models.auth_profile
+  ) {
+    writeFileSync(
+      join(configDir, "auth-profile.json"),
+      `${JSON.stringify(
+        {
+          mode: "auth_profile",
+          profile: config.models.auth_profile,
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+  }
 }

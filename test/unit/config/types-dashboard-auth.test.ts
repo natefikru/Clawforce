@@ -11,17 +11,20 @@ function baseConfig(dashboardOverride?: Record<string, unknown>) {
       approval_channel: "C0123456789",
       allowed_channels: [],
     },
-    models: { primary: "anthropic/claude-sonnet-4-5" },
+    models: {
+      primary: "anthropic/claude-sonnet-4-5",
+      api_key: "sk-ant-test123",
+    },
     dashboard: dashboardOverride,
   };
 }
 
 describe("ClawforceConfigSchema — dashboard.auth", () => {
-  it("accepts dashboard without auth field (backward compat)", () => {
+  it("rejects dashboard enabled without explicit auth policy", () => {
     const result = ClawforceConfigSchema.safeParse(
       baseConfig({ enabled: true, port: 3000 }),
     );
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
   it("accepts auth.enabled: false without username/password", () => {
@@ -31,6 +34,13 @@ describe("ClawforceConfigSchema — dashboard.auth", () => {
         port: 3000,
         auth: { enabled: false },
       }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts dashboard disabled without auth policy", () => {
+    const result = ClawforceConfigSchema.safeParse(
+      baseConfig({ enabled: false, port: 3000 }),
     );
     expect(result.success).toBe(true);
   });

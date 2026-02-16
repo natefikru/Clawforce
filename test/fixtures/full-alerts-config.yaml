@@ -11,6 +11,7 @@ slack:
 models:
   primary: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
+  api_key: "${ANTHROPIC_API_KEY}"
 
 router:
   enabled: true

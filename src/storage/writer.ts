@@ -15,6 +15,7 @@ import type {
   ModelHealthStateEntry,
   RoutingLogEntry,
 } from "./types.js";
+import { normalizeAgentId } from "./types.js";
 import { isLocalModel } from "../shared/pricing.js";
 
 export class StorageWriter {
@@ -85,15 +86,20 @@ export class StorageWriter {
   }
 
   writeComplianceEvent(entry: ComplianceEntry): void {
-    this.appendJsonl(this.complianceLogPath, entry);
+    const normalizedAgentId = normalizeAgentId(entry.agentId);
+    const normalizedEntry: ComplianceEntry = {
+      ...entry,
+      agentId: normalizedAgentId,
+    };
+    this.appendJsonl(this.complianceLogPath, normalizedEntry);
     if (!this.stmtCompliance) return;
     try {
       this.stmtCompliance.run(
-        entry.ts,
-        entry.event,
-        typeof entry.agentId === "string" ? entry.agentId : null,
-        typeof entry.channel === "string" ? entry.channel : null,
-        JSON.stringify(entry),
+        normalizedEntry.ts,
+        normalizedEntry.event,
+        normalizedAgentId,
+        typeof normalizedEntry.channel === "string" ? normalizedEntry.channel : null,
+        JSON.stringify(normalizedEntry),
       );
     } catch (err) {
       process.stderr.write(
@@ -103,24 +109,29 @@ export class StorageWriter {
   }
 
   writeRoutingDecision(entry: RoutingLogEntry): void {
-    this.appendJsonl(this.routingLogPath, entry);
+    const normalizedAgentId = normalizeAgentId(entry.agentId);
+    const normalizedEntry: RoutingLogEntry = {
+      ...entry,
+      agentId: normalizedAgentId,
+    };
+    this.appendJsonl(this.routingLogPath, normalizedEntry);
     if (!this.stmtRouting) return;
     try {
-      const model = entry.model ?? "";
+      const model = normalizedEntry.model ?? "";
       const provider = model.includes("/") ? model.split("/")[0] : null;
       this.stmtRouting.run(
-        entry.ts,
-        entry.agentId ?? null,
+        normalizedEntry.ts,
+        normalizedAgentId,
         model,
         provider,
-        entry.hasPII ? 1 : 0,
-        entry.piiTypes ? JSON.stringify(entry.piiTypes) : null,
-        entry.complexity ?? null,
-        entry.domain ?? null,
-        entry.dataTier ?? null,
+        normalizedEntry.hasPII ? 1 : 0,
+        normalizedEntry.piiTypes ? JSON.stringify(normalizedEntry.piiTypes) : null,
+        normalizedEntry.complexity ?? null,
+        normalizedEntry.domain ?? null,
+        normalizedEntry.dataTier ?? null,
         isLocalModel(model) ? 1 : 0,
         0,
-        JSON.stringify(entry),
+        JSON.stringify(normalizedEntry),
       );
     } catch (err) {
       process.stderr.write(

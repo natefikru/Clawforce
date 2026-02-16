@@ -7,6 +7,14 @@
 
 import type { ComplianceEntry } from "../plugins/clawforce-compliance/index.js";
 
+export const DEFAULT_AGENT_ID = "_global";
+
+export function normalizeAgentId(agentId: unknown): string {
+  if (typeof agentId !== "string") return DEFAULT_AGENT_ID;
+  const trimmed = agentId.trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_AGENT_ID;
+}
+
 export const ALERT_TYPES = [
   "model_health",
   "budget_exceeded",

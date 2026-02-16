@@ -11,7 +11,10 @@ function baseConfig(alertsOverride?: Record<string, unknown>) {
       approval_channel: "C0123456789",
       allowed_channels: [],
     },
-    models: { primary: "anthropic/claude-sonnet-4-5" },
+    models: {
+      primary: "anthropic/claude-sonnet-4-5",
+      api_key: "sk-ant-test123",
+    },
     alerts: alertsOverride,
   };
 }

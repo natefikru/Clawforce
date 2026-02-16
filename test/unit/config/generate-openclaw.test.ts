@@ -68,9 +68,49 @@ describe("generateOpenClawConfig", () => {
     );
   });
 
+  it("should set authProfile when credential mode is auth_profile", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        models: {
+          primary: "anthropic/claude-sonnet-4-5",
+          credential_mode: "auth_profile",
+          auth_profile: "corp-prod",
+        },
+      }),
+    );
+    expect(result.agents.defaults.authProfile).toBe("corp-prod");
+  });
+
+  it("should not set authProfile when credential mode is env", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({
+        models: {
+          primary: "anthropic/claude-sonnet-4-5",
+          credential_mode: "env",
+          auth_profile: "corp-prod",
+        },
+      }),
+    );
+    expect(result.agents.defaults.authProfile).toBeUndefined();
+  });
+
   it("should set session dmScope", () => {
     const result = generateOpenClawConfig(makeConfig());
     expect(result.session.dmScope).toBe("per-channel-peer");
+  });
+
+  it("should default gateway bind to loopback", () => {
+    const result = generateOpenClawConfig(makeConfig());
+    const gateway = result.gateway as Record<string, unknown>;
+    expect(gateway.bind).toBe("loopback");
+  });
+
+  it("should allow explicit gateway bind override", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({ gateway: { bind: "lan" } }),
+    );
+    const gateway = result.gateway as Record<string, unknown>;
+    expect(gateway.bind).toBe("lan");
   });
 
   it("should enable cron for inbox-analyst role", () => {

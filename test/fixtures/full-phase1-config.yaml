@@ -32,3 +32,5 @@ compliance:
 dashboard:
   enabled: true
   port: 3001
+  auth:
+    enabled: false

@@ -34,6 +34,7 @@ describe("deployCommand", () => {
 
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.CLAWFORCE_SKIP_SECURITY_AUDIT;
     if (existsSync(deployDir)) {
       rmSync(deployDir, { recursive: true });
     }
@@ -141,5 +142,52 @@ describe("deployCommand", () => {
     if (existsSync(minimalDeployDir)) {
       rmSync(minimalDeployDir, { recursive: true });
     }
+  });
+
+  it("should run openclaw security audit inside gateway container", async () => {
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    expect(exec).toHaveBeenCalledWith(
+      "docker",
+      [
+        "compose",
+        "exec",
+        "-T",
+        "openclaw-gateway",
+        "node",
+        "dist/index.js",
+        "security",
+        "audit",
+        "--deep",
+      ],
+      expect.objectContaining({ cwd: deployDir }),
+    );
+  });
+
+  it("should fail deploy when audit output contains critical findings", async () => {
+    vi.mocked(exec).mockImplementation(async (_command, args) => {
+      if (
+        args[0] === "compose" &&
+        args[1] === "exec" &&
+        args.includes("security") &&
+        args.includes("audit")
+      ) {
+        return "CRITICAL: gateway.bind is not secure";
+      }
+      return "";
+    });
+
+    await expect(
+      deployCommand(join(fixturesDir, "valid-config.yaml")),
+    ).rejects.toThrow("Security audit failed");
+  });
+
+  it("should skip security audit when bypass flag is set", async () => {
+    process.env.CLAWFORCE_SKIP_SECURITY_AUDIT = "1";
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    expect(exec).not.toHaveBeenCalledWith(
+      "docker",
+      expect.arrayContaining(["security", "audit", "--deep"]),
+      expect.anything(),
+    );
   });
 });

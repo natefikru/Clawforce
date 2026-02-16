@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 const slackChannelId = z.string().regex(/^C[A-Z0-9]+$/, "Invalid Slack channel ID");
+const localModelPrefixes = ["ollama/", "local/", "sglang/", "vllm/"] as const;
+
+function modelRequiresProviderApiKey(model: string): boolean {
+  return !localModelPrefixes.some((prefix) => model.startsWith(prefix));
+}
 
 const alertTypesSchema = z.object({
   model_health: z.boolean().default(true),
@@ -120,7 +125,36 @@ export const ClawforceConfigSchema = z.object({
     primary: z.string().min(1),
     local: z.string().optional(),
     api_key: z.string().optional(),
+    credential_mode: z.enum(["env", "auth_profile"]).optional(),
+    auth_profile: z.string().min(1).optional(),
+  }).superRefine((value, ctx) => {
+    const credentialMode = value.credential_mode ?? "env";
+    if (credentialMode === "auth_profile" && !value.auth_profile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "models.auth_profile is required when models.credential_mode=auth_profile",
+        path: ["auth_profile"],
+      });
+    }
+    if (
+      credentialMode === "env" &&
+      modelRequiresProviderApiKey(value.primary) &&
+      !value.api_key
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "models.api_key is required when models.credential_mode=env and models.primary is a cloud provider model",
+        path: ["api_key"],
+      });
+    }
   }),
+
+  gateway: z
+    .object({
+      bind: z.enum(["loopback", "lan"]).default("loopback"),
+    })
+    .optional(),
 
   approval: z
     .object({
@@ -259,6 +293,16 @@ export const ClawforceConfigSchema = z.object({
           { message: "username and password are required when auth is enabled" },
         )
         .optional(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.enabled !== false && value.auth === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "dashboard.auth must be explicitly configured when dashboard is enabled; set auth.enabled=false to opt out",
+          path: ["auth"],
+        });
+      }
     })
     .optional(),
 

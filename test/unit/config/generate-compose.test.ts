@@ -55,7 +55,44 @@ describe("generateCompose", () => {
     const env = parsed.services["openclaw-gateway"].environment;
     expect(env).toContain("HOME=/home/node");
     expect(env).toContain("OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}");
+    expect(env).toContain("OPENCLAW_GATEWAY_BIND=loopback");
     expect(env).toContain("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
+  });
+
+  it("should omit provider API key in auth_profile credential mode", () => {
+    const parsed = parseYaml(
+      generateCompose(
+        makeConfig({
+          models: {
+            primary: "anthropic/claude-sonnet-4-5",
+            credential_mode: "auth_profile",
+            auth_profile: "corp-prod",
+          },
+        }),
+      ),
+    );
+    const env = parsed.services["openclaw-gateway"].environment;
+    expect(env).not.toContain("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
+    expect(env).toContain("OPENCLAW_AUTH_PROFILE=${OPENCLAW_AUTH_PROFILE}");
+  });
+
+  it("should default gateway bind to loopback", () => {
+    const parsed = parseYaml(generateCompose(makeConfig()));
+    const cmd = parsed.services["openclaw-gateway"].command;
+    const bindIdx = cmd.indexOf("--bind");
+    expect(bindIdx).toBeGreaterThanOrEqual(0);
+    expect(cmd[bindIdx + 1]).toBe("loopback");
+  });
+
+  it("should allow explicit lan gateway bind override", () => {
+    const parsed = parseYaml(
+      generateCompose(makeConfig({ gateway: { bind: "lan" } })),
+    );
+    const env = parsed.services["openclaw-gateway"].environment;
+    const cmd = parsed.services["openclaw-gateway"].command;
+    const bindIdx = cmd.indexOf("--bind");
+    expect(env).toContain("OPENCLAW_GATEWAY_BIND=lan");
+    expect(cmd[bindIdx + 1]).toBe("lan");
   });
 
   it("should not include ollama when disabled", () => {
