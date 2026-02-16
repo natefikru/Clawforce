@@ -1,9 +1,7 @@
 import type { AlertEntry } from "../storage/types.js";
-import { sendSlackAlert, type SlackNotifierConfig } from "./notifiers/slack.js";
 import { sendEmailAlert, type EmailNotifierConfig } from "./notifiers/email.js";
 
 export interface AlertNotificationConfig {
-  slack: SlackNotifierConfig;
   email: EmailNotifierConfig;
 }
 
@@ -12,7 +10,6 @@ export async function dispatchAlertNotifications(
   config: AlertNotificationConfig,
 ): Promise<void> {
   const results = await Promise.allSettled([
-    sendSlackAlert(config.slack, alert),
     sendEmailAlert(config.email, alert),
   ]);
 

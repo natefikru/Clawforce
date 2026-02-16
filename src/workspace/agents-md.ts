@@ -13,7 +13,7 @@ export function generateAgentsMd(config: ClawforceConfig): string {
   let content = `# Clawforce AI Employee
 
 You are an AI employee deployed by Clawforce for ${config.name}.
-You work alongside the human team via Slack.
+You work alongside the human team via configured OpenClaw channels.
 
 ## Rules
 

@@ -77,10 +77,6 @@ export interface RouterAlertConfig {
   };
   notifications?: {
     dashboard?: boolean;
-    slack?: {
-      enabled?: boolean;
-      webhookUrlEnv?: string;
-    };
     email?: {
       enabled?: boolean;
       smtpHost?: string;
@@ -112,10 +108,6 @@ interface ResolvedRouterAlertConfig {
   };
   notifications: {
     dashboard: boolean;
-    slack: {
-      enabled: boolean;
-      webhookUrl?: string;
-    };
     email: {
       enabled: boolean;
       smtpHost?: string;
@@ -184,9 +176,6 @@ const DEFAULT_ALERT_CONFIG: ResolvedRouterAlertConfig = {
   },
   notifications: {
     dashboard: true,
-    slack: {
-      enabled: false,
-    },
     email: {
       enabled: false,
       smtpPort: 587,
@@ -299,7 +288,6 @@ export function activate(api: RouterPluginApi): void {
     void dispatchAlertNotifications(
       alertEntry,
       {
-        slack: config.alerts.notifications.slack,
         email: config.alerts.notifications.email,
       },
     );
@@ -772,26 +760,13 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
     };
   }
   const cfg = value as RouterAlertConfig;
-  const slackEnabled =
-    typeof cfg.notifications?.slack?.enabled === "boolean"
-      ? cfg.notifications.slack.enabled
-      : DEFAULT_ALERT_CONFIG.notifications.slack.enabled;
   const emailEnabled =
     typeof cfg.notifications?.email?.enabled === "boolean"
       ? cfg.notifications.email.enabled
       : DEFAULT_ALERT_CONFIG.notifications.email.enabled;
-  const slackWebhookUrl = resolveSecretFromEnvName(
-    cfg.notifications?.slack?.webhookUrlEnv,
-  );
   const emailPassword = resolveSecretFromEnvName(
     cfg.notifications?.email?.passwordEnv,
   );
-
-  if (slackEnabled && !slackWebhookUrl) {
-    throw new Error(
-      "Router alerts slack is enabled but webhook secret env is missing or empty",
-    );
-  }
 
   if (emailEnabled && !emailPassword) {
     throw new Error(
@@ -843,10 +818,6 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
         typeof cfg.notifications?.dashboard === "boolean"
           ? cfg.notifications.dashboard
           : DEFAULT_ALERT_CONFIG.notifications.dashboard,
-      slack: {
-        enabled: slackEnabled,
-        webhookUrl: slackWebhookUrl ?? DEFAULT_ALERT_CONFIG.notifications.slack.webhookUrl,
-      },
       email: {
         enabled: emailEnabled,
         smtpHost:
