@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   selectModel,
   getDefaultRules,
+  analyzeRoutingRules,
   type RoutingRule,
   type RoutingDimension,
 } from "../../../../src/plugins/clawforce-router/router.js";
@@ -219,6 +220,21 @@ describe("getDefaultRules", () => {
     const rules2 = getDefaultRules();
     expect(rules1).not.toBe(rules2);
     expect(rules1).toEqual(rules2);
+  });
+});
+
+describe("analyzeRoutingRules", () => {
+  it("reports unknown custom conditions for diagnostics", () => {
+    const diagnostics = analyzeRoutingRules([
+      { condition: "pii_detected", model: "sglang/qwen3-32b" },
+      { condition: "custom_compliance_gate", model: "anthropic/claude-sonnet-4-5" },
+      { condition: "custom_compliance_gate", model: "openai/gpt-4o" },
+      { condition: "custom_cost_bucket", model: "openai/gpt-4o-mini" },
+    ]);
+    expect(diagnostics.unknownConditions).toEqual([
+      "custom_compliance_gate",
+      "custom_cost_bucket",
+    ]);
   });
 });
 

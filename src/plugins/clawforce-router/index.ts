@@ -23,7 +23,9 @@ import { detectDomain } from "./domain-detector.js";
 import {
   selectModel,
   getDefaultRules,
+  analyzeRoutingRules,
   type RoutingRule,
+  type RoutingRuleDiagnostics,
   type RoutingDimension,
 } from "./router.js";
 import { resolveDataTier, type DataPolicy, type DataTier } from "./data-policy.js";
@@ -392,6 +394,13 @@ export function activate(api: RouterPluginApi): void {
     `Router plugin activated (${config.rules.length} rules, default: ${config.defaultModel})` +
       (budgetTracker ? `, budget: $${config.budget!.dailyLimit}/day` : ""),
   );
+  if (config.ruleDiagnostics.unknownConditions.length > 0) {
+    api.logger.warn(
+      `Router config contains unsupported custom rule conditions: ${
+        config.ruleDiagnostics.unknownConditions.join(", ")
+      }. They are ignored unless handled by a custom router extension.`,
+    );
+  }
 
   assertHookPermission(api.id, permissions, "before_agent_start");
   api.on(
@@ -739,18 +748,20 @@ interface ResolvedRouterConfig {
   alerts: ResolvedRouterAlertConfig;
   piiThreshold: number;
   piiPatternThresholds?: Record<string, number>;
+  ruleDiagnostics: RoutingRuleDiagnostics;
 }
 
 function resolveConfig(
   pluginConfig?: Record<string, unknown>,
 ): ResolvedRouterConfig {
+  const rules = Array.isArray(pluginConfig?.rules)
+    ? (pluginConfig.rules as RoutingRule[]) : getDefaultRules();
   return {
     defaultModel: typeof pluginConfig?.defaultModel === "string"
       ? pluginConfig.defaultModel : "anthropic/claude-sonnet-4-5",
     defaultLocalModel: typeof pluginConfig?.defaultLocalModel === "string"
       ? pluginConfig.defaultLocalModel : undefined,
-    rules: Array.isArray(pluginConfig?.rules)
-      ? (pluginConfig.rules as RoutingRule[]) : getDefaultRules(),
+    rules,
     sensitivityKeywords: Array.isArray(pluginConfig?.sensitivityKeywords)
       ? (pluginConfig.sensitivityKeywords as string[]) : [],
     logPath: typeof pluginConfig?.logPath === "string"
@@ -779,6 +790,7 @@ function resolveConfig(
     piiPatternThresholds: pluginConfig?.piiPatternThresholds &&
       typeof pluginConfig.piiPatternThresholds === "object"
       ? (pluginConfig.piiPatternThresholds as Record<string, number>) : undefined,
+    ruleDiagnostics: analyzeRoutingRules(rules),
   };
 }
 

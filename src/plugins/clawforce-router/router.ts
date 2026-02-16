@@ -24,8 +24,23 @@ export type RoutingCondition =
 export type RoutingDimension = "policy" | "sensitivity" | "cost" | "domain" | "complexity";
 
 export interface RoutingRule {
-  condition: RoutingCondition;
+  condition: RoutingCondition | string;
   model: string;
+}
+
+const SUPPORTED_ROUTING_CONDITIONS: RoutingCondition[] = [
+  "pii_detected",
+  "low_complexity",
+  "high_complexity",
+  "domain_code",
+  "domain_writing",
+  "domain_analysis",
+  "domain_data",
+  "over_budget",
+];
+
+export interface RoutingRuleDiagnostics {
+  unknownConditions: string[];
 }
 
 export interface SelectModelInput {
@@ -258,4 +273,14 @@ function evaluateComplexity(ctx: DimensionContext) {
 
 export function getDefaultRules(): RoutingRule[] {
   return [...DEFAULT_RULES];
+}
+
+export function analyzeRoutingRules(rules: RoutingRule[]): RoutingRuleDiagnostics {
+  const unknown = new Set<string>();
+  for (const rule of rules) {
+    if (!SUPPORTED_ROUTING_CONDITIONS.includes(rule.condition as RoutingCondition)) {
+      unknown.add(rule.condition);
+    }
+  }
+  return { unknownConditions: [...unknown] };
 }

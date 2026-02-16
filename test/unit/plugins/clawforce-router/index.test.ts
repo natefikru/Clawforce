@@ -134,6 +134,19 @@ describe("Router Plugin", () => {
     );
   });
 
+  it("warns when config contains unsupported custom rule conditions", () => {
+    const api = createMockApi({
+      rules: [
+        { condition: "low_complexity", model: "sglang/qwen3-32b" },
+        { condition: "custom_condition_x", model: "anthropic/claude-sonnet-4-5" },
+      ],
+    });
+    activate(api);
+    expect(api.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("unsupported custom rule conditions: custom_condition_x"),
+    );
+  });
+
   it("keeps both monitors active when activating multiple instances", () => {
     const stopSpy = vi.spyOn(ModelHealthMonitor.prototype, "stop");
     const apiA = createMockApi();
