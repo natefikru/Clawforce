@@ -13,6 +13,9 @@
     "dev": "tsx src/cli.ts",
     "build": "tsdown src/cli.ts src/index.ts --format esm --dts",
     "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "test:smoke": "vitest run test/integration/deploy-lifecycle.test.ts test/integration/deploy-security-audit-gate.test.ts test/integration/router-enforcement.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
@@ -23,6 +26,7 @@
     "check:root": "pnpm typecheck && pnpm build && pnpm test && pnpm knip --include dependencies,unlisted,unresolved",
     "check:dashboard": "pnpm --dir clawforce-dashboard lint && pnpm --dir clawforce-dashboard build && pnpm --dir clawforce-dashboard test && pnpm knip --directory clawforce-dashboard --include dependencies,unlisted,unresolved",
     "check:security": "pnpm audit --prod && pnpm --dir clawforce-dashboard audit --prod",
+    "check:ci": "pnpm test:unit && pnpm test:integration && pnpm test:smoke && pnpm typecheck && pnpm build && pnpm knip --include dependencies,unlisted,unresolved && pnpm check:security",
     "precommit:verify": "pnpm check:root && pnpm check:dashboard && pnpm check:security",
     "prepush:verify": "pnpm precommit:verify",
     "prepare": "husky"
