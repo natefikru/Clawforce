@@ -165,7 +165,8 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - ✅ Router budget tracking supports per-agent state in SQLite.
 - ✅ Compliance storage/read paths normalize and filter by agent scope.
 - ✅ Credential strategy supports `env` and `auth_profile` modes.
-- ⏳ Final smoke verification and docs consistency checks (Task 8 gate) pending.
+- ✅ Final smoke verification and docs consistency checks completed.
+- ✅ Deploy lifecycle integration coverage now includes security-audit gate behavior.
 
 ---
 

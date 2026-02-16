@@ -66,14 +66,14 @@ Minimum execution board entries:
 
 ### Mandatory before PR Ready
 
-- [ ] Run code review via sub-agent on all changes in branch.
-- [ ] Apply fixes in separate commits (no amend).
-- [ ] Push after each fix commit so draft PR stays current.
-- [ ] Run smoke-test loop in real conditions and capture results.
-- [ ] Re-run full verification suite (`pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm check:root`).
-- [ ] Update documentation (`README.md`, `ROADMAP.md`, relevant docs in `docs/`).
-- [ ] Verify commit history and PR body contain no assistant/AI attribution.
-- [ ] Mark draft PR ready only after all above complete:
+- [x] Run code review via sub-agent on all changes in branch.
+- [x] Apply fixes in separate commits (no amend).
+- [x] Push after each fix commit so draft PR stays current.
+- [x] Run smoke-test loop in real conditions and capture results.
+- [x] Re-run full verification suite (`pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm check:root`).
+- [x] Update documentation (`README.md`, `ROADMAP.md`, relevant docs in `docs/`).
+- [x] Verify commit history and PR body contain no assistant/AI attribution.
+- [x] Mark draft PR ready only after all above complete:
   - `gh pr ready`
 
 ---
@@ -401,6 +401,24 @@ All must be true before starting full 2B implementation:
   - smoke result
   - known limitations and follow-ups
 - Confirm PR text has no assistant/AI attribution.
+
+### Execution record (completed)
+
+- Full verification suite completed successfully:
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm build`
+  - `pnpm check:root`
+  - `pnpm check:dashboard`
+- Smoke deploy loop completed with real command execution:
+  - `pnpm dev deploy -c test/fixtures/smoke-config-no-ollama.yaml`
+  - Verified generated compose/openclaw/env outputs and service health.
+  - Stopped deployment cleanly with `pnpm dev stop`.
+- Smoke-found blocker resolved:
+  - Dashboard container base image upgraded from Node 20 to Node 22 to support `node:sqlite`.
+  - Added `test/fixtures/smoke-config-no-ollama.yaml` for repeatable non-Ollama smoke runs.
+- Integration hardening follow-up completed:
+  - Added deploy security-audit integration coverage in `test/integration/deploy-security-audit-gate.test.ts`.
 
 ---
 

@@ -168,4 +168,17 @@ describe("parseConfig", () => {
       parseConfig(join(fixturesDir, "invalid-auth-profile-config.yaml")),
     ).toThrow("models.auth_profile is required when models.credential_mode=auth_profile");
   });
+
+  it("should reject env credential mode without api_key for cloud models", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-env-cloud-without-api-key.yaml")),
+    ).toThrow("models.api_key is required when models.credential_mode=env");
+  });
+
+  it("should allow env credential mode without api_key for local models", () => {
+    const config = parseConfig(join(fixturesDir, "valid-env-local-without-api-key.yaml"));
+    expect(config.models.credential_mode).toBe("env");
+    expect(config.models.api_key).toBeUndefined();
+    expect(config.models.primary).toBe("ollama/llama3.3:8b");
+  });
 });

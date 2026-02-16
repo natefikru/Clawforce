@@ -7,6 +7,7 @@ Run this checklist after each build to validate the deployment works end-to-end.
 - [ ] Docker Desktop running
 - [ ] Valid Slack bot tokens in environment
 - [ ] Anthropic API key set (`export ANTHROPIC_API_KEY="sk-ant-..."`)
+- [ ] If using cloud model + `credential_mode: env`, ensure `models.api_key` is configured
 
 ## Test Steps
 
@@ -20,6 +21,8 @@ clawforce deploy --config ./clawforce.yaml
 - [ ] No errors during deployment
 - [ ] Gateway health check passes within 30s
 - [ ] Directory `clawforce-<name>/` created with full structure
+- [ ] Security audit gate runs and reports no critical findings
+- [ ] If bypass used (`CLAWFORCE_SKIP_SECURITY_AUDIT=1`), it is local-only and explicitly documented
 
 ### 2. Verify Directory Structure
 
@@ -87,7 +90,24 @@ clawforce audit --tail 10
 - [ ] Shows recent agent actions in JSONL format
 - [ ] Entries have timestamp, agent, action, result fields
 
-### 9. Stop Deployment
+### 9. Security Audit Gate Semantics
+
+- [ ] Deploy blocks if audit reports critical findings
+- [ ] Local bypass behavior is explicit:
+  - [ ] `CLAWFORCE_SKIP_SECURITY_AUDIT=1` allows local smoke iteration
+  - [ ] Bypass is not used in shared/staging/prod environments
+
+### 10. Per-Agent Query Spot Check
+
+```bash
+clawforce audit --source database --agent _global --tail 5
+```
+
+**Expected**:
+- [ ] Database query path resolves correctly when data exists
+- [ ] Agent filter is accepted and produces isolated output
+
+### 11. Stop Deployment
 
 ```bash
 clawforce stop
