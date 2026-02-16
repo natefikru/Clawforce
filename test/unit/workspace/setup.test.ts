@@ -129,6 +129,7 @@ describe("setupWorkspace", () => {
     expect(existsSync(pluginDir)).toBe(true);
     expect(existsSync(join(pluginDir, "index.js"))).toBe(true);
     expect(existsSync(join(pluginDir, "index.js.map"))).toBe(true);
+    expect(existsSync(join(pluginDir, "openclaw.plugin.json"))).toBe(true);
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 
@@ -141,6 +142,7 @@ describe("setupWorkspace", () => {
     expect(existsSync(pluginDir)).toBe(true);
     expect(existsSync(join(pluginDir, "index.js"))).toBe(true);
     expect(existsSync(join(pluginDir, "index.js.map"))).toBe(true);
+    expect(existsSync(join(pluginDir, "openclaw.plugin.json"))).toBe(true);
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 

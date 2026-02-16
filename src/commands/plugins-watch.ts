@@ -1,13 +1,14 @@
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { parseConfig } from "../config/parse.js";
 import {
+  buildPluginsToExtensions,
   enabledPluginsForConfig,
   watchPluginsToExtensions,
   type PluginName,
 } from "../plugins/compiler.js";
 import { logger } from "../utils/logger.js";
 
-interface PluginsWatchOptions {
+interface PluginCommandOptions {
   config: string;
   extensionsDir?: string;
   router?: boolean;
@@ -16,7 +17,7 @@ interface PluginsWatchOptions {
 
 function selectedPluginsFromOptions(
   enabledByConfig: PluginName[],
-  options: PluginsWatchOptions,
+  options: PluginCommandOptions,
 ): PluginName[] {
   if (!options.router && !options.compliance) {
     return enabledByConfig;
@@ -28,9 +29,26 @@ function selectedPluginsFromOptions(
   return enabledByConfig.filter((pluginName) => requested.has(pluginName));
 }
 
-export async function pluginsWatchCommand(
-  options: PluginsWatchOptions,
-): Promise<void> {
+function resolveExtensionsDir(
+  options: PluginCommandOptions,
+  configName: string,
+): string {
+  if (options.extensionsDir) {
+    return resolve(options.extensionsDir);
+  }
+
+  const configPath = resolve(options.config);
+  const configBaseDir = dirname(configPath);
+  return resolve(
+    join(configBaseDir, `clawforce-${configName}`, "config", "extensions"),
+  );
+}
+
+function selectPluginsOrThrow(options: PluginCommandOptions): {
+  configName: string;
+  extensionsDir: string;
+  selectedPlugins: PluginName[];
+} {
   const config = parseConfig(options.config);
   const enabledPlugins = enabledPluginsForConfig(config);
   const selectedPlugins = selectedPluginsFromOptions(enabledPlugins, options);
@@ -41,9 +59,29 @@ export async function pluginsWatchCommand(
     );
   }
 
-  const extensionsDir = options.extensionsDir
-    ? resolve(options.extensionsDir)
-    : resolve(join(`./clawforce-${config.name}`, "config", "extensions"));
+  return {
+    configName: config.name,
+    extensionsDir: resolveExtensionsDir(options, config.name),
+    selectedPlugins,
+  };
+}
+
+export async function pluginsBundleCommand(
+  options: PluginCommandOptions,
+): Promise<void> {
+  const { extensionsDir, selectedPlugins } = selectPluginsOrThrow(options);
+  logger.header("Plugin Bundle");
+  logger.step(`Bundling plugins: ${selectedPlugins.join(", ")}`);
+  logger.info(`Extensions output: ${extensionsDir}`);
+
+  buildPluginsToExtensions(selectedPlugins, extensionsDir);
+  logger.success("Plugin bundle complete.");
+}
+
+export async function pluginsWatchCommand(
+  options: PluginCommandOptions,
+): Promise<void> {
+  const { extensionsDir, selectedPlugins } = selectPluginsOrThrow(options);
 
   logger.header("Plugin Watch");
   logger.step(`Watching plugins: ${selectedPlugins.join(", ")}`);

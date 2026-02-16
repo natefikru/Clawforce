@@ -47,6 +47,7 @@ describe("plugin compiler", () => {
     const pluginDir = join(outDir, "clawforce-router");
     expect(existsSync(join(pluginDir, "index.js"))).toBe(true);
     expect(existsSync(join(pluginDir, "index.js.map"))).toBe(true);
+    expect(existsSync(join(pluginDir, "openclaw.plugin.json"))).toBe(true);
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 

@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -29,6 +29,14 @@ function sourceEntryForPlugin(pluginName: PluginName): string {
   return join(pluginsRootDir, pluginName, "index.ts");
 }
 
+function manifestSourceForPlugin(pluginName: PluginName): string {
+  return join(pluginsRootDir, pluginName, "openclaw.plugin.json");
+}
+
+function manifestOutputForPlugin(pluginName: PluginName, extensionsDir: string): string {
+  return join(extensionsDir, pluginName, "openclaw.plugin.json");
+}
+
 function bundlerOptionsFor(
   pluginName: PluginName,
   extensionsDir: string,
@@ -40,7 +48,6 @@ function bundlerOptionsFor(
     format: "esm",
     platform: "node",
     target: "node22",
-    packages: "external",
     sourcemap: true,
     logLevel: "silent",
   };
@@ -96,6 +103,10 @@ export function buildPluginsToExtensions(
   try {
     for (const pluginName of selectedPlugins) {
       buildSync(bundlerOptionsFor(pluginName, extensionsDir));
+      cpSync(
+        manifestSourceForPlugin(pluginName),
+        manifestOutputForPlugin(pluginName, extensionsDir),
+      );
     }
   } catch (error) {
     if (error && typeof error === "object" && "errors" in error) {
@@ -122,6 +133,10 @@ export async function watchPluginsToExtensions(
       const ctx = await context(bundlerOptionsFor(pluginName, extensionsDir));
       contexts.push(ctx);
       await ctx.rebuild();
+      cpSync(
+        manifestSourceForPlugin(pluginName),
+        manifestOutputForPlugin(pluginName, extensionsDir),
+      );
       await ctx.watch();
     }
 

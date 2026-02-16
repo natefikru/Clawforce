@@ -8,6 +8,6 @@ export { deployCommand } from "./commands/deploy.js";
 export { statusCommand } from "./commands/status.js";
 export { stopCommand } from "./commands/stop.js";
 export { auditCommand } from "./commands/audit.js";
-export { pluginsWatchCommand } from "./commands/plugins-watch.js";
+export { pluginsBundleCommand, pluginsWatchCommand } from "./commands/plugins-watch.js";
 export type { ClawforceConfig } from "./config/types.js";
 export type { OpenClawConfig } from "./config/generate-openclaw.js";

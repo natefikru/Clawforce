@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
+    "plugins:bundle": "tsx src/cli.ts plugins-bundle -c ./clawforce.yaml",
     "plugins:watch": "tsx src/cli.ts plugins-watch -c ./clawforce.yaml",
     "precommit:root": "pnpm typecheck && pnpm test",
     "precommit:dashboard": "pnpm --dir clawforce-dashboard lint && pnpm --dir clawforce-dashboard test",
