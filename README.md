@@ -13,16 +13,29 @@ npm install -g clawforce
 cat > clawforce.yaml << 'EOF'
 name: my-agent
 role: inbox-analyst
+slack:
+  app_token: "${SLACK_APP_TOKEN}"
+  bot_token: "${SLACK_BOT_TOKEN}"
+  approval_channel: "C0123456789"
+  allowed_channels: []
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  credential_mode: env
+  api_key: "${ANTHROPIC_API_KEY}"
+gateway:
+  bind: loopback
+dashboard:
+  enabled: true
+  port: 3000
+  auth:
+    enabled: false
 router:
   enabled: true
 compliance:
   enabled: true
-dashboard:
-  enabled: true
-  port: 3000
 ollama:
   enabled: true
-  model: "qwen3:32b"
+  model: "qwen3.3:8b"
 EOF
 
 # Deploy
@@ -30,6 +43,11 @@ clawforce deploy -c clawforce.yaml
 ```
 
 This starts an OpenClaw gateway, a local model via SGLang/Ollama, the compliance logger, and the monitoring dashboard — all via Docker Compose.
+
+Secure-by-default deployment behavior:
+- Gateway binds to `loopback` unless explicitly set to `gateway.bind: lan`.
+- Dashboard requires an explicit auth policy whenever dashboard is enabled.
+- Deploy runs an OpenClaw security audit gate and blocks on critical findings.
 
 ## Features
 
@@ -83,6 +101,10 @@ router:
 
 Outbound messages and tool results are scanned for PII before leaving the agent. Matches are replaced with redaction markers like `[SSN_REDACTED]`, `[EMAIL_REDACTED]`, etc.
 
+### Deployment Security Gate
+
+`clawforce deploy` runs `openclaw security audit --deep` inside the gateway container and fails deployment on critical findings. For local-only iteration, you can bypass this with `CLAWFORCE_SKIP_SECURITY_AUDIT=1`.
+
 ### Compliance Logging
 
 Every agent action is captured as structured JSONL and SQLite:
@@ -112,7 +134,7 @@ Next.js dashboard with 5 panels:
 - **Cost Tracker** — Gateway-sourced cost data with Summary, Timeline, and What-If analysis tabs
 - **Task Log** — Recent agent runs with duration and outcome
 
-**Authentication** — Optional multi-user auth with Auth.js v5. When enabled, the dashboard requires login with username/password credentials stored in SQLite. JWT sessions with role-based access control (admin/viewer). Backward compatible: dashboard remains open when auth is not configured.
+**Authentication** — Auth.js v5 with username/password credentials stored in SQLite. Dashboard-enabled configs must explicitly declare an auth policy (`dashboard.auth.enabled: true|false`). This avoids accidental insecure defaults.
 
 ### Agent Role Templates
 
@@ -165,13 +187,28 @@ Full `clawforce.yaml` reference:
 name: my-agent
 role: inbox-analyst              # inbox-analyst | research-agent | process-automator
 
+slack:
+  app_token: "${SLACK_APP_TOKEN}"
+  bot_token: "${SLACK_BOT_TOKEN}"
+  approval_channel: "C0123456789"
+  allowed_channels: []
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  local: "sglang/qwen3-32b"
+  credential_mode: env           # env | auth_profile
+  api_key: "${ANTHROPIC_API_KEY}"  # used when credential_mode=env
+  # auth_profile: "corp-prod"      # required when credential_mode=auth_profile
+
+gateway:
+  bind: loopback                 # loopback | lan
+
 router:
   enabled: true
-  defaultModel: "anthropic/claude-sonnet-4-5"
-  defaultLocalModel: "sglang/qwen3-32b"
   rules: []                      # Custom routing rules
   sensitivity_keywords: []       # Additional PII keywords
   priority:                      # Dimension evaluation order
+    - policy
     - sensitivity
     - cost
     - domain
@@ -179,6 +216,9 @@ router:
   budget:
     daily_limit: 10.00
     fallback_model: "sglang/qwen3-32b"
+  health_check:
+    enabled: true
+    failover_policy: block       # block | failover-safe (queue not implemented)
 
 compliance:
   enabled: true
@@ -186,14 +226,17 @@ compliance:
 dashboard:
   enabled: true
   port: 3000
-  auth:                          # Optional — omit for open dashboard
+  auth:                          # Required whenever dashboard.enabled=true
     enabled: true
     username: admin
     password: "your-secure-password"  # Min 8 characters
+  # To explicitly run an open dashboard, set:
+  # auth:
+  #   enabled: false
 
 ollama:
   enabled: true
-  model: "qwen3:32b"
+  model: "qwen3.3:8b"
   gpu: nvidia                    # nvidia | amd | none
 
 capabilities: full               # minimal | standard | full
@@ -208,14 +251,13 @@ alerts:
     agent_error: true
     agent_idle: true
   idle:
-    threshold_seconds: 900
-    cooldown_seconds: 3600
+    threshold_minutes: 60
+    cooldown_minutes: 30
   budget:
-    cooldown_seconds: 3600
-    auto_block: false
+    cooldown_minutes: 60
+    auto_block_on_exceeded: false
   notifications:
-    dashboard:
-      enabled: true
+    dashboard: true
     slack:
       enabled: false
       webhook_url: ""

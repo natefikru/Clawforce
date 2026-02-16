@@ -16,15 +16,15 @@ This plan follows the required non-trivial implementation workflow exactly:
 
 ### Phase 0 Workflow Checklist (must complete before Task 1 coding)
 
-- [ ] **Research complete**: current behavior verified, impacted files identified, risks logged.
-- [ ] **Plan complete**: this document reviewed for scope, tests, and out-of-scope boundaries.
-- [ ] **Plan review complete**: sub-agent review performed; edge cases and test gaps incorporated.
-- [ ] **Feature branch created from latest `main`**:
+- [x] **Research complete**: current behavior verified, impacted files identified, risks logged.
+- [x] **Plan complete**: this document reviewed for scope, tests, and out-of-scope boundaries.
+- [x] **Plan review complete**: sub-agent review performed; edge cases and test gaps incorporated.
+- [x] **Feature branch created from latest `main`**:
   - `git checkout main && git pull`
   - `git checkout -b feat/2b-readiness-hardening`
-- [ ] **Branch pushed**:
+- [x] **Branch pushed**:
   - `git push -u origin feat/2b-readiness-hardening`
-- [ ] **Draft PR opened immediately** (before code implementation starts):
+- [x] **Draft PR opened immediately** (before code implementation starts):
   - `gh pr create --draft --base main --title "feat: 2b readiness hardening"`
   - PR body must include summary + explicit test plan + known risks.
 
@@ -114,14 +114,14 @@ This plan addresses those blockers without introducing 2B feature scope creep.
 
 All must be true before starting full 2B implementation:
 
-- [ ] Gateway bind defaults to loopback-only unless explicit override.
-- [ ] Dashboard auth policy is explicitly secure by default (or requires explicit opt-out).
-- [ ] Deploy command executes security audit gate and fails on critical findings.
-- [ ] Budget tracking can key by `agentId` (no forced `_global` behavior).
-- [ ] Compliance and alert query paths are validated for per-agent filtering.
-- [ ] `ROADMAP.md` shows 2A.6 complete and includes a 2B readiness checklist.
-- [ ] Root test suite + typecheck pass.
-- [ ] Dashboard checks pass for auth/middleware paths (`pnpm check:dashboard` or equivalent targeted tests).
+- [x] Gateway bind defaults to loopback-only unless explicit override.
+- [x] Dashboard auth policy is explicitly secure by default (or requires explicit opt-out).
+- [x] Deploy command executes security audit gate and fails on critical findings.
+- [x] Budget tracking can key by `agentId` (no forced `_global` behavior).
+- [x] Compliance and alert query paths are validated for per-agent filtering.
+- [x] `ROADMAP.md` shows 2A.6 complete and includes a 2B readiness checklist.
+- [x] Root test suite + typecheck pass.
+- [x] Dashboard checks pass for auth/middleware paths (`pnpm check:dashboard` or equivalent targeted tests).
 
 ---
 
