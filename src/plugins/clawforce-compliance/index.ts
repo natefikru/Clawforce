@@ -14,6 +14,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseJsonl } from "../../shared/jsonl.js";
 import type { StorageWriter } from "../../storage/writer.js";
+import { normalizeAgentId } from "../../storage/types.js";
 
 export interface ComplianceEntry {
   ts: string;
@@ -55,10 +56,11 @@ export function activate(api: CompliancePluginApi): void {
 
   // Log tool calls
   api.on("after_tool_call", (event, ctx) => {
+    const agentId = normalizeAgentId(ctx.agentId);
     write({
       ts: new Date().toISOString(),
       event: "tool_call",
-      agentId: ctx.agentId as string | undefined,
+      agentId,
       tool: event.toolName as string | undefined,
       success: event.success as boolean | undefined,
       durationMs: event.durationMs as number | undefined,
@@ -68,9 +70,11 @@ export function activate(api: CompliancePluginApi): void {
   // Log received messages
   api.on("message_received", (event, ctx) => {
     const content = event.content ?? event.text ?? "";
+    const agentId = normalizeAgentId(ctx.agentId);
     write({
       ts: new Date().toISOString(),
       event: "message_received",
+      agentId,
       channel: ctx.messageProvider as string | undefined,
       from: event.from as string | undefined,
       contentLength: typeof content === "string" ? content.length : 0,
@@ -80,9 +84,11 @@ export function activate(api: CompliancePluginApi): void {
   // Log sent messages
   api.on("message_sent", (event, ctx) => {
     const content = event.content ?? event.text ?? "";
+    const agentId = normalizeAgentId(ctx.agentId);
     write({
       ts: new Date().toISOString(),
       event: "message_sent",
+      agentId,
       channel: ctx.messageProvider as string | undefined,
       to: event.to as string | undefined,
       contentLength: typeof content === "string" ? content.length : 0,

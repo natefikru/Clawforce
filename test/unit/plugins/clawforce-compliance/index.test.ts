@@ -90,6 +90,7 @@ describe("Compliance Logger Plugin", () => {
       (mockedAppendFileSync.mock.calls[0][1] as string).trim(),
     ) as ComplianceEntry;
     expect(logged.event).toBe("tool_call");
+    expect(logged.agentId).toBe("main");
     expect(logged.tool).toBe("exec");
     expect(logged.success).toBe(true);
     expect(logged.durationMs).toBe(150);
@@ -102,7 +103,7 @@ describe("Compliance Logger Plugin", () => {
     const handler = api.hooks.get("message_received")!;
     handler(
       { from: "user123", content: "Hello world" },
-      { messageProvider: "telegram" },
+      { messageProvider: "telegram", agentId: "main" },
     );
 
     expect(mockedAppendFileSync).toHaveBeenCalled();
@@ -110,6 +111,7 @@ describe("Compliance Logger Plugin", () => {
       (mockedAppendFileSync.mock.calls[0][1] as string).trim(),
     ) as ComplianceEntry;
     expect(logged.event).toBe("message_received");
+    expect(logged.agentId).toBe("main");
     expect(logged.channel).toBe("telegram");
     expect(logged.from).toBe("user123");
     expect(logged.contentLength).toBe(11);
@@ -122,7 +124,7 @@ describe("Compliance Logger Plugin", () => {
     const handler = api.hooks.get("message_sent")!;
     handler(
       { to: "user123", content: "Hi there!", model: "claude-sonnet-4-5" },
-      { messageProvider: "telegram" },
+      { messageProvider: "telegram", agentId: "main" },
     );
 
     expect(mockedAppendFileSync).toHaveBeenCalled();
@@ -130,6 +132,7 @@ describe("Compliance Logger Plugin", () => {
       (mockedAppendFileSync.mock.calls[0][1] as string).trim(),
     ) as ComplianceEntry;
     expect(logged.event).toBe("message_sent");
+    expect(logged.agentId).toBe("main");
     expect(logged.to).toBe("user123");
     expect(logged.contentLength).toBe(9);
     expect(logged.model).toBe("claude-sonnet-4-5");
@@ -155,6 +158,7 @@ describe("Compliance Logger Plugin", () => {
       (mockedAppendFileSync.mock.calls[0][1] as string).trim(),
     ) as ComplianceEntry;
     expect(logged.contentLength).toBe(0);
+    expect(logged.agentId).toBe("_global");
   });
 
   it("should use text field as fallback for content", () => {
@@ -168,6 +172,22 @@ describe("Compliance Logger Plugin", () => {
       (mockedAppendFileSync.mock.calls[0][1] as string).trim(),
     ) as ComplianceEntry;
     expect(logged.contentLength).toBe(5);
+  });
+
+  it("should normalize blank agent IDs to _global", () => {
+    const api = createMockApi();
+    activate(api);
+
+    const handler = api.hooks.get("after_tool_call")!;
+    handler(
+      { toolName: "exec", success: true, durationMs: 10 },
+      { agentId: "   " },
+    );
+
+    const logged = JSON.parse(
+      (mockedAppendFileSync.mock.calls[0][1] as string).trim(),
+    ) as ComplianceEntry;
+    expect(logged.agentId).toBe("_global");
   });
 });
 

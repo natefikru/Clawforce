@@ -16,6 +16,7 @@ import type {
   DailySpend,
   ModelHealthStateRow,
 } from "./types.js";
+import { DEFAULT_AGENT_ID, normalizeAgentId } from "./types.js";
 
 export class StorageReader {
   private db: DatabaseSync;
@@ -40,8 +41,13 @@ export class StorageReader {
       params.push(opts.event);
     }
     if (opts.agentId) {
-      conditions.push("agent_id = ?");
-      params.push(opts.agentId);
+      const normalizedAgentId = normalizeAgentId(opts.agentId);
+      if (normalizedAgentId === DEFAULT_AGENT_ID) {
+        conditions.push("(agent_id = ? OR agent_id IS NULL)");
+      } else {
+        conditions.push("agent_id = ?");
+      }
+      params.push(normalizedAgentId);
     }
     if (opts.since) {
       conditions.push("ts >= ?");
@@ -58,7 +64,13 @@ export class StorageReader {
       )
       .all(...params) as { data: string }[];
 
-    return rows.map((r) => JSON.parse(r.data) as ComplianceEntry);
+    return rows.map((r) => {
+      const entry = JSON.parse(r.data) as ComplianceEntry;
+      return {
+        ...entry,
+        agentId: normalizeAgentId(entry.agentId),
+      };
+    });
   }
 
   getRoutingDecisions(opts: {
@@ -75,8 +87,13 @@ export class StorageReader {
       params.push(opts.since);
     }
     if (opts.agentId) {
-      conditions.push("agent_id = ?");
-      params.push(opts.agentId);
+      const normalizedAgentId = normalizeAgentId(opts.agentId);
+      if (normalizedAgentId === DEFAULT_AGENT_ID) {
+        conditions.push("(agent_id = ? OR agent_id IS NULL)");
+      } else {
+        conditions.push("agent_id = ?");
+      }
+      params.push(normalizedAgentId);
     }
     if (opts.piiOnly) {
       conditions.push("has_pii = 1");
@@ -103,8 +120,13 @@ export class StorageReader {
     const params: SQLInputValue[] = [since];
 
     if (opts.agentId) {
-      conditions.push("agent_id = ?");
-      params.push(opts.agentId);
+      const normalizedAgentId = normalizeAgentId(opts.agentId);
+      if (normalizedAgentId === DEFAULT_AGENT_ID) {
+        conditions.push("(agent_id = ? OR agent_id IS NULL)");
+      } else {
+        conditions.push("agent_id = ?");
+      }
+      params.push(normalizedAgentId);
     }
 
     const where = `WHERE ${conditions.join(" AND ")}`;
@@ -216,8 +238,13 @@ export class StorageReader {
     const params: SQLInputValue[] = [since];
 
     if (opts.agentId) {
-      conditions.push("agent_id = ?");
-      params.push(opts.agentId);
+      const normalizedAgentId = normalizeAgentId(opts.agentId);
+      if (normalizedAgentId === DEFAULT_AGENT_ID) {
+        conditions.push("(agent_id = ? OR agent_id IS NULL)");
+      } else {
+        conditions.push("agent_id = ?");
+      }
+      params.push(normalizedAgentId);
     }
 
     const where = `WHERE ${conditions.join(" AND ")}`;

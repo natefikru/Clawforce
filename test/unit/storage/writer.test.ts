@@ -75,7 +75,7 @@ describe("StorageWriter", () => {
       );
     });
 
-    it("handles missing agentId and channel gracefully (null in DB)", () => {
+    it("handles missing agentId and channel gracefully", () => {
       const entry: ComplianceEntry = {
         ts: "2026-02-15T12:00:00Z",
         event: "message_received",
@@ -88,7 +88,7 @@ describe("StorageWriter", () => {
         .all() as { agent_id: string | null; channel: string | null }[];
 
       expect(rows).toHaveLength(1);
-      expect(rows[0].agent_id).toBeNull();
+      expect(rows[0].agent_id).toBe("_global");
       expect(rows[0].channel).toBeNull();
     });
 
@@ -105,7 +105,7 @@ describe("StorageWriter", () => {
         .prepare("SELECT agent_id FROM compliance_events")
         .all() as { agent_id: string | null }[];
 
-      expect(rows[0].agent_id).toBeNull();
+      expect(rows[0].agent_id).toBe("_global");
     });
 
     it("continues JSONL write even if SQLite fails", () => {
@@ -246,7 +246,7 @@ describe("StorageWriter", () => {
         .prepare("SELECT selected_model, agent_id, complexity FROM routing_decisions")
         .get() as { selected_model: string; agent_id: string | null; complexity: string | null };
       expect(row.selected_model).toBe("");
-      expect(row.agent_id).toBeNull();
+      expect(row.agent_id).toBe("_global");
       expect(row.complexity).toBeNull();
     });
 
