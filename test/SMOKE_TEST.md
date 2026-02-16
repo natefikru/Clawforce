@@ -5,8 +5,8 @@ Run this checklist after each build to validate the deployment works end-to-end.
 ## Prerequisites
 
 - [ ] Docker Desktop running
-- [ ] Valid Slack bot tokens in environment
 - [ ] Anthropic API key set (`export ANTHROPIC_API_KEY="sk-ant-..."`)
+- [ ] At least one connector configured in `openclaw.channels`
 - [ ] If using cloud model + `credential_mode: env`, ensure `models.api_key` is configured
 
 ## Test Steps
@@ -66,14 +66,11 @@ clawforce status
 **Expected**:
 - [ ] Shows running containers with status
 
-### 6. Slack Integration
+### 6. Connector Configuration Validation
 
-- [ ] Bot appears online in Slack workspace
-- [ ] Send message in monitored channel mentioning bot
-- [ ] Bot responds appropriately
-- [ ] Check approval channel for approval requests (if hybrid mode)
-- [ ] React with checkmark to approve
-- [ ] React with X to reject
+- [ ] `config/openclaw.json` includes configured entries under `channels`
+- [ ] No Clawforce-generated Slack/Telegram channel synthesis is present
+- [ ] Connector settings are passed through from `openclaw.channels`
 
 ### 7. Cron Job (Inbox Analyst only)
 
