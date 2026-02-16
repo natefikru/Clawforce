@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   buildPluginsToExtensions,
+  watchPluginsToExtensions,
   enabledPluginsForConfig,
 } from "../../../src/plugins/compiler.js";
 import type { ClawforceConfig } from "../../../src/config/types.js";
@@ -48,6 +49,75 @@ describe("plugin compiler", () => {
     expect(existsSync(join(pluginDir, "index.js.map"))).toBe(true);
     expect(existsSync(join(pluginDir, "openclaw.plugin.json"))).toBe(true);
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
+  });
+
+  it("empty selectedPlugins array returns immediately without creating dir", () => {
+    const outDir = join(tmpdir(), "clawforce-empty-build-" + Date.now());
+    buildPluginsToExtensions([], outDir);
+    expect(existsSync(outDir)).toBe(false);
+  });
+
+  it("missing plugin throws with diagnostic message", () => {
+    const outDir = makeTempDir("clawforce-missing-build-");
+    expect(() =>
+      buildPluginsToExtensions(["nonexistent-plugin"], outDir),
+    ).toThrow("Plugin selection failed");
+  });
+
+  it("clean=false preserves existing files in extensions dir", () => {
+    const outDir = makeTempDir("clawforce-noclean-build-");
+    const markerDir = join(outDir, "clawforce-router");
+    mkdirSync(markerDir, { recursive: true });
+    writeFileSync(join(markerDir, "marker.txt"), "keep", "utf8");
+
+    buildPluginsToExtensions(["clawforce-router"], outDir, { clean: false });
+
+    // marker file should still exist since clean=false
+    expect(existsSync(join(markerDir, "marker.txt"))).toBe(true);
+    // Build artifacts should also exist
+    expect(existsSync(join(markerDir, "index.js"))).toBe(true);
+  });
+
+  it("clean=true (default) removes existing plugin dir before build", () => {
+    const outDir = makeTempDir("clawforce-clean-build-");
+    const markerDir = join(outDir, "clawforce-router");
+    mkdirSync(markerDir, { recursive: true });
+    writeFileSync(join(markerDir, "marker.txt"), "keep", "utf8");
+
+    buildPluginsToExtensions(["clawforce-router"], outDir);
+
+    // marker file should be gone since default is clean=true
+    expect(existsSync(join(markerDir, "marker.txt"))).toBe(false);
+    expect(existsSync(join(markerDir, "index.js"))).toBe(true);
+  });
+
+  describe("watchPluginsToExtensions", () => {
+    it("empty selectedPlugins array throws", async () => {
+      const outDir = makeTempDir("clawforce-watch-empty-");
+      await expect(
+        watchPluginsToExtensions([], outDir),
+      ).rejects.toThrow("No plugins selected for watch mode");
+    });
+
+    it("missing plugin throws with diagnostic message", async () => {
+      const outDir = makeTempDir("clawforce-watch-missing-");
+      await expect(
+        watchPluginsToExtensions(["nonexistent-plugin"], outDir),
+      ).rejects.toThrow("Plugin selection failed");
+    });
+
+    it("starts watch mode and close() disposes contexts", async () => {
+      const outDir = makeTempDir("clawforce-watch-");
+      const handle = await watchPluginsToExtensions(["clawforce-router"], outDir);
+
+      // Verify built
+      const pluginDir = join(outDir, "clawforce-router");
+      expect(existsSync(join(pluginDir, "index.js"))).toBe(true);
+      expect(existsSync(join(pluginDir, "openclaw.plugin.json"))).toBe(true);
+
+      // Close should not throw
+      await expect(handle.close()).resolves.toBeUndefined();
+    });
   });
 
   it("selects all discovered plugins regardless of legacy plugin toggles", () => {

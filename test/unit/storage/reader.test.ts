@@ -292,6 +292,222 @@ describe("StorageReader", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].type).toBe("pii_violation");
     });
+
+    it("filters by severity", () => {
+      writer.writeAlert({
+        ts: "2026-02-15T10:00:00Z",
+        severity: "warning",
+        type: "budget_exceeded",
+        message: "Budget warning",
+      });
+      writer.writeAlert({
+        ts: "2026-02-15T10:01:00Z",
+        severity: "error",
+        type: "pii_violation",
+        message: "PII error",
+      });
+      writer.writeAlert({
+        ts: "2026-02-15T10:02:00Z",
+        severity: "error",
+        type: "agent_error",
+        message: "Agent error",
+      });
+
+      const rows = reader.getAlerts({ severity: "error", limit: 10 });
+      expect(rows).toHaveLength(2);
+      expect(rows.every((r) => r.severity === "error")).toBe(true);
+    });
+
+    it("filters by since timestamp", () => {
+      writer.writeAlert({
+        ts: "2026-02-14T10:00:00Z",
+        severity: "warning",
+        type: "budget_exceeded",
+        message: "Old alert",
+      });
+      writer.writeAlert({
+        ts: "2026-02-16T10:00:00Z",
+        severity: "error",
+        type: "pii_violation",
+        message: "New alert",
+      });
+
+      const rows = reader.getAlerts({ since: "2026-02-15T00:00:00Z", limit: 10 });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].message).toBe("New alert");
+    });
+
+    it("filters unacknowledgedOnly", () => {
+      writer.writeAlert({
+        ts: "2026-02-15T10:00:00Z",
+        severity: "warning",
+        type: "budget_exceeded",
+        message: "Unacked",
+      });
+      writer.writeAlert({
+        ts: "2026-02-15T10:01:00Z",
+        severity: "error",
+        type: "pii_violation",
+        message: "Also unacked",
+      });
+      // Acknowledge the first alert
+      db.prepare("UPDATE alerts SET acknowledged = 1 WHERE message = ?").run("Unacked");
+
+      const rows = reader.getAlerts({ unacknowledgedOnly: true, limit: 10 });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].message).toBe("Also unacked");
+    });
+
+    it("combines severity + since + unacknowledgedOnly", () => {
+      writer.writeAlert({
+        ts: "2026-02-14T10:00:00Z",
+        severity: "error",
+        type: "pii_violation",
+        message: "Old error",
+      });
+      writer.writeAlert({
+        ts: "2026-02-16T10:00:00Z",
+        severity: "warning",
+        type: "budget_exceeded",
+        message: "New warning",
+      });
+      writer.writeAlert({
+        ts: "2026-02-16T10:01:00Z",
+        severity: "error",
+        type: "agent_error",
+        message: "New error unacked",
+      });
+
+      const rows = reader.getAlerts({
+        severity: "error",
+        since: "2026-02-15T00:00:00Z",
+        unacknowledgedOnly: true,
+        limit: 10,
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].message).toBe("New error unacked");
+    });
+
+    it("returns empty array when no alerts match", () => {
+      writer.writeAlert({
+        ts: "2026-02-15T10:00:00Z",
+        severity: "warning",
+        type: "budget_exceeded",
+        message: "Budget exceeded",
+      });
+
+      const rows = reader.getAlerts({ type: "pii_violation", limit: 10 });
+      expect(rows).toEqual([]);
+    });
+  });
+
+  describe("getUsageSummary", () => {
+    it("aggregates cost and request counts", () => {
+      writer.writeRoutingDecision({
+        ts: new Date().toISOString(),
+        event: "routing_decision",
+        model: "anthropic/claude-sonnet-4-5",
+      });
+      writer.writeRoutingDecision({
+        ts: new Date().toISOString(),
+        event: "routing_decision",
+        model: "ollama/llama3.3:8b",
+      });
+      writer.writeRoutingDecision({
+        ts: new Date().toISOString(),
+        event: "routing_decision",
+        model: "anthropic/claude-sonnet-4-5",
+      });
+
+      const summary = reader.getUsageSummary({ days: 1 });
+      expect(summary.totalRequests).toBe(3);
+      expect(summary.localRequests).toBe(1);
+      expect(summary.cloudRequests).toBe(2);
+      expect(summary.modelBreakdown["anthropic/claude-sonnet-4-5"].count).toBe(2);
+      expect(summary.modelBreakdown["ollama/llama3.3:8b"].count).toBe(1);
+    });
+
+    it("agent-specific summary excludes other agents", () => {
+      writer.writeRoutingDecision({
+        ts: new Date().toISOString(),
+        event: "routing_decision",
+        agentId: "agent-1",
+        model: "ollama/llama3.3:8b",
+      });
+      writer.writeRoutingDecision({
+        ts: new Date().toISOString(),
+        event: "routing_decision",
+        agentId: "agent-2",
+        model: "anthropic/claude-sonnet-4-5",
+      });
+
+      const summary = reader.getUsageSummary({ days: 1, agentId: "agent-1" });
+      expect(summary.totalRequests).toBe(1);
+      expect(summary.localRequests).toBe(1);
+      expect(summary.cloudRequests).toBe(0);
+    });
+
+    it("empty date range returns zero summary", () => {
+      writer.writeRoutingDecision({
+        ts: "2020-01-01T00:00:00Z", // Very old entry
+        event: "routing_decision",
+        model: "ollama/llama3.3:8b",
+      });
+
+      const summary = reader.getUsageSummary({ days: 1 });
+      expect(summary.totalRequests).toBe(0);
+      expect(summary.totalCost).toBe(0);
+      expect(summary.localRequests).toBe(0);
+      expect(summary.cloudRequests).toBe(0);
+    });
+  });
+
+  describe("getDailySpend — additional edge cases", () => {
+    it("multiple days with gaps returns only populated days", () => {
+      writer.writeBudgetState("_global", "2026-02-10", 1.0, 5);
+      // Gap on 2026-02-11, 2026-02-12
+      writer.writeBudgetState("_global", "2026-02-13", 3.0, 15);
+      writer.writeBudgetState("_global", "2026-02-14", 2.0, 10);
+
+      const spend = reader.getDailySpend({ days: 7 });
+      expect(spend).toHaveLength(3);
+      // Most recent first
+      expect(spend[0].date).toBe("2026-02-14");
+      expect(spend[1].date).toBe("2026-02-13");
+      expect(spend[2].date).toBe("2026-02-10");
+    });
+
+    it("returns empty array when no budget data exists", () => {
+      const spend = reader.getDailySpend({ days: 7 });
+      expect(spend).toEqual([]);
+    });
+  });
+
+  describe("getModelHealthStates — additional edge cases", () => {
+    it("returns empty array when no health states exist", () => {
+      const states = reader.getModelHealthStates();
+      expect(states).toEqual([]);
+    });
+
+    it("returns all providers when multiple exist", () => {
+      writer.writeModelHealthState({
+        provider: "ollama",
+        status: "healthy",
+        circuit: "closed",
+        lastCheckedAt: "2026-02-15T12:00:00Z",
+      });
+      writer.writeModelHealthState({
+        provider: "sglang",
+        status: "degraded",
+        circuit: "half_open",
+        lastCheckedAt: "2026-02-15T12:05:00Z",
+      });
+
+      const states = reader.getModelHealthStates();
+      expect(states).toHaveLength(2);
+      const providers = states.map((s) => s.provider).sort();
+      expect(providers).toEqual(["ollama", "sglang"]);
+    });
   });
 
   describe("getTotalEventCount", () => {

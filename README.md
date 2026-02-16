@@ -356,7 +356,7 @@ The router plugin hooks into `before_agent_start` to override model selection, `
 git clone https://github.com/natefikru/clawforce.git
 cd clawforce
 pnpm install
-pnpm test           # 809 tests
+pnpm test           # 878 tests
 ```
 
 Dashboard:
