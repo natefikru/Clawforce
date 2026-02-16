@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { appendFileSync } from "node:fs";
 import {
   activate,
+  deactivateInstance,
   applyFailoverPolicy,
   parseModelRef,
   buildScanText,
@@ -133,7 +134,7 @@ describe("Router Plugin", () => {
     );
   });
 
-  it("stops previous monitor when re-activating in the same process", () => {
+  it("keeps both monitors active when activating multiple instances", () => {
     const stopSpy = vi.spyOn(ModelHealthMonitor.prototype, "stop");
     const apiA = createMockApi();
     const apiB = createMockApi();
@@ -143,7 +144,7 @@ describe("Router Plugin", () => {
     activate(apiB);
     const callsAfterSecondActivate = stopSpy.mock.calls.length;
 
-    expect(callsAfterSecondActivate - callsAfterFirstActivate).toBe(1);
+    expect(callsAfterSecondActivate - callsAfterFirstActivate).toBe(0);
     stopSpy.mockRestore();
   });
 
