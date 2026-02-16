@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+set -e
+
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+
+if [ -z "$staged_files" ]; then
+  echo "No staged files detected; skipping pre-commit checks."
+  exit 0
+fi
+
+run_root=0
+run_dashboard=0
+
+for file in $staged_files; do
+  case "$file" in
+    clawforce-dashboard/*)
+      run_dashboard=1
+      ;;
+    package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.json|knip.json|knip.config.js|knip.config.ts|.husky/*|.github/*)
+      run_root=1
+      run_dashboard=1
+      ;;
+    *)
+      run_root=1
+      ;;
+  esac
+done
+
+if [ "$run_root" -eq 1 ]; then
+  echo "Running root pre-commit checks..."
+  pnpm run precommit:root
+fi
+
+if [ "$run_dashboard" -eq 1 ]; then
+  echo "Running dashboard pre-commit checks..."
+  pnpm run precommit:dashboard
+fi

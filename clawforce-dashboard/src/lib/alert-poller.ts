@@ -18,7 +18,7 @@ export function createAlertPoller(
         .prepare(
           "SELECT id, ts, severity, type, agent_id, message, acknowledged, data, created_at FROM alerts WHERE id > ? AND acknowledged = 0 ORDER BY id ASC LIMIT ?",
         )
-        .all(cursor, POLL_BATCH) as AlertPollRow[];
+        .all(cursor, POLL_BATCH) as unknown as AlertPollRow[];
 
       const events: SSEMessage[] = rows.map((row) => ({
         id: `a-${row.id}`,
@@ -57,7 +57,7 @@ export function getAlertBackfill(db: DatabaseSync): AlertBackfillResult {
     .prepare(
       "SELECT id, ts, severity, type, agent_id, message, acknowledged, data, created_at FROM alerts WHERE acknowledged = 0 ORDER BY id DESC LIMIT ?",
     )
-    .all(INITIAL_BATCH) as AlertPollRow[];
+    .all(INITIAL_BATCH) as unknown as AlertPollRow[];
 
   rows.reverse();
 

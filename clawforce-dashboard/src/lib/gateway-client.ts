@@ -11,10 +11,12 @@ import { randomUUID } from "node:crypto";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export type GatewayClientOptions = {
-  url: string;
+  url?: string;
   token?: string;
   timeoutMs?: number;
 };
+
+export type GatewayAvailabilityOptions = Partial<GatewayClientOptions>;
 
 export type GatewayResponse<T = unknown> = {
   ok: boolean;
@@ -106,7 +108,7 @@ export async function gatewayRequest<T = unknown>(
  * Check if the gateway is reachable.
  */
 export async function isGatewayAvailable(
-  options?: GatewayClientOptions,
+  options?: GatewayAvailabilityOptions,
 ): Promise<boolean> {
   try {
     await gatewayRequest("usage.status", undefined, {

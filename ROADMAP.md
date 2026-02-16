@@ -1,14 +1,14 @@
 # Clawforce: Forward Roadmap
 
 **Date**: 2026-02-15
-**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, and Phase 2A.1 through 2A.4 complete)
+**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, and Phase 2A.1 through 2A.5 complete)
 **Built On**: OpenClaw (open-source personal AI assistant)
 
 ---
 
 ## Current State (What's Shipped)
 
-Current branch state: 820 tests passing (693 root + 127 dashboard) with 80% coverage enforced in the main project.
+Current branch state: 852 tests passing (712 root + 140 dashboard) with 80% coverage enforced in the main project.
 
 | Component | Status | Tests | Notes |
 |-----------|--------|-------|-------|
@@ -22,13 +22,14 @@ Current branch state: 820 tests passing (693 root + 127 dashboard) with 80% cove
 | SQLite Storage Layer | **Complete** | 87 | Dual-write, StorageWriter/Reader, migrations, migrate CLI |
 | Dashboard Auth (Auth.js v5, RBAC) | **Complete** | 112 | Multi-user, JWT sessions, login page, middleware, user CLI |
 | Real-Time Event Streaming (SSE) | **Complete** | 45 | Multiplexed SSE, cursor-based reconnection, 3 poll sources |
-| Dashboard (Status, Activity, Cost, Tasks) | Complete | 45 | Next.js, SQLite-first queries, 4 panels, 3 cost tabs |
+| Alert System (dashboard + notifications) | **Complete** | ~20+ | Budget/PII/health/error/idle alerts, SQLite history, SSE stream, acknowledge API, Slack/email dispatch |
+| Dashboard (Status, Activity, Alerts, Cost, Tasks) | Complete | 45 | Next.js, SQLite-first queries, 5 panels, 3 cost tabs |
 | Docker Compose Generation (OpenClaw + Ollama) | Complete | ~30 | Includes SGLang/vLLM runtime options |
 | 3 Role Templates | Complete | ~10 | Inbox Analyst, Research Agent, Process Automator |
 | Config System (clawforce.yaml -> openclaw.json) | Complete | ~30 | Zod validation, capability profiles |
 | OpenClaw Plugin Integration | Complete | — | before_agent_start hook with modelOverride/providerOverride |
 
-**What's NOT built**: Multi-agent orchestration, alert system, billing, onboarding wizard, cross-tool coordination layer, expanded template library.
+**What's NOT built**: Multi-agent orchestration, billing, onboarding wizard, cross-tool coordination layer, expanded template library.
 
 ---
 
@@ -120,15 +121,15 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - Provider-scoped probing prevents startup noise for unused runtimes
 - **Why**: If local model goes down, PII could cascade to cloud. This is a security invariant violation.
 
-#### 2A.5 Alert System
-- Agent errors/failures -> admin notification (Slack webhook, email, or dashboard)
-- Cost budget exceeded -> alert + optional auto-block
-- PII detected heading to cloud (invariant violation attempt) -> alert
-- Model health degradation -> alert
-- Agent idle for configurable period -> alert
-- Alert history stored in SQLite `alerts` table with acknowledgment tracking
-- Alert configuration in clawforce.yaml
-- Dashboard alert panel with real-time updates (via SSE from 2A.3)
+#### 2A.5 Alert System — COMPLETE ✅
+- Agent errors/failures alert via dashboard, Slack webhook, and optional email
+- Budget exceeded alerts with cooldown and optional auto-block behavior
+- PII-to-cloud invariant violations raise explicit alerts and block unsafe execution
+- Model health degradation and transition alerts persisted to SQLite `alerts`
+- Agent idle alerts with configurable threshold and cooldown
+- Dashboard alert panel with acknowledgment API and real-time SSE updates
+- Alert configuration in `clawforce.yaml` (`alerts.types`, `alerts.idle`, `alerts.budget`, `alerts.notifications`)
+- **Merged**: PR #7
 - **Why**: Operators need visibility into failures without watching the dashboard constantly.
 
 #### 2A.6 Plugin TypeScript Compilation Pipeline
@@ -152,7 +153,7 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - ~~Dashboard requires authentication to access~~ ✅
 - ~~Activity feed updates in real-time without polling~~ ✅
 - ~~Local model failure does NOT cascade PII to cloud~~ ✅
-- Alerts fire for all critical conditions
+- ~~Alerts fire for all critical conditions~~ ✅
 - Plugins are compiled before deployment
 
 ---
@@ -424,8 +425,8 @@ integrations:
 | ~~SQLite Storage Layer~~ | ~~CRITICAL (foundation)~~ | ~~LOW~~ | ~~None~~ | ~~2A.1~~ ✅ |
 | ~~Dashboard Auth~~ | ~~HIGH (security blocker)~~ | ~~LOW~~ | ~~SQLite (2A.1)~~ | ~~2A.2~~ ✅ |
 | ~~Real-Time Streaming~~ | ~~MEDIUM (demo quality)~~ | ~~LOW~~ | ~~SQLite (2A.1)~~ | ~~2A.3~~ ✅ |
-| Model Health/Failover | HIGH (security invariant) | MEDIUM | SQLite (2A.1) | 2A.4 |
-| Alert System | HIGH (operational need) | LOW | SQLite + Streaming + Health (2A.1-4) | 2A.5 |
+| ~~Model Health/Failover~~ | ~~HIGH (security invariant)~~ | ~~MEDIUM~~ | ~~SQLite (2A.1)~~ | ~~2A.4~~ ✅ |
+| ~~Alert System~~ | ~~HIGH (operational need)~~ | ~~LOW~~ | ~~SQLite + Streaming + Health (2A.1-4)~~ | ~~2A.5~~ ✅ |
 | Multi-Agent Config | CRITICAL (core differentiator) | MEDIUM | OpenClaw bindings | 2B |
 | Supervisor Template | CRITICAL (Ultron pattern) | HIGH | Multi-agent (2B.1) | 2B |
 | Dashboard Multi-Agent | HIGH (pilot requirement) | MEDIUM | Multi-agent (2B.1) | 2B |

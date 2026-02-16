@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -e
+
+echo "Running full pre-push verification (root + dashboard + security)..."
+pnpm run prepush:verify

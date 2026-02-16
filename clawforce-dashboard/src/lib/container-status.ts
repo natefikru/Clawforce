@@ -66,7 +66,7 @@ function readModelHealthSummary(
 
   for (const dbPath of candidates) {
     if (!existsSync(dbPath)) continue;
-    const db = new DatabaseSync(dbPath, { readonly: true });
+    const db = new DatabaseSync(dbPath, { readOnly: true });
     try {
       const stateRows = db
         .prepare(

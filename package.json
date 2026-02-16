@@ -15,7 +15,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "precommit:root": "pnpm typecheck && pnpm test",
+    "precommit:dashboard": "pnpm --dir clawforce-dashboard lint && pnpm --dir clawforce-dashboard test",
+    "check:root": "pnpm typecheck && pnpm build && pnpm test && pnpm knip --include dependencies,unlisted,unresolved",
+    "check:dashboard": "pnpm --dir clawforce-dashboard lint && pnpm --dir clawforce-dashboard build && pnpm --dir clawforce-dashboard test && pnpm knip --directory clawforce-dashboard --include dependencies,unlisted,unresolved",
+    "check:security": "pnpm audit --prod && pnpm --dir clawforce-dashboard audit --prod",
+    "precommit:verify": "pnpm check:root && pnpm check:dashboard && pnpm check:security",
+    "prepush:verify": "pnpm precommit:verify",
+    "prepare": "husky"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -29,6 +37,8 @@
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^7.0.10",
     "@vitest/coverage-v8": "^4.0.18",
+    "husky": "^9.1.7",
+    "knip": "^5.83.1",
     "tsdown": "^0.20.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
