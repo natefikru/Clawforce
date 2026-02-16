@@ -38,7 +38,7 @@ describe("createCostPoller", () => {
     ).run("_global", today(), 1.5, 10);
 
     const poller = createCostPoller(db);
-    const result = poller.poll(null);
+    const result = poller.poll();
 
     expect(result.events).toHaveLength(1);
     expect(result.events[0].event).toBe("cost");
@@ -55,11 +55,11 @@ describe("createCostPoller", () => {
     const poller = createCostPoller(db);
 
     // First poll emits
-    const r1 = poller.poll(null);
+    const r1 = poller.poll();
     expect(r1.events).toHaveLength(1);
 
     // Second poll with same values does not emit
-    const r2 = poller.poll(r1.cursor);
+    const r2 = poller.poll();
     expect(r2.events).toHaveLength(0);
   });
 
@@ -69,14 +69,14 @@ describe("createCostPoller", () => {
     ).run("_global", today(), 1.0, 5);
 
     const poller = createCostPoller(db);
-    poller.poll(null); // First poll
+    poller.poll(); // First poll
 
     // Update values
     db.prepare(
       "UPDATE budget_state SET spent = ?, request_count = ? WHERE agent_id = '_global' AND date = ?",
     ).run(2.5, 15, today());
 
-    const r2 = poller.poll(null);
+    const r2 = poller.poll();
     expect(r2.events).toHaveLength(1);
     const data = JSON.parse(r2.events[0].data);
     expect(data.spent).toBe(2.5);
@@ -85,7 +85,7 @@ describe("createCostPoller", () => {
 
   it("returns empty when no budget_state exists", () => {
     const poller = createCostPoller(db);
-    const result = poller.poll(null);
+    const result = poller.poll();
 
     expect(result.events).toHaveLength(0);
   });
@@ -102,7 +102,7 @@ describe("createCostPoller", () => {
     ).run("agent-1", today(), 99.0, 999);
 
     const poller = createCostPoller(db);
-    const result = poller.poll(null);
+    const result = poller.poll();
 
     expect(result.events).toHaveLength(0);
   });

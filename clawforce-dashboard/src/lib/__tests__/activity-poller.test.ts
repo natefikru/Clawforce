@@ -173,14 +173,13 @@ describe("createActivityPoller", () => {
     db.close();
   });
 
-  it("returns only events after cursor", () => {
+  it("returns only events after initial cursor", () => {
     seedEvents(db, 10);
 
     const poller = createActivityPoller(db, 5);
-    const result = poller.poll(5);
+    const result = poller.poll();
 
     expect(result.events).toHaveLength(5); // IDs 6-10
-    expect(result.cursor).toBe(10);
 
     const ids = result.events.map((e) => parseInt(e.id!, 10));
     expect(ids[0]).toBe(6);
@@ -191,33 +190,30 @@ describe("createActivityPoller", () => {
     seedEvents(db, 5);
 
     const poller = createActivityPoller(db, 5);
-    const result = poller.poll(5);
+    const result = poller.poll();
 
     expect(result.events).toHaveLength(0);
-    expect(result.cursor).toBe(5);
   });
 
-  it("tracks cursor across successive polls", () => {
+  it("tracks cursor internally across successive polls", () => {
     seedEvents(db, 5);
 
     const poller = createActivityPoller(db, 0);
 
     // First poll gets all 5
-    const r1 = poller.poll(0);
+    const r1 = poller.poll();
     expect(r1.events).toHaveLength(5);
-    expect(r1.cursor).toBe(5);
 
-    // Second poll gets nothing
-    const r2 = poller.poll(r1.cursor);
+    // Second poll gets nothing (cursor advanced internally)
+    const r2 = poller.poll();
     expect(r2.events).toHaveLength(0);
 
     // Add more events
     seedEvents(db, 3);
 
     // Third poll picks up new events
-    const r3 = poller.poll(r2.cursor);
+    const r3 = poller.poll();
     expect(r3.events).toHaveLength(3);
-    expect(r3.cursor).toBe(8);
   });
 
   it("has correct PollSource metadata", () => {
@@ -231,9 +227,8 @@ describe("createActivityPoller", () => {
     seedEvents(db, 150);
 
     const poller = createActivityPoller(db, 0);
-    const result = poller.poll(0);
+    const result = poller.poll();
 
     expect(result.events).toHaveLength(100);
-    expect(result.cursor).toBe(100);
   });
 });

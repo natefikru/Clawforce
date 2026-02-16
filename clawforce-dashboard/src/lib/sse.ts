@@ -14,17 +14,17 @@ export interface SSEMessage {
 
 /**
  * A source that can be polled at a fixed interval.
- * `poll()` receives the current cursor and returns events + updated cursor.
+ * Each source manages its own internal cursor/state.
+ * `poll()` takes no arguments — call it and it returns any new events.
  */
-export interface PollSource<C = number> {
+export interface PollSource {
   name: string;
   intervalMs: number;
-  poll(cursor: C): PollResult<C> | Promise<PollResult<C>>;
+  poll(): PollResult | Promise<PollResult>;
 }
 
-export interface PollResult<C = number> {
+export interface PollResult {
   events: SSEMessage[];
-  cursor: C;
 }
 
 /** Format a single SSE message per the spec (https://html.spec.whatwg.org/#server-sent-events). */
@@ -58,7 +58,7 @@ export interface PollingStreamOptions {
  * On `signal.abort()` all intervals are cleared and the stream closes.
  */
 export function createPollingStream(
-  sources: PollSource<unknown>[],
+  sources: PollSource[],
   signal: AbortSignal,
   options: PollingStreamOptions = {},
 ): ReadableStream<Uint8Array> {
@@ -80,20 +80,21 @@ export function createPollingStream(
       for (const source of sources) {
         const id = setInterval(() => {
           try {
-            const result = source.poll(
-              (source as PollSource<unknown> & { _cursor?: unknown })._cursor ??
-                0,
-            );
+            const result = source.poll();
             if (result instanceof Promise) {
               result
                 .then((r) => {
-                  enqueueResults(controller, encoder, r, source);
+                  for (const event of r.events) {
+                    controller.enqueue(encoder.encode(formatSSE(event)));
+                  }
                 })
                 .catch(() => {
                   // Swallow — prevent leaked intervals
                 });
             } else {
-              enqueueResults(controller, encoder, result, source);
+              for (const event of result.events) {
+                controller.enqueue(encoder.encode(formatSSE(event)));
+              }
             }
           } catch {
             // Swallow — prevent leaked intervals
@@ -135,18 +136,4 @@ export function createPollingStream(
       intervals.length = 0;
     },
   });
-}
-
-function enqueueResults(
-  controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder,
-  result: PollResult<unknown>,
-  source: PollSource<unknown>,
-): void {
-  for (const event of result.events) {
-    controller.enqueue(encoder.encode(formatSSE(event)));
-  }
-  // Store cursor back on source for next poll
-  (source as PollSource<unknown> & { _cursor?: unknown })._cursor =
-    result.cursor;
 }

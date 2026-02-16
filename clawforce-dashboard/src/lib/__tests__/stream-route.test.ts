@@ -118,10 +118,9 @@ describe("SSE stream integration", () => {
     seedEvents(db, 3);
 
     const poller = createActivityPoller(db, backfill.cursor);
-    const result = poller.poll(backfill.cursor);
+    const result = poller.poll();
 
     expect(result.events).toHaveLength(3);
-    expect(result.cursor).toBe(13);
   });
 
   it("cost poller detects budget changes", () => {
@@ -133,7 +132,7 @@ describe("SSE stream integration", () => {
     const poller = createCostPoller(db);
 
     // First poll emits initial state
-    const r1 = poller.poll(null);
+    const r1 = poller.poll();
     expect(r1.events).toHaveLength(1);
     expect(r1.events[0].event).toBe("cost");
 
@@ -143,7 +142,7 @@ describe("SSE stream integration", () => {
     ).run(0.5, 3, today);
 
     // Second poll detects change
-    const r2 = poller.poll(r1.cursor);
+    const r2 = poller.poll();
     expect(r2.events).toHaveLength(1);
     const data = JSON.parse(r2.events[0].data);
     expect(data.spent).toBe(0.5);

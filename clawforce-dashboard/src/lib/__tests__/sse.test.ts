@@ -82,14 +82,13 @@ describe("createPollingStream", () => {
     const controller = new AbortController();
     let callCount = 0;
 
-    const source: PollSource<number> = {
+    const source: PollSource = {
       name: "test",
       intervalMs: 100,
-      poll(cursor: number) {
+      poll() {
         callCount++;
         return {
-          events: [{ id: String(cursor + 1), event: "test", data: "ok" }],
-          cursor: cursor + 1,
+          events: [{ id: String(callCount), event: "test", data: "ok" }],
         };
       },
     };
@@ -108,7 +107,6 @@ describe("createPollingStream", () => {
   it("sends heartbeat at configured interval", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();
-    const enqueueSpy: string[] = [];
 
     const stream = createPollingStream([], controller.signal, {
       heartbeatMs: 100,
@@ -137,12 +135,12 @@ describe("createPollingStream", () => {
     const controller = new AbortController();
     let pollCount = 0;
 
-    const source: PollSource<number> = {
+    const source: PollSource = {
       name: "test",
       intervalMs: 50,
       poll() {
         pollCount++;
-        return { events: [], cursor: 0 };
+        return { events: [] };
       },
     };
 
@@ -163,13 +161,12 @@ describe("createPollingStream", () => {
     vi.useFakeTimers();
     const controller = new AbortController();
 
-    const source: PollSource<number> = {
+    const source: PollSource = {
       name: "async-test",
       intervalMs: 100,
-      async poll(cursor: number) {
+      async poll() {
         return {
           events: [{ event: "status", data: '{"running":true}' }],
-          cursor: cursor + 1,
         };
       },
     };
@@ -198,13 +195,13 @@ describe("createPollingStream", () => {
     const controller = new AbortController();
     let callCount = 0;
 
-    const source: PollSource<number> = {
+    const source: PollSource = {
       name: "error-test",
       intervalMs: 50,
       poll() {
         callCount++;
         if (callCount === 1) throw new Error("poll error");
-        return { events: [], cursor: 0 };
+        return { events: [] };
       },
     };
 

@@ -16,7 +16,7 @@ export interface StatusSnapshot {
   agents: AgentStatus[];
 }
 
-export function createStatusPoller(): PollSource<StatusSnapshot | null> {
+export function createStatusPoller(): PollSource {
   let lastSnapshot: string | null = null;
   let consecutiveFailures = 0;
   let nextPollAt = 0;
@@ -24,10 +24,10 @@ export function createStatusPoller(): PollSource<StatusSnapshot | null> {
   return {
     name: "status",
     intervalMs: BASE_INTERVAL,
-    async poll(): Promise<PollResult<StatusSnapshot | null>> {
+    async poll(): Promise<PollResult> {
       // Backoff: skip poll if too early
       if (Date.now() < nextPollAt) {
-        return { events: [], cursor: null };
+        return { events: [] };
       }
 
       let agents: AgentStatus[];
@@ -39,14 +39,14 @@ export function createStatusPoller(): PollSource<StatusSnapshot | null> {
         if (consecutiveFailures >= FAILURE_THRESHOLD) {
           nextPollAt = Date.now() + BACKOFF_INTERVAL;
         }
-        return { events: [], cursor: null };
+        return { events: [] };
       }
 
       const snapshot: StatusSnapshot = { agents };
       const serialized = JSON.stringify(snapshot);
 
       if (serialized === lastSnapshot) {
-        return { events: [], cursor: snapshot };
+        return { events: [] };
       }
 
       lastSnapshot = serialized;
@@ -58,7 +58,7 @@ export function createStatusPoller(): PollSource<StatusSnapshot | null> {
         },
       ];
 
-      return { events, cursor: snapshot };
+      return { events };
     },
   };
 }

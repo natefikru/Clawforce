@@ -14,13 +14,13 @@ export interface CostData {
   requestCount: number;
 }
 
-export function createCostPoller(db: DatabaseSync): PollSource<CostData | null> {
+export function createCostPoller(db: DatabaseSync): PollSource {
   let lastKnown: CostData | null = null;
 
   return {
     name: "cost",
     intervalMs: 5000,
-    poll(): PollResult<CostData | null> {
+    poll(): PollResult {
       const today = new Date().toISOString().slice(0, 10);
 
       let row: { spent: number; request_count: number } | undefined;
@@ -31,11 +31,11 @@ export function createCostPoller(db: DatabaseSync): PollSource<CostData | null> 
           )
           .get(today) as { spent: number; request_count: number } | undefined;
       } catch {
-        return { events: [], cursor: lastKnown };
+        return { events: [] };
       }
 
       if (!row) {
-        return { events: [], cursor: lastKnown };
+        return { events: [] };
       }
 
       const current: CostData = {
@@ -49,7 +49,7 @@ export function createCostPoller(db: DatabaseSync): PollSource<CostData | null> 
         lastKnown.spent === current.spent &&
         lastKnown.requestCount === current.requestCount
       ) {
-        return { events: [], cursor: lastKnown };
+        return { events: [] };
       }
 
       lastKnown = current;
@@ -61,7 +61,7 @@ export function createCostPoller(db: DatabaseSync): PollSource<CostData | null> 
         },
       ];
 
-      return { events, cursor: lastKnown };
+      return { events };
     },
   };
 }

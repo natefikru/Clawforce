@@ -25,7 +25,7 @@ describe("createStatusPoller", () => {
     ]);
 
     const poller = createStatusPoller();
-    const result = await poller.poll(null);
+    const result = await poller.poll();
 
     expect(result.events).toHaveLength(1);
     expect(result.events[0].event).toBe("status");
@@ -42,10 +42,10 @@ describe("createStatusPoller", () => {
 
     const poller = createStatusPoller();
 
-    const r1 = await poller.poll(null);
+    const r1 = await poller.poll();
     expect(r1.events).toHaveLength(1);
 
-    const r2 = await poller.poll(r1.cursor);
+    const r2 = await poller.poll();
     expect(r2.events).toHaveLength(0);
   });
 
@@ -55,13 +55,13 @@ describe("createStatusPoller", () => {
     ]);
 
     const poller = createStatusPoller();
-    await poller.poll(null); // First poll
+    await poller.poll(); // First poll
 
     mockGetContainerStatus.mockResolvedValue([
       { containerName: "clawforce-agent", status: "stopped", uptime: "Exited (0)" },
     ]);
 
-    const r2 = await poller.poll(null);
+    const r2 = await poller.poll();
     expect(r2.events).toHaveLength(1);
     const data = JSON.parse(r2.events[0].data);
     expect(data.agents[0].status).toBe("stopped");
@@ -71,7 +71,7 @@ describe("createStatusPoller", () => {
     mockGetContainerStatus.mockRejectedValue(new Error("docker not found"));
 
     const poller = createStatusPoller();
-    const result = await poller.poll(null);
+    const result = await poller.poll();
 
     expect(result.events).toHaveLength(0);
   });
@@ -83,16 +83,16 @@ describe("createStatusPoller", () => {
     const poller = createStatusPoller();
 
     // 3 consecutive failures
-    await poller.poll(null);
-    await poller.poll(null);
-    await poller.poll(null);
+    await poller.poll();
+    await poller.poll();
+    await poller.poll();
 
     // Now the poller should skip (backoff active)
     mockGetContainerStatus.mockResolvedValue([
       { containerName: "clawforce-agent", status: "running", uptime: "Up 1 hour" },
     ]);
 
-    const r4 = await poller.poll(null);
+    const r4 = await poller.poll();
     // getContainerStatus should NOT have been called again (backoff)
     expect(mockGetContainerStatus).toHaveBeenCalledTimes(3);
     expect(r4.events).toHaveLength(0);
@@ -100,7 +100,7 @@ describe("createStatusPoller", () => {
     // Advance past backoff period
     vi.advanceTimersByTime(61_000);
 
-    const r5 = await poller.poll(null);
+    const r5 = await poller.poll();
     expect(mockGetContainerStatus).toHaveBeenCalledTimes(4);
     expect(r5.events).toHaveLength(1);
 
@@ -117,7 +117,7 @@ describe("createStatusPoller", () => {
     mockGetContainerStatus.mockResolvedValue([]);
 
     const poller = createStatusPoller();
-    const r1 = await poller.poll(null);
+    const r1 = await poller.poll();
     expect(r1.events).toHaveLength(1); // Initial empty state
 
     // Container appears
@@ -125,7 +125,7 @@ describe("createStatusPoller", () => {
       { containerName: "clawforce-agent", status: "running", uptime: "Up 1 min" },
     ]);
 
-    const r2 = await poller.poll(r1.cursor);
+    const r2 = await poller.poll();
     expect(r2.events).toHaveLength(1);
   });
 });

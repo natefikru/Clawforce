@@ -26,7 +26,6 @@ import { createPollingStream, formatSSE } from "@/lib/sse";
 import { createActivityPoller, getBackfill } from "@/lib/activity-poller";
 import { createCostPoller } from "@/lib/cost-poller";
 import { createStatusPoller } from "@/lib/status-poller";
-import type { PollSource } from "@/lib/sse";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
@@ -54,10 +53,10 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      const sources: PollSource<unknown>[] = [
-        createActivityPoller(db, backfill.cursor) as PollSource<unknown>,
-        createCostPoller(db) as PollSource<unknown>,
-        createStatusPoller() as PollSource<unknown>,
+      const sources = [
+        createActivityPoller(db, backfill.cursor),
+        createCostPoller(db),
+        createStatusPoller(),
       ];
 
       const stream = createPollingStream(sources, req.signal, {

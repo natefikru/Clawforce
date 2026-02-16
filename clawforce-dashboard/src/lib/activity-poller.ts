@@ -15,18 +15,18 @@ const POLL_BATCH = 100;
 
 /**
  * Create a PollSource that fetches new compliance_events from SQLite.
- * Queries `WHERE id > cursor ORDER BY id ASC LIMIT 100`.
+ * Manages its own cursor internally — queries `WHERE id > cursor ORDER BY id ASC LIMIT 100`.
  */
 export function createActivityPoller(
   db: DatabaseSync,
   initialCursor: number,
-): PollSource<number> {
+): PollSource {
   let cursor = initialCursor;
 
   return {
     name: "activity",
     intervalMs: 1500,
-    poll(): PollResult<number> {
+    poll(): PollResult {
       const rows = db
         .prepare(
           "SELECT id, data FROM compliance_events WHERE id > ? ORDER BY id ASC LIMIT ?",
@@ -43,7 +43,7 @@ export function createActivityPoller(
         cursor = rows[rows.length - 1].id;
       }
 
-      return { events, cursor };
+      return { events };
     },
   };
 }
