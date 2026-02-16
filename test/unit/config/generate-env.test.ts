@@ -38,6 +38,36 @@ describe("generateEnv", () => {
     expect(env).toContain("ANTHROPIC_API_KEY=sk-ant-test123");
   });
 
+  it("should omit provider API key in auth_profile mode", () => {
+    const env = generateEnv(
+      makeConfig({
+        models: {
+          primary: "anthropic/claude-sonnet-4-5",
+          credential_mode: "auth_profile",
+          auth_profile: "corp-prod",
+          api_key: "sk-ant-should-not-be-used",
+        },
+      }),
+    );
+    expect(env).not.toContain("ANTHROPIC_API_KEY=");
+    expect(env).toContain("OPENCLAW_AUTH_PROFILE=corp-prod");
+  });
+
+  it("should include warning comment when auth_profile exists in env mode", () => {
+    const env = generateEnv(
+      makeConfig({
+        models: {
+          primary: "anthropic/claude-sonnet-4-5",
+          credential_mode: "env",
+          auth_profile: "corp-prod",
+          api_key: "sk-ant-test123",
+        },
+      }),
+    );
+    expect(env).toContain("credential_mode=env");
+    expect(env).toContain("ANTHROPIC_API_KEY=sk-ant-test123");
+  });
+
   it("should handle missing API key", () => {
     const env = generateEnv(
       makeConfig({ models: { primary: "anthropic/claude-sonnet-4-5" } }),

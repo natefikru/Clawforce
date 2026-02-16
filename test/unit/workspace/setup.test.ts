@@ -160,4 +160,22 @@ describe("setupWorkspace", () => {
     const extensionsDir = join(testDir, "config/extensions");
     expect(existsSync(extensionsDir)).toBe(false);
   });
+
+  it("should write auth-profile metadata when credential mode is auth_profile", () => {
+    setupWorkspace(
+      makeConfig({
+        models: {
+          primary: "anthropic/claude-sonnet-4-5",
+          credential_mode: "auth_profile",
+          auth_profile: "corp-prod",
+        },
+      }),
+      testDir,
+    );
+    const metadataPath = join(testDir, "config/auth-profile.json");
+    expect(existsSync(metadataPath)).toBe(true);
+    const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+    expect(metadata.mode).toBe("auth_profile");
+    expect(metadata.profile).toBe("corp-prod");
+  });
 });

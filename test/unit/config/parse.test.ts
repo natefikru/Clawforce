@@ -156,4 +156,16 @@ describe("parseConfig", () => {
       parseConfig(join(fixturesDir, "invalid-dashboard-auth-policy.yaml")),
     ).toThrow("dashboard.auth must be explicitly configured");
   });
+
+  it("should parse auth_profile credential mode when profile is provided", () => {
+    const config = parseConfig(join(fixturesDir, "valid-auth-profile-config.yaml"));
+    expect(config.models.credential_mode).toBe("auth_profile");
+    expect(config.models.auth_profile).toBe("corp-prod");
+  });
+
+  it("should reject auth_profile credential mode without profile", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-auth-profile-config.yaml")),
+    ).toThrow("models.auth_profile is required when models.credential_mode=auth_profile");
+  });
 });

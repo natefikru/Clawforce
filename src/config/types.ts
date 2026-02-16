@@ -120,6 +120,16 @@ export const ClawforceConfigSchema = z.object({
     primary: z.string().min(1),
     local: z.string().optional(),
     api_key: z.string().optional(),
+    credential_mode: z.enum(["env", "auth_profile"]).optional(),
+    auth_profile: z.string().min(1).optional(),
+  }).superRefine((value, ctx) => {
+    if (value.credential_mode === "auth_profile" && !value.auth_profile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "models.auth_profile is required when models.credential_mode=auth_profile",
+        path: ["auth_profile"],
+      });
+    }
   }),
 
   gateway: z

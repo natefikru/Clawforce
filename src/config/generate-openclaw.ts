@@ -75,6 +75,7 @@ export interface OpenClawConfig {
   agents: {
     defaults: {
       workspace: string;
+      authProfile?: string;
       model: {
         primary: string;
         fallbacks?: string[];
@@ -134,6 +135,10 @@ export function generateOpenClawConfig(
     agents: {
       defaults: {
         workspace: "/home/node/.openclaw/workspace",
+        ...(config.models.credential_mode === "auth_profile" &&
+        config.models.auth_profile
+          ? { authProfile: config.models.auth_profile }
+          : {}),
         model: {
           primary: config.models.primary,
           ...(config.models.local
