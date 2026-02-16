@@ -133,7 +133,7 @@ export class BudgetTracker {
       }
     }
 
-    // JSON file fallback (legacy global state only)
+    // JSON file fallback (global state only)
     if (agentId !== "_global") {
       return { date: todayString(), spent: 0, requestCount: 0 };
     }
@@ -165,7 +165,7 @@ export class BudgetTracker {
       }
     }
 
-    // JSON file fallback (legacy global state only)
+    // JSON file fallback (global state only)
     if (agentId !== "_global") {
       return;
     }

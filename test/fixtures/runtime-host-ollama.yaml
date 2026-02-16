@@ -1,4 +1,4 @@
-name: "test-corp"
+name: "host-ollama"
 role: "inbox-analyst"
 
 openclaw:
@@ -11,19 +11,8 @@ models:
   local: "ollama/llama3.3:8b"
   api_key: "${ANTHROPIC_API_KEY}"
 
-approval:
-  mode: "hybrid"
-  require_approval_for:
-    - "browser"
-    - "message.send"
-
-sensitivity:
-  blocklist:
-    - "ssn"
-    - "credit card"
-  pii_detection: true
-
 runtime:
   engine: "ollama"
-  location: "container"
+  location: "host"
+  host_url: "http://host.docker.internal:11434"
   model: "llama3.3:8b"

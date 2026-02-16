@@ -151,17 +151,11 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
-  ollama: z
-    .object({
-      enabled: z.boolean(),
-      model: z.string().optional(),
-      gpu: z.enum(["nvidia", "amd", "none"]).optional(),
-    })
-    .optional(),
-
   runtime: z
     .object({
       engine: z.enum(["ollama", "sglang", "vllm"]).default("sglang"),
+      location: z.enum(["container", "host"]).default("container"),
+      host_url: z.string().url().optional(),
       model: z.string().default("qwen3-32b"),
       gpu: z.enum(["nvidia", "amd", "none"]).optional(),
       quantization: z.enum(["fp16", "int8", "int4", "awq", "gptq"]).optional(),

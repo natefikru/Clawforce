@@ -478,12 +478,12 @@ describe("scanForPII", () => {
     expect(emailMatches[1].matchedText).toBe("jane@example.com");
   });
 
-  it("should work with backward-compat detectPII wrapper", () => {
+  it("should work with detectPII wrapper", () => {
     expect(detectPII("ssn 123-45-6789")).toBe(true);
     expect(detectPII("clean text")).toBe(false);
   });
 
-  it("should work with backward-compat detectPIITypes wrapper", () => {
+  it("should work with detectPIITypes wrapper", () => {
     const types = detectPIITypes("ssn 123-45-6789 email john@example.com");
     expect(types).toContain("ssn");
     expect(types).toContain("email");
@@ -518,7 +518,7 @@ describe("PII confidence threshold filtering", () => {
   const TEXT_WITH_MIXED_CONFIDENCE =
     "SSN: 123-45-6789, email: user@example.com, IP: 192.168.1.1";
 
-  it("threshold: 0 returns all matches (backward compat)", () => {
+  it("threshold: 0 returns all matches", () => {
     const matches = scanForPII(TEXT_WITH_MIXED_CONFIDENCE, { threshold: 0 });
     expect(matches.length).toBeGreaterThan(0);
     const types = matches.map((m) => m.type);

@@ -91,9 +91,17 @@ export async function deployCommand(configPath: string): Promise<void> {
     logger.success("Dashboard image built");
   }
 
-  // 8. Pull Ollama model if enabled
-  if (config.ollama?.enabled && config.ollama.model) {
-    logger.step(`Starting Ollama and pulling model: ${config.ollama.model}...`);
+  // 8. Pull Ollama model if configured as a managed container runtime
+  const runtimeEngine = config.runtime?.engine;
+  const runtimeLocation = config.runtime?.location ?? "container";
+  const shouldPullOllamaModel =
+    runtimeEngine === "ollama" && runtimeLocation === "container";
+  const ollamaModelToPull = shouldPullOllamaModel
+    ? (config.runtime?.model ?? "llama3.3:8b")
+    : undefined;
+
+  if (shouldPullOllamaModel && ollamaModelToPull) {
+    logger.step(`Starting Ollama and pulling model: ${ollamaModelToPull}...`);
     await exec("docker", ["compose", "up", "-d", "ollama"], {
       cwd: deployDir,
     });
@@ -104,7 +112,7 @@ export async function deployCommand(configPath: string): Promise<void> {
         `clawforce-${config.name}-ollama`,
         "ollama",
         "pull",
-        config.ollama.model,
+        ollamaModelToPull,
       ],
       { cwd: deployDir },
     );

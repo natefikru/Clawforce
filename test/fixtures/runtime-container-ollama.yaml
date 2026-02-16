@@ -1,4 +1,4 @@
-name: "test-corp"
+name: "runtime-ollama"
 role: "inbox-analyst"
 
 openclaw:
@@ -10,18 +10,6 @@ models:
   primary: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   api_key: "${ANTHROPIC_API_KEY}"
-
-approval:
-  mode: "hybrid"
-  require_approval_for:
-    - "browser"
-    - "message.send"
-
-sensitivity:
-  blocklist:
-    - "ssn"
-    - "credit card"
-  pii_detection: true
 
 runtime:
   engine: "ollama"

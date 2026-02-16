@@ -1,5 +1,9 @@
 # Clawforce
 
+<p align="center">
+  <img src="docs/assets/clawforce-logo.png" alt="Clawforce logo" width="280" />
+</p>
+
 **Enterprise AI agent management for teams that can't afford to get security wrong.**
 
 Clawforce deploys, routes, and monitors autonomous AI agents on your infrastructure — with built-in PII protection, compliance logging, and intelligent cost optimization. Your data never leaves your network. Sensitive requests route to local models automatically.
@@ -79,9 +83,11 @@ openclaw:
     discord:
       enabled: true
       token: "${DISCORD_BOT_TOKEN}"
-ollama:
-  enabled: true
+runtime:
+  engine: "ollama"
+  location: "container"
   model: "qwen3.3:8b"
+  gpu: "nvidia"
 EOF
 
 # Deploy
@@ -295,10 +301,12 @@ dashboard:
     username: admin
     password: "your-secure-password"  # Min 8 characters
 
-ollama:
-  enabled: true
+runtime:
+  engine: "ollama"               # ollama | sglang | vllm
+  location: "container"          # container | host
   model: "qwen3.3:8b"
   gpu: nvidia                    # nvidia | amd | none
+  port: 11434                    # engine port (ollama default: 11434)
 
 capabilities: full               # minimal | standard | full
 

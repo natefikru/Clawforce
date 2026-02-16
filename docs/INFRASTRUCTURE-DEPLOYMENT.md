@@ -132,6 +132,27 @@ Gateway and local model inference on the same machine. Best cost-performance for
 
 ---
 
+### Option 2B: Mac mini-First (Host Runtime + Docker Gateway)
+
+Run OpenClaw + Clawforce in Docker, but run local inference natively on macOS (for example, Ollama with Apple Silicon acceleration).
+
+```yaml
+runtime:
+  engine: "ollama"
+  location: "host"
+  host_url: "http://host.docker.internal:11434"
+  model: "llama3.3:8b"
+```
+
+**How this works:**
+1. `runtime.location: host` tells Clawforce not to launch an inference sidecar container.
+2. The gateway routes local-model traffic to `runtime.host_url`.
+3. Router/compliance/PII invariants remain unchanged.
+
+**Best for:** Home-lab and small-team deployments that want local privacy and lower recurring cloud spend without managing Linux GPU servers.
+
+---
+
 ### Option 3: Split Architecture (Recommended for Production)
 
 Gateway on a cheap VPS, local models on a dedicated GPU server. Most flexible and cost-effective for multi-agent deployments.
@@ -174,14 +195,12 @@ Gateway on a cheap VPS, local models on a dedicated GPU server. Most flexible an
 4. **Multi-agent ready** — You can scale GPU inference independently and place a load balancer in front of inference nodes
 5. **Hybrid routing** — PII-sensitive requests go to local GPU, everything else to cloud APIs
 
-**Connection (today):** Remote inference endpoints are not first-class in `clawforce.yaml` yet. Configure them by editing generated Compose env vars on `openclaw-gateway` (`OLLAMA_HOST`, `SGLANG_HOST`, `VLLM_HOST`) to point to your inference service or load balancer.
+**Connection:** Configure remote inference directly in `clawforce.yaml`:
 ```yaml
-# Generated clawforce-<name>/docker-compose.yml (openclaw-gateway env)
-environment:
-  - OLLAMA_HOST=http://gpu-lb.internal:11434
-  # or:
-  # - SGLANG_HOST=http://gpu-lb.internal:30000
-  # - VLLM_HOST=http://gpu-lb.internal:8000
+runtime:
+  engine: "ollama" # or sglang / vllm
+  location: "host"
+  host_url: "http://gpu-lb.internal:11434"
 ```
 
 **Best for:** Production deployments, multi-agent orchestration (Phase 2B+), regulated industries.
