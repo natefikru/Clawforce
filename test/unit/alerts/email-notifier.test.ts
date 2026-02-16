@@ -40,6 +40,14 @@ describe("sendEmailAlert", () => {
     );
 
     expect(createTransport).toHaveBeenCalledTimes(1);
+    expect(createTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "smtp.example.com",
+        port: 587,
+        secure: false,
+        requireTLS: true,
+      }),
+    );
     expect(sendMail).toHaveBeenCalledTimes(1);
   });
 });

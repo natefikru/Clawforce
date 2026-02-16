@@ -34,6 +34,8 @@ describe("Deploy security audit integration", () => {
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAWFORCE_SKIP_SECURITY_AUDIT;
+    delete process.env.CI;
+    delete process.env.NODE_ENV;
     if (existsSync(deployDir)) {
       rmSync(deployDir, { recursive: true });
     }
@@ -74,5 +76,16 @@ describe("Deploy security audit integration", () => {
         skip: true,
       }),
     );
+  });
+
+  it("rejects bypass in CI and does not invoke audit runner", async () => {
+    process.env.CLAWFORCE_SKIP_SECURITY_AUDIT = "1";
+    process.env.CI = "true";
+
+    await expect(
+      deployCommand(join(fixturesDir, "smoke-config-no-ollama.yaml")),
+    ).rejects.toThrow("Security audit bypass is not allowed in CI or production");
+
+    expect(runSecurityAudit).not.toHaveBeenCalled();
   });
 });

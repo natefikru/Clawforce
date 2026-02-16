@@ -35,6 +35,8 @@ describe("deployCommand", () => {
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAWFORCE_SKIP_SECURITY_AUDIT;
+    delete process.env.CI;
+    delete process.env.NODE_ENV;
     if (existsSync(deployDir)) {
       rmSync(deployDir, { recursive: true });
     }
@@ -189,5 +191,14 @@ describe("deployCommand", () => {
       expect.arrayContaining(["security", "audit", "--deep"]),
       expect.anything(),
     );
+  });
+
+  it("should reject security audit bypass in CI contexts", async () => {
+    process.env.CLAWFORCE_SKIP_SECURITY_AUDIT = "1";
+    process.env.CI = "true";
+
+    await expect(
+      deployCommand(join(fixturesDir, "valid-config.yaml")),
+    ).rejects.toThrow("Security audit bypass is not allowed in CI or production");
   });
 });

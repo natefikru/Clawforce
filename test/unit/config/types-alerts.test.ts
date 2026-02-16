@@ -40,6 +40,20 @@ describe("ClawforceConfigSchema — alerts", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects non-https slack webhook URLs when enabled", () => {
+    const result = ClawforceConfigSchema.safeParse(
+      baseConfig({
+        notifications: {
+          slack: {
+            enabled: true,
+            webhook_url: "http://hooks.slack.com/services/T/B/X",
+          },
+        },
+      }),
+    );
+    expect(result.success).toBe(false);
+  });
+
   it("rejects enabled email notifications without recipients", () => {
     const result = ClawforceConfigSchema.safeParse(
       baseConfig({
@@ -51,6 +65,25 @@ describe("ClawforceConfigSchema — alerts", () => {
             password: "secret",
             from: "alerts@example.com",
             to: [],
+          },
+        },
+      }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects email notifier ports outside TLS-safe set", () => {
+    const result = ClawforceConfigSchema.safeParse(
+      baseConfig({
+        notifications: {
+          email: {
+            enabled: true,
+            smtp_host: "smtp.example.com",
+            smtp_port: 2525,
+            username: "alerts@example.com",
+            password: "secret",
+            from: "alerts@example.com",
+            to: ["ops@example.com"],
           },
         },
       }),
