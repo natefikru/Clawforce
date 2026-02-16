@@ -26,6 +26,8 @@ describe("Deploy security audit integration", () => {
     vi.clearAllMocks();
     process.env.ANTHROPIC_API_KEY = "sk-ant-integration-test";
     delete process.env.CLAWFORCE_SKIP_SECURITY_AUDIT;
+    delete process.env.CI;
+    delete process.env.NODE_ENV;
     if (existsSync(deployDir)) {
       rmSync(deployDir, { recursive: true });
     }
@@ -34,6 +36,8 @@ describe("Deploy security audit integration", () => {
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAWFORCE_SKIP_SECURITY_AUDIT;
+    delete process.env.CI;
+    delete process.env.NODE_ENV;
     if (existsSync(deployDir)) {
       rmSync(deployDir, { recursive: true });
     }
@@ -75,4 +79,22 @@ describe("Deploy security audit integration", () => {
       }),
     );
   });
+
+  it.each(["1", "yes", "TRUE"])(
+    "rejects bypass in CI when CI=%s",
+    async (ciValue) => {
+      process.env.CLAWFORCE_SKIP_SECURITY_AUDIT = "1";
+      process.env.CI = ciValue;
+      vi.mocked(runSecurityAudit).mockResolvedValue({
+        skipped: false,
+        hasCriticalFindings: false,
+      });
+
+      await expect(
+        deployCommand(join(fixturesDir, "smoke-config-no-ollama.yaml")),
+      ).rejects.toThrow("Security audit bypass is not allowed in CI or production");
+
+      expect(runSecurityAudit).not.toHaveBeenCalled();
+    },
+  );
 });
