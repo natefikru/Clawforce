@@ -424,7 +424,7 @@ export function activate(api: RouterPluginApi): void {
         ESTIMATED_OUTPUT_TOKENS,
       );
       const budgetCheck = budgetTracker
-        ? budgetTracker.checkBudget(estimatedCost)
+        ? budgetTracker.checkBudget(estimatedCost, ctx.agentId)
         : { withinBudget: true, remainingBudget: Infinity, dailySpent: 0 };
 
       if (!budgetCheck.withinBudget) {
@@ -542,7 +542,7 @@ export function activate(api: RouterPluginApi): void {
           ESTIMATED_INPUT_TOKENS,
           ESTIMATED_OUTPUT_TOKENS,
         );
-        budgetTracker.recordSpend(actualEstimate);
+        budgetTracker.recordSpend(actualEstimate, ctx.agentId);
       }
 
       api.logger.info(

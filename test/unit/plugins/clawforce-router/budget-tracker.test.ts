@@ -267,6 +267,40 @@ describe("BudgetTracker", () => {
       expect(json.spent).toBe(5.0);
     });
 
+    it("should isolate budget state by agent ID in SQLite", () => {
+      const tracker = makeTracker({ db });
+      tracker.recordSpend(1.0, "agent-a");
+      tracker.recordSpend(2.5, "agent-b");
+      tracker.recordSpend(0.5, "agent-a");
+
+      const rowA = db.prepare(
+        "SELECT spent, request_count FROM budget_state WHERE agent_id = 'agent-a'",
+      ).get() as { spent: number; request_count: number } | undefined;
+      const rowB = db.prepare(
+        "SELECT spent, request_count FROM budget_state WHERE agent_id = 'agent-b'",
+      ).get() as { spent: number; request_count: number } | undefined;
+
+      expect(rowA).toBeDefined();
+      expect(rowA!.spent).toBe(1.5);
+      expect(rowA!.request_count).toBe(2);
+
+      expect(rowB).toBeDefined();
+      expect(rowB!.spent).toBe(2.5);
+      expect(rowB!.request_count).toBe(1);
+    });
+
+    it("should evaluate budget independently per agent", () => {
+      const tracker = makeTracker({ db, dailyLimit: 2 });
+      tracker.recordSpend(1.75, "agent-a");
+      tracker.recordSpend(0.25, "agent-b");
+
+      const checkA = tracker.checkBudget(0.5, "agent-a");
+      const checkB = tracker.checkBudget(0.5, "agent-b");
+
+      expect(checkA.withinBudget).toBe(false);
+      expect(checkB.withinBudget).toBe(true);
+    });
+
     it("should reset state in both SQLite and JSON", () => {
       const tracker = makeTracker({ db });
       tracker.recordSpend(3.0);
