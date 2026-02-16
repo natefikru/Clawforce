@@ -50,10 +50,30 @@ function bundlerOptionsFor(
 }
 
 function selectedPluginIdsFromConfig(
-  _config: ClawforceConfig,
+  config: ClawforceConfig,
   discoveredPlugins: readonly DiscoveredPlugin[],
 ): string[] {
-  return discoveredPlugins.map((plugin) => plugin.id);
+  const configuredEnabled = config.plugins?.enabled;
+  if (configuredEnabled && configuredEnabled.length > 0) {
+    const enabledSet = new Set(configuredEnabled);
+    return discoveredPlugins
+      .map((plugin) => plugin.id)
+      .filter((pluginId) => enabledSet.has(pluginId));
+  }
+
+  return discoveredPlugins
+    .map((plugin) => plugin.id)
+    .filter((pluginId) => isEnabledByCoreToggle(config, pluginId));
+}
+
+function isEnabledByCoreToggle(config: ClawforceConfig, pluginId: string): boolean {
+  if (pluginId === "clawforce-router" && config.router?.enabled === false) {
+    return false;
+  }
+  if (pluginId === "clawforce-compliance" && config.compliance?.enabled === false) {
+    return false;
+  }
+  return true;
 }
 
 async function formatBuildFailure(error: BuildFailure): Promise<string> {

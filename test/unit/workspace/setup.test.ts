@@ -145,13 +145,13 @@ describe("setupWorkspace", () => {
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 
-  it("should still copy router plugin when explicitly disabled", () => {
+  it("should not copy router plugin when explicitly disabled", () => {
     setupWorkspace(
       makeConfig({ router: { enabled: false } }),
       testDir,
     );
     const pluginDir = join(testDir, "config/extensions/clawforce-router");
-    expect(existsSync(pluginDir)).toBe(true);
+    expect(existsSync(pluginDir)).toBe(false);
   });
 
   it("should copy discovered plugins when plugin config is not present", () => {

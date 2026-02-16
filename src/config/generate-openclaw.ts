@@ -165,6 +165,9 @@ export function generateOpenClawConfig(
     enabled: true,
     entries: buildPluginEntries(config),
   };
+  if (result.plugins.entries && Object.keys(result.plugins.entries).length === 0) {
+    result.plugins.enabled = false;
+  }
 
   // Enable command-logger hook for audit trail
   const hooksToken = randomBytes(32).toString("hex");
@@ -196,15 +199,32 @@ function buildPluginEntries(
   config: ClawforceConfig,
 ): Record<string, { enabled: boolean; config?: Record<string, unknown> }> {
   const discovered = discoverPlugins();
+  const configuredEnabled = config.plugins?.enabled;
+  const enabledSet = configuredEnabled ? new Set(configuredEnabled) : undefined;
   const entries: Record<string, { enabled: boolean; config?: Record<string, unknown> }> = {};
 
   for (const plugin of discovered) {
+    if (enabledSet && enabledSet.size > 0 && !enabledSet.has(plugin.id)) {
+      continue;
+    }
+    if (!enabledSet || enabledSet.size === 0) {
+      if (plugin.id === "clawforce-router" && config.router?.enabled === false) {
+        continue;
+      }
+      if (plugin.id === "clawforce-compliance" && config.compliance?.enabled === false) {
+        continue;
+      }
+    }
+
+    const pluginOverrides = config.plugins?.config?.[plugin.id];
+
     if (plugin.id === "clawforce-router") {
       entries[plugin.id] = {
         enabled: true,
         config: {
           ...buildRouterPluginConfig(config),
           pluginPermissions: plugin.manifest.permissions,
+          ...(pluginOverrides ?? {}),
         },
       };
       continue;
@@ -214,6 +234,7 @@ function buildPluginEntries(
       enabled: true,
       config: {
         pluginPermissions: plugin.manifest.permissions,
+        ...(pluginOverrides ?? {}),
       },
     };
   }
