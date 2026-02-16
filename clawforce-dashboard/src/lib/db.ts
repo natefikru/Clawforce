@@ -1,0 +1,16 @@
+import { DatabaseSync } from "node:sqlite";
+
+const DATA_DIR = process.env.DATA_DIR ?? "/data";
+const DB_PATH = `${DATA_DIR}/clawforce.db`;
+
+let cachedDb: DatabaseSync | null = null;
+
+export function getReadDb(): DatabaseSync | null {
+  if (cachedDb) return cachedDb;
+  try {
+    cachedDb = new DatabaseSync(DB_PATH, { readOnly: true });
+    return cachedDb;
+  } catch {
+    return null;
+  }
+}
