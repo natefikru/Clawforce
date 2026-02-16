@@ -74,6 +74,38 @@ describe("userAddCommand", () => {
     expect(user.role).toBe("viewer");
   });
 
+  it("rejects password shorter than 8 characters", async () => {
+    await userAddCommand("admin", {
+      role: "admin",
+      password: "short",
+      dataDir: tmpDir,
+    });
+
+    const db = new DatabaseSync(join(tmpDir, "clawforce.db"), { readOnly: true });
+    const user = db
+      .prepare("SELECT * FROM dashboard_users WHERE username = ?")
+      .get("admin");
+    db.close();
+
+    expect(user).toBeUndefined();
+  });
+
+  it("rejects invalid role", async () => {
+    await userAddCommand("admin", {
+      role: "superadmin",
+      password: "test12345",
+      dataDir: tmpDir,
+    });
+
+    const db = new DatabaseSync(join(tmpDir, "clawforce.db"), { readOnly: true });
+    const user = db
+      .prepare("SELECT * FROM dashboard_users WHERE username = ?")
+      .get("admin");
+    db.close();
+
+    expect(user).toBeUndefined();
+  });
+
   it("rejects duplicate username", async () => {
     await userAddCommand("admin", {
       role: "admin",

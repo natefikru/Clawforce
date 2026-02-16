@@ -7,10 +7,21 @@ async function loadBcrypt(): Promise<typeof import("bcryptjs")> {
   return import("bcryptjs");
 }
 
+const VALID_ROLES = ["admin", "viewer"] as const;
+
 export async function userAddCommand(
   username: string,
   options: { role: string; password: string; dataDir: string },
 ): Promise<void> {
+  if (options.password.length < 8) {
+    logger.error("Password must be at least 8 characters.");
+    return;
+  }
+  if (!VALID_ROLES.includes(options.role as (typeof VALID_ROLES)[number])) {
+    logger.error(`Role must be one of: ${VALID_ROLES.join(", ")}.`);
+    return;
+  }
+
   const { hash } = await loadBcrypt();
   const dbPath = resolve(options.dataDir, "clawforce.db");
   const db = getDatabase(dbPath);

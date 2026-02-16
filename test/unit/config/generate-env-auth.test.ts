@@ -37,7 +37,7 @@ describe("generateEnv — dashboard auth", () => {
     expect(match![1]).toHaveLength(64);
   });
 
-  it("includes DASHBOARD_ADMIN_USERNAME and PASSWORD", () => {
+  it("does not include plaintext credentials in env output", () => {
     const env = generateEnv(
       makeConfig({
         dashboard: {
@@ -47,8 +47,9 @@ describe("generateEnv — dashboard auth", () => {
         },
       }),
     );
-    expect(env).toContain("DASHBOARD_ADMIN_USERNAME=myadmin");
-    expect(env).toContain("DASHBOARD_ADMIN_PASSWORD=secretpass");
+    expect(env).not.toContain("DASHBOARD_ADMIN_USERNAME");
+    expect(env).not.toContain("DASHBOARD_ADMIN_PASSWORD");
+    expect(env).not.toContain("secretpass");
   });
 
   it("omits auth vars when dashboard auth not configured", () => {

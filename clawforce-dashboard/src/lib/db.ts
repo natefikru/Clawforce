@@ -10,7 +10,8 @@ export function getReadDb(): DatabaseSync | null {
   try {
     cachedDb = new DatabaseSync(DB_PATH, { readOnly: true });
     return cachedDb;
-  } catch {
+  } catch (err) {
+    console.error("[db] Failed to open database:", err);
     return null;
   }
 }

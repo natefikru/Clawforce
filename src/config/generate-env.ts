@@ -21,8 +21,6 @@ export function generateEnv(config: ClawforceConfig): string {
     lines.push("");
     lines.push("# Dashboard authentication");
     lines.push(`AUTH_SECRET=${authSecret}`);
-    lines.push(`DASHBOARD_ADMIN_USERNAME=${config.dashboard.auth.username}`);
-    lines.push(`DASHBOARD_ADMIN_PASSWORD=${config.dashboard.auth.password}`);
   }
 
   return lines.join("\n") + "\n";
