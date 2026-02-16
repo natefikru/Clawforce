@@ -1,14 +1,14 @@
 # Clawforce: Forward Roadmap
 
 **Date**: 2026-02-15
-**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, Phase 2A.1, and Phase 2A.2 complete)
+**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, Phase 2A.1, Phase 2A.2, and Phase 2A.3 complete)
 **Built On**: OpenClaw (open-source personal AI assistant)
 
 ---
 
 ## Current State (What's Shipped)
 
-All work shipped on `main` branch. 744 tests passing (666 root + 78 dashboard) with 80% coverage enforced.
+All work shipped on `main` branch. 789 tests passing (666 root + 123 dashboard) with 80% coverage enforced.
 
 | Component | Status | Tests | Notes |
 |-----------|--------|-------|-------|
@@ -21,13 +21,14 @@ All work shipped on `main` branch. 744 tests passing (666 root + 78 dashboard) w
 | Budget Tracking (daily limits, SQLite-backed) | Complete | ~23 | Auto-fallback to local models, SQLite upsert |
 | SQLite Storage Layer | **Complete** | 87 | Dual-write, StorageWriter/Reader, migrations, migrate CLI |
 | Dashboard Auth (Auth.js v5, RBAC) | **Complete** | 112 | Multi-user, JWT sessions, login page, middleware, user CLI |
+| Real-Time Event Streaming (SSE) | **Complete** | 45 | Multiplexed SSE, cursor-based reconnection, 3 poll sources |
 | Dashboard (Status, Activity, Cost, Tasks) | Complete | 45 | Next.js, SQLite-first queries, 4 panels, 3 cost tabs |
 | Docker Compose Generation (OpenClaw + Ollama) | Complete | ~30 | Includes SGLang/vLLM runtime options |
 | 3 Role Templates | Complete | ~10 | Inbox Analyst, Research Agent, Process Automator |
 | Config System (clawforce.yaml -> openclaw.json) | Complete | ~30 | Zod validation, capability profiles |
 | OpenClaw Plugin Integration | Complete | — | before_agent_start hook with modelOverride/providerOverride |
 
-**What's NOT built**: Multi-agent orchestration, real-time streaming, alert system, billing, onboarding wizard, health monitoring/failover, cross-tool coordination layer, expanded template library.
+**What's NOT built**: Multi-agent orchestration, alert system, billing, onboarding wizard, health monitoring/failover, cross-tool coordination layer, expanded template library.
 
 ---
 
@@ -95,13 +96,18 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - **Merged**: PR #4
 - **Why**: Anyone reaching port 3000 could previously read compliance data. Blocker for any external deployment.
 
-#### 2A.3 Real-Time Event Streaming
-- Replace polling with Server-Sent Events (SSE) for activity feed
-- Live cost updates as requests flow through the router
-- Agent status change notifications pushed to dashboard
-- Reconnection handling with missed-event replay
-- SSE events sourced from SQLite (new events since last cursor)
-- **Why**: Polling is too slow for live demos and operational monitoring.
+#### 2A.3 Real-Time Event Streaming — COMPLETE ✅
+- Single multiplexed SSE stream replacing polling for activity feed, cost, and agent status
+- Three poll sources: activity (1.5s, SQLite cursor-based), cost (5s, budget_state diffing), status (10s, Docker container state)
+- `Last-Event-ID` reconnection with missed-event replay (capped at 500, sync event on truncation)
+- JSONL fallback path preserved with named `event: activity` events for client compatibility
+- Shared `lib/db.ts` module consolidating duplicate `getReadDb()` implementations
+- `container-status.ts` extracted as shared utility with exponential backoff after failures
+- `lib/sse.ts` provides spec-compliant SSE formatting and `createPollingStream()` multiplexer
+- ActivityFeed component updated for named event handlers (`addEventListener`) with cost/status display
+- 45 new tests (789 total: 666 root + 123 dashboard)
+- **Merged**: PR #5
+- **Why**: Polling was too slow for live demos and operational monitoring.
 
 #### 2A.4 Model Health Monitoring & Failover
 - Health check loop for local models (Ollama, SGLang, vLLM)
@@ -138,10 +144,10 @@ These are blockers that must be resolved before putting Clawforce in front of an
 ```
 
 **Phase 2A Exit Criteria**:
-- All operational data queryable via SQLite (compliance events, routing decisions, usage metrics, budget state, alerts)
-- JSONL files still written alongside SQLite (dual-write verified)
-- Dashboard requires authentication to access
-- Activity feed updates in real-time without polling
+- ~~All operational data queryable via SQLite (compliance events, routing decisions, usage metrics, budget state, alerts)~~ ✅
+- ~~JSONL files still written alongside SQLite (dual-write verified)~~ ✅
+- ~~Dashboard requires authentication to access~~ ✅
+- ~~Activity feed updates in real-time without polling~~ ✅
 - Local model failure does NOT cascade PII to cloud
 - Alerts fire for all critical conditions
 - Plugins are compiled before deployment
@@ -402,7 +408,7 @@ integrations:
 |---------|---------------|----------------|--------------|-------|
 | ~~SQLite Storage Layer~~ | ~~CRITICAL (foundation)~~ | ~~LOW~~ | ~~None~~ | ~~2A.1~~ ✅ |
 | ~~Dashboard Auth~~ | ~~HIGH (security blocker)~~ | ~~LOW~~ | ~~SQLite (2A.1)~~ | ~~2A.2~~ ✅ |
-| Real-Time Streaming | MEDIUM (demo quality) | LOW | SQLite (2A.1) | 2A.3 |
+| ~~Real-Time Streaming~~ | ~~MEDIUM (demo quality)~~ | ~~LOW~~ | ~~SQLite (2A.1)~~ | ~~2A.3~~ ✅ |
 | Model Health/Failover | HIGH (security invariant) | MEDIUM | SQLite (2A.1) | 2A.4 |
 | Alert System | HIGH (operational need) | LOW | SQLite + Streaming + Health (2A.1-4) | 2A.5 |
 | Multi-Agent Config | CRITICAL (core differentiator) | MEDIUM | OpenClaw bindings | 2B |
