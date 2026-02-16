@@ -937,8 +937,7 @@ function registerIdleCleanup(monitor: IdleMonitor): void {
   currentIdleMonitor = monitor;
 }
 
-/** Reset the directory-ensured flag. Exported for testing only. */
-export function resetRoutingLogDirCache(): void {
+function resetRoutingLogDirCache(): void {
   routingLogDirEnsured = false;
 }
 
