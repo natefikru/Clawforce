@@ -102,10 +102,18 @@ describe("parseConfig", () => {
   it("should parse runtime config with SGLang engine", () => {
     const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
     expect(config.runtime?.engine).toBe("sglang");
+    expect(config.runtime?.location).toBe("container");
     expect(config.runtime?.model).toBe("qwen3-32b");
     expect(config.runtime?.gpu).toBe("nvidia");
     expect(config.runtime?.quantization).toBe("fp16");
     expect(config.runtime?.port).toBe(30000);
+  });
+
+  it("should parse runtime host mode for ollama", () => {
+    const config = parseConfig(join(fixturesDir, "runtime-host-ollama.yaml"));
+    expect(config.runtime?.engine).toBe("ollama");
+    expect(config.runtime?.location).toBe("host");
+    expect(config.runtime?.host_url).toBe("http://host.docker.internal:11434");
   });
 
   it("should parse compliance_frameworks array", () => {

@@ -14,7 +14,7 @@ Clawforce is an orchestration layer that sits on top of [OpenClaw](https://githu
 4. **Cost intelligence** — Daily budget caps with automatic fallback to local models
 5. **Monitoring dashboard** — Next.js dashboard with real-time SSE streaming, alerting, and cost tracking
 
-Clawforce operates as an **OpenClaw plugin**. It hooks into OpenClaw's lifecycle events (`before_agent_start`, `message_sending`, `tool_result_persist`, `agent_end`) to intercept and control agent behavior without forking OpenClaw.
+Clawforce operates as an **OpenClaw plugin**. It hooks into OpenClaw's lifecycle events (`before_agent_start`, `message_sending`, `tool_result_persist`, `agent_end`) to intercept and control agent behavior in your OpenClaw fork.
 
 ```
 Your Channels (Discord, Slack, email, etc.)
@@ -345,8 +345,10 @@ ollama:
   model: "qwen3.3:8b"
   gpu: nvidia                          # nvidia | amd | none
 
-runtime:                               # Alternative to ollama — use SGLang or vLLM directly
-  engine: "sglang"                     # sglang | vllm
+runtime:                               # Runtime configuration (managed sidecar or host endpoint)
+  engine: "sglang"                     # ollama | sglang | vllm
+  location: "container"                # container (managed sidecar) | host (external runtime)
+  host_url: "http://host.docker.internal:30000"  # Required/recommended for location=host
   model: "qwen3-32b"
   gpu: "nvidia"
   quantization: "fp16"
@@ -567,23 +569,62 @@ dashboard:
     password: "${DASHBOARD_PASSWORD}"
 ```
 
+### Mac Mini-First Hybrid (Recommended for local/private setups)
+
+Run OpenClaw + Clawforce in Docker, but keep Ollama native on macOS for best Apple Silicon performance.
+
+```yaml
+name: my-agent
+role: inbox-analyst
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
+  credential_mode: env
+  api_key: "${ANTHROPIC_API_KEY}"
+runtime:
+  engine: "ollama"
+  location: "host"
+  host_url: "http://host.docker.internal:11434"
+  model: "llama3.3:8b"
+router:
+  enabled: true
+  rules:
+    - condition: "pii_detected"
+      model: "ollama/llama3.3:8b"
+    - condition: "high_complexity"
+      model: "anthropic/claude-sonnet-4-5"
+  budget:
+    daily_limit: 10.00
+    fallback_model: "ollama/llama3.3:8b"
+compliance:
+  enabled: true
+dashboard:
+  enabled: true
+  auth:
+    enabled: true
+    username: admin
+    password: "${DASHBOARD_PASSWORD}"
+```
+
+Notes:
+- Start your host runtime first (for example, Ollama on macOS).
+- `runtime.location: host` means Clawforce will not create a runtime sidecar container.
+- The gateway still enforces the same PII routing invariants.
+
 ### Split Architecture (Production)
 
 Gateway on a cheap VPS, GPU inference on a separate server.
 
-Current status: this is possible, but not first-class in `clawforce.yaml` yet. Generated compose files do not expose dedicated config fields for remote local-runtime endpoints.
+Use host runtime mode and point the runtime endpoint at your remote inference server or load balancer:
 
-Practical approach today:
-1. Deploy with your normal config.
-2. Edit the generated `clawforce-<name>/docker-compose.yml`.
-3. Set `openclaw-gateway` environment entries (`OLLAMA_HOST`, `SGLANG_HOST`, or `VLLM_HOST`) to your remote inference endpoint.
-4. Ensure your routing rules still point to local model refs (`ollama/...`, `sglang/...`, `vllm/...`) so PII invariants remain local-only.
-
-```bash
-# In generated clawforce-<name>/docker-compose.yml:
-# OLLAMA_HOST=http://gpu-server.internal:11434
-clawforce deploy -c clawforce.yaml
+```yaml
+runtime:
+  engine: "ollama"                     # or sglang / vllm
+  location: "host"
+  host_url: "http://gpu-server.internal:11434"
 ```
+
+Ensure your routing rules still point to local model refs (`ollama/...`, `sglang/...`, `vllm/...`) so PII invariants remain local-only.
 
 ---
 
@@ -728,7 +769,7 @@ pnpm knip --include dependencies,unlisted,unresolved
 
 | Decision | Rationale |
 |----------|-----------|
-| **OpenClaw plugin, not fork** | Hooks (`before_agent_start`, `message_sending`, `tool_result_persist`, `agent_end`) provide all needed interception points. Staying as a plugin means OpenClaw upgrades don't require rebasing. |
+| **OpenClaw plugin in a forked deployment** | Hooks (`before_agent_start`, `message_sending`, `tool_result_persist`, `agent_end`) provide all needed interception points. Clawforce remains plugin-oriented even when running on a maintained OpenClaw fork. |
 | **SQLite + JSONL dual-write** | JSONL is the durable write-ahead log for SIEM export. SQLite (Node.js 22 built-in) provides fast indexed queries. Same pattern OpenClaw uses internally. |
 | **Regex PII, not ML** | Deterministic, fast, auditable. No model loading overhead. Adversarial defense (homoglyph folding, NFKD normalization) covers most evasion techniques. ML-based detection is on the roadmap (Phase 4). |
 | **Docker Compose, not K8s** | Simpler debugging, faster iteration, sufficient for single-tenant through Phase 3. Kubernetes deployment planned for Phase 4. |

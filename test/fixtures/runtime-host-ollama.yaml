@@ -1,0 +1,18 @@
+name: "host-ollama"
+role: "inbox-analyst"
+
+openclaw:
+  channels:
+    discord:
+      enabled: true
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
+  api_key: "${ANTHROPIC_API_KEY}"
+
+runtime:
+  engine: "ollama"
+  location: "host"
+  host_url: "http://host.docker.internal:11434"
+  model: "llama3.3:8b"

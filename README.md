@@ -1,5 +1,9 @@
 # Clawforce
 
+<p align="center">
+  <img src="docs/assets/clawforce-logo.png" alt="Clawforce logo" width="280" />
+</p>
+
 **Enterprise AI agent management for teams that can't afford to get security wrong.**
 
 Clawforce deploys, routes, and monitors autonomous AI agents on your infrastructure — with built-in PII protection, compliance logging, and intelligent cost optimization. Your data never leaves your network. Sensitive requests route to local models automatically.

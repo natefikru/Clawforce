@@ -12,6 +12,7 @@ interface ComposeService {
   command?: string[];
   depends_on?: Record<string, { condition: string }>;
   devices?: string[];
+  extra_hosts?: string[];
   deploy?: {
     resources: {
       reservations: {
@@ -85,8 +86,30 @@ export function generateCompose(config: ClawforceConfig): string {
     const rt = config.runtime;
     const engine = rt.engine ?? "sglang";
     const serviceName = engine === "ollama" ? "ollama" : engine;
+    const runtimeLocation = rt.location ?? "container";
+    const hostRuntimeUrl = resolveHostRuntimeUrl(rt);
 
-    if (engine === "sglang") {
+    if (runtimeLocation === "host") {
+      if (hostRuntimeUrl.includes("host.docker.internal")) {
+        compose.services["openclaw-gateway"].extra_hosts = [
+          ...(compose.services["openclaw-gateway"].extra_hosts ?? []),
+          "host.docker.internal:host-gateway",
+        ];
+      }
+      if (engine === "sglang") {
+        compose.services["openclaw-gateway"].environment!.push(
+          `SGLANG_HOST=${hostRuntimeUrl}`,
+        );
+      } else if (engine === "vllm") {
+        compose.services["openclaw-gateway"].environment!.push(
+          `VLLM_HOST=${hostRuntimeUrl}`,
+        );
+      } else {
+        compose.services["openclaw-gateway"].environment!.push(
+          `OLLAMA_HOST=${hostRuntimeUrl}`,
+        );
+      }
+    } else if (engine === "sglang") {
       const port = rt.port ?? 30000;
       compose.services["openclaw-gateway"].depends_on = {
         [serviceName]: { condition: "service_started" },
@@ -219,4 +242,20 @@ function addOllamaService(
   applyGpuConfig(svc, gpu);
   compose.services.ollama = svc;
   compose.volumes = { ...compose.volumes, [volumeName]: {} };
+}
+
+function resolveHostRuntimeUrl(
+  runtime: NonNullable<ClawforceConfig["runtime"]>,
+): string {
+  if (runtime.host_url) {
+    return runtime.host_url;
+  }
+
+  if (runtime.engine === "ollama") {
+    return "http://host.docker.internal:11434";
+  }
+  if (runtime.engine === "vllm") {
+    return `http://host.docker.internal:${runtime.port ?? 8000}`;
+  }
+  return `http://host.docker.internal:${runtime.port ?? 30000}`;
 }

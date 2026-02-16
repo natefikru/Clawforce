@@ -130,4 +130,35 @@ describe("generateEnv", () => {
 
     expect(env).toContain("CLAWFORCE_ALERTS_EMAIL_PASSWORD=super-secret");
   });
+
+  it("should export OLLAMA_HOST for host runtime mode", () => {
+    const env = generateEnv(
+      makeConfig({
+        runtime: {
+          engine: "ollama",
+          location: "host",
+          host_url: "http://host.docker.internal:11434",
+          model: "llama3.3:8b",
+          port: 11434,
+        },
+      }),
+    );
+
+    expect(env).toContain("OLLAMA_HOST=http://host.docker.internal:11434");
+  });
+
+  it("should default host runtime endpoint when host_url is omitted", () => {
+    const env = generateEnv(
+      makeConfig({
+        runtime: {
+          engine: "sglang",
+          location: "host",
+          model: "qwen3-32b",
+          port: 30000,
+        },
+      }),
+    );
+
+    expect(env).toContain("SGLANG_HOST=http://host.docker.internal:30000");
+  });
 });

@@ -162,4 +162,38 @@ describe("Deploy Lifecycle Integration", () => {
       }
     }
   });
+
+  it("should generate host runtime compose and env for mac mini profile", () => {
+    const hostDir = resolve("./test-deployment-host-runtime");
+    try {
+      const config = parseConfig(join(fixturesDir, "runtime-host-ollama.yaml"));
+      setupWorkspace(config, hostDir);
+
+      const { writeFileSync, mkdirSync } = require("node:fs");
+      mkdirSync(join(hostDir, "config"), { recursive: true });
+      writeFileSync(
+        join(hostDir, "config", "openclaw.json"),
+        JSON.stringify(generateOpenClawConfig(config), null, 2),
+        "utf8",
+      );
+      writeFileSync(join(hostDir, "docker-compose.yml"), generateCompose(config), "utf8");
+      writeFileSync(join(hostDir, ".env"), generateEnv(config), "utf8");
+
+      const compose = parseYaml(readFileSync(join(hostDir, "docker-compose.yml"), "utf8"));
+      expect(compose.services.ollama).toBeUndefined();
+      expect(compose.services["openclaw-gateway"].environment).toContain(
+        "OLLAMA_HOST=http://host.docker.internal:11434",
+      );
+      expect(compose.services["openclaw-gateway"].extra_hosts).toContain(
+        "host.docker.internal:host-gateway",
+      );
+
+      const envContent = readFileSync(join(hostDir, ".env"), "utf8");
+      expect(envContent).toContain("OLLAMA_HOST=http://host.docker.internal:11434");
+    } finally {
+      if (existsSync(hostDir)) {
+        rmSync(hostDir, { recursive: true, force: true });
+      }
+    }
+  });
 });

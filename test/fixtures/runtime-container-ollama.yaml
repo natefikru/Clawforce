@@ -1,0 +1,17 @@
+name: "runtime-ollama"
+role: "inbox-analyst"
+
+openclaw:
+  channels:
+    discord:
+      enabled: true
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
+  api_key: "${ANTHROPIC_API_KEY}"
+
+runtime:
+  engine: "ollama"
+  location: "container"
+  model: "llama3.3:8b"

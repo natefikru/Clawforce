@@ -146,6 +146,48 @@ describe("deployCommand", () => {
     }
   });
 
+  it("should pull ollama model when runtime engine is ollama in container mode", async () => {
+    await deployCommand(join(fixturesDir, "runtime-container-ollama.yaml"));
+    expect(exec).toHaveBeenCalledWith(
+      "docker",
+      ["compose", "up", "-d", "ollama"],
+      expect.objectContaining({ cwd: join(process.cwd(), "clawforce-runtime-ollama") }),
+    );
+    expect(exec).toHaveBeenCalledWith(
+      "docker",
+      [
+        "exec",
+        "clawforce-runtime-ollama-ollama",
+        "ollama",
+        "pull",
+        "llama3.3:8b",
+      ],
+      expect.objectContaining({ cwd: join(process.cwd(), "clawforce-runtime-ollama") }),
+    );
+    const runtimeDeployDir = join(process.cwd(), "clawforce-runtime-ollama");
+    if (existsSync(runtimeDeployDir)) {
+      rmSync(runtimeDeployDir, { recursive: true });
+    }
+  });
+
+  it("should not pull ollama model when runtime engine is ollama in host mode", async () => {
+    await deployCommand(join(fixturesDir, "runtime-host-ollama.yaml"));
+    expect(exec).not.toHaveBeenCalledWith(
+      "docker",
+      ["compose", "up", "-d", "ollama"],
+      expect.anything(),
+    );
+    expect(exec).not.toHaveBeenCalledWith(
+      "docker",
+      expect.arrayContaining(["ollama", "pull"]),
+      expect.anything(),
+    );
+    const hostDeployDir = join(process.cwd(), "clawforce-host-ollama");
+    if (existsSync(hostDeployDir)) {
+      rmSync(hostDeployDir, { recursive: true });
+    }
+  });
+
   it("should run openclaw security audit inside gateway container", async () => {
     await deployCommand(join(fixturesDir, "valid-config.yaml"));
     expect(exec).toHaveBeenCalledWith(
