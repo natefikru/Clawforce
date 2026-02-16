@@ -146,6 +146,8 @@ export const ClawforceConfigSchema = z.object({
     .object({
       blocklist: z.array(z.string()).optional(),
       pii_detection: z.boolean().optional(),
+      pii_confidence_threshold: z.number().min(0).max(1).optional(),
+      pii_pattern_thresholds: z.record(z.string(), z.number().min(0).max(1)).optional(),
     })
     .optional(),
 
