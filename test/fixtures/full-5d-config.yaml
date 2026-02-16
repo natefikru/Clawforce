@@ -29,6 +29,16 @@ router:
   sensitivity_keywords:
     - "password"
     - "secret"
+  health_check:
+    enabled: true
+    interval_seconds: 10
+    timeout_seconds: 3
+    stale_after_seconds: 30
+    failover_policy: "failover-safe"
+    failure_threshold: 3
+    recovery_threshold: 2
+    retry_attempts: 2
+    retry_delay_ms: 500
   budget:
     daily_limit: 10.00
     fallback_model: "ollama/llama3.3:8b"
