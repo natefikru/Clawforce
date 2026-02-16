@@ -1,9 +1,14 @@
 import { isLocalModel } from "../../shared/pricing.js";
+import {
+  getRuntimeEngineAdapter,
+  getRuntimeEngineAdapterOrNull,
+  getRuntimeEngineIds,
+} from "../../config/engines/registry.js";
 
 export type FailoverPolicy = "block" | "queue" | "failover-safe";
 export type HealthStatus = "healthy" | "degraded" | "down" | "unknown";
 export type CircuitState = "closed" | "open" | "half_open";
-export type LocalProvider = "ollama" | "sglang" | "vllm";
+export type LocalProvider = string;
 
 export interface HealthCheckConfig {
   enabled: boolean;
@@ -47,7 +52,7 @@ const DEFAULT_STATE: Omit<ProviderHealthState, "provider"> = {
   consecutiveSuccesses: 0,
 };
 
-const PROVIDERS: LocalProvider[] = ["ollama", "sglang", "vllm"];
+const PROVIDERS: LocalProvider[] = getRuntimeEngineIds();
 
 export class ModelHealthMonitor {
   private readonly config: HealthCheckConfig;
@@ -191,10 +196,7 @@ export function parseLocalProvider(modelRef: string): LocalProvider | null {
   const slashIdx = modelRef.indexOf("/");
   if (slashIdx <= 0) return null;
   const provider = modelRef.slice(0, slashIdx);
-  if (provider === "ollama" || provider === "sglang" || provider === "vllm") {
-    return provider;
-  }
-  return null;
+  return getRuntimeEngineAdapterOrNull(provider)?.engine ?? null;
 }
 
 function applyStaleness(
@@ -240,21 +242,13 @@ async function probeProviderOnce(
 ): Promise<boolean> {
   const timeout = timeoutSeconds * 1000;
   const host = providerHost(provider);
-
-  if (provider === "ollama") {
-    return probe(`${host}/api/tags`, timeout);
+  const adapter = getRuntimeEngineAdapter(provider);
+  for (const path of adapter.healthProbePaths) {
+    if (await probe(`${host}${path}`, timeout)) {
+      return true;
+    }
   }
-
-  if (provider === "sglang") {
-    const healthOk = await probe(`${host}/health`, timeout);
-    if (healthOk) return true;
-    return probe(`${host}/v1/models`, timeout);
-  }
-
-  // vllm
-  const healthOk = await probe(`${host}/health`, timeout);
-  if (healthOk) return true;
-  return probe(`${host}/v1/models`, timeout);
+  return false;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -268,13 +262,10 @@ async function probe(url: string, timeoutMs: number): Promise<boolean> {
 }
 
 function providerHost(provider: LocalProvider): string {
-  if (provider === "ollama") {
-    return sanitizeHost(process.env.OLLAMA_HOST ?? "http://ollama:11434");
-  }
-  if (provider === "sglang") {
-    return sanitizeHost(process.env.SGLANG_HOST ?? "http://sglang:30000");
-  }
-  return sanitizeHost(process.env.VLLM_HOST ?? "http://vllm:8000");
+  const adapter = getRuntimeEngineAdapter(provider);
+  const envHost = process.env[adapter.hostEnvVarName];
+  const fallbackHost = `http://${provider}:${adapter.defaultPort}`;
+  return sanitizeHost(envHost ?? fallbackHost);
 }
 
 function sanitizeHost(host: string): string {

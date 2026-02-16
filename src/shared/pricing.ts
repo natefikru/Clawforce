@@ -1,3 +1,5 @@
+import { getRuntimeEngineIds } from "../config/engines/registry.js";
+
 /**
  * Shared model pricing constants and utilities.
  * Used by both the router (budget tracking) and dashboard (cost calculation).
@@ -41,12 +43,11 @@ export const FALLBACK_CLOUD_PRICING: ModelPricing = {
 };
 
 export function isLocalModel(model: string): boolean {
-  return (
-    model.startsWith("ollama/") ||
-    model.startsWith("local/") ||
-    model.startsWith("sglang/") ||
-    model.startsWith("vllm/")
-  );
+  const slashIdx = model.indexOf("/");
+  if (slashIdx <= 0) return false;
+  const provider = model.slice(0, slashIdx);
+  if (provider === "local") return true;
+  return getRuntimeEngineIds().includes(provider);
 }
 
 const warnedModels = new Set<string>();

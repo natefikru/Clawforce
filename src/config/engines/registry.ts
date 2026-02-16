@@ -53,6 +53,7 @@ export interface RuntimeEngineAdapter {
   serviceName: string;
   hostEnvVarName: string;
   defaultPort: number;
+  healthProbePaths: string[];
   resolveHostRuntimeUrl: (runtime: NonNullable<ClawforceConfig["runtime"]>) => string;
   buildContainerService: (input: RuntimeAdapterBuildInput) => RuntimeContainerService;
   preGatewayStart?: (input: RuntimePreGatewayStartInput) => Promise<void>;
@@ -77,6 +78,7 @@ const SGLANG_ADAPTER: RuntimeEngineAdapter = {
   serviceName: "sglang",
   hostEnvVarName: "SGLANG_HOST",
   defaultPort: 30000,
+  healthProbePaths: ["/health", "/v1/models"],
   resolveHostRuntimeUrl: (runtime) => {
     if (runtime.host_url) return runtime.host_url;
     return `http://host.docker.internal:${runtime.port ?? 30000}`;
@@ -114,6 +116,7 @@ const VLLM_ADAPTER: RuntimeEngineAdapter = {
   serviceName: "vllm",
   hostEnvVarName: "VLLM_HOST",
   defaultPort: 8000,
+  healthProbePaths: ["/health", "/v1/models"],
   resolveHostRuntimeUrl: (runtime) => {
     if (runtime.host_url) return runtime.host_url;
     return `http://host.docker.internal:${runtime.port ?? 8000}`;
@@ -142,6 +145,7 @@ const OLLAMA_ADAPTER: RuntimeEngineAdapter = {
   serviceName: "ollama",
   hostEnvVarName: "OLLAMA_HOST",
   defaultPort: 11434,
+  healthProbePaths: ["/api/tags"],
   resolveHostRuntimeUrl: (runtime) => {
     if (runtime.host_url) return runtime.host_url;
     return "http://host.docker.internal:11434";
@@ -205,5 +209,15 @@ export function getRuntimeEngineAdapter(engine: string): RuntimeEngineAdapter {
     );
   }
   return adapter;
+}
+
+export function getRuntimeEngineAdapterOrNull(
+  engine: string,
+): RuntimeEngineAdapter | undefined {
+  return ADAPTERS[engine];
+}
+
+export function getRuntimeEngineIds(): string[] {
+  return Object.keys(ADAPTERS);
 }
 
