@@ -66,7 +66,8 @@ role: inbox-analyst
 models:
   primary: "anthropic/claude-sonnet-4-5"
   credential_mode: env
-  api_key: "${ANTHROPIC_API_KEY}"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
 gateway:
   bind: loopback
 dashboard:
@@ -260,7 +261,8 @@ models:
   primary: "anthropic/claude-sonnet-4-5"
   local: "sglang/qwen3-32b"
   credential_mode: env           # env | auth_profile
-  api_key: "${ANTHROPIC_API_KEY}"  # used when credential_mode=env
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"   # used when credential_mode=env
 
 gateway:
   bind: loopback                 # loopback | lan
@@ -302,7 +304,7 @@ dashboard:
     password: "your-secure-password"  # Min 8 characters
 
 runtime:
-  engine: "ollama"               # ollama | sglang | vllm
+  engine: "ollama"               # Runtime engine id (e.g. ollama | sglang | vllm)
   location: "container"          # container | host
   model: "qwen3.3:8b"
   gpu: nvidia                    # nvidia | amd | none
