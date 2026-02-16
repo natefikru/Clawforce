@@ -17,7 +17,12 @@ export function generateEnv(config: ClawforceConfig): string {
   ];
 
   if (credentialMode === "env") {
-    lines.push(`ANTHROPIC_API_KEY=${config.models.api_key ?? ""}`);
+    const providerKeys = Object.entries(config.models.provider_keys ?? {}).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    );
+    for (const [provider, apiKey] of providerKeys) {
+      lines.push(`${toProviderApiKeyEnvName(provider)}=${apiKey}`);
+    }
     if (config.models.auth_profile) {
       lines.push(
         "# NOTE: models.auth_profile is configured but ignored because credential_mode=env",
@@ -26,9 +31,9 @@ export function generateEnv(config: ClawforceConfig): string {
   } else {
     lines.push("# Credential mode uses OpenClaw auth profile, not provider env vars");
     lines.push(`OPENCLAW_AUTH_PROFILE=${config.models.auth_profile ?? ""}`);
-    if (config.models.api_key) {
+    if (config.models.provider_keys && Object.keys(config.models.provider_keys).length > 0) {
       lines.push(
-        "# NOTE: models.api_key is configured but ignored because credential_mode=auth_profile",
+        "# NOTE: models.provider_keys is configured but ignored because credential_mode=auth_profile",
       );
     }
   }
@@ -66,4 +71,8 @@ function resolveHostRuntimeUrl(config: ClawforceConfig): string {
   if (runtime.engine === "ollama") return "http://host.docker.internal:11434";
   if (runtime.engine === "vllm") return `http://host.docker.internal:${runtime.port ?? 8000}`;
   return `http://host.docker.internal:${runtime.port ?? 30000}`;
+}
+
+function toProviderApiKeyEnvName(provider: string): string {
+  return `${provider.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY`;
 }
