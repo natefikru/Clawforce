@@ -37,6 +37,17 @@ interface RuntimeAdapterBuildInput {
   runtime: NonNullable<ClawforceConfig["runtime"]>;
 }
 
+export interface RuntimePreGatewayStartInput {
+  configName: string;
+  deployDir: string;
+  runtime: NonNullable<ClawforceConfig["runtime"]>;
+  exec: (command: string, args: string[], options?: { cwd?: string }) => Promise<string>;
+  logger: {
+    step: (message: string) => void;
+    success: (message: string) => void;
+  };
+}
+
 export interface RuntimeEngineAdapter {
   engine: string;
   serviceName: string;
@@ -44,6 +55,7 @@ export interface RuntimeEngineAdapter {
   defaultPort: number;
   resolveHostRuntimeUrl: (runtime: NonNullable<ClawforceConfig["runtime"]>) => string;
   buildContainerService: (input: RuntimeAdapterBuildInput) => RuntimeContainerService;
+  preGatewayStart?: (input: RuntimePreGatewayStartInput) => Promise<void>;
 }
 
 function applyGpuConfig(svc: ComposeRuntimeService, gpu?: string): void {
@@ -157,6 +169,25 @@ const OLLAMA_ADAPTER: RuntimeEngineAdapter = {
       service,
       volumes: { [volumeName]: {} },
     };
+  },
+  preGatewayStart: async ({ configName, deployDir, runtime, exec, logger }) => {
+    const model = runtime.model ?? "llama3.3:8b";
+    logger.step(`Starting Ollama and pulling model: ${model}...`);
+    await exec("docker", ["compose", "up", "-d", "ollama"], {
+      cwd: deployDir,
+    });
+    await exec(
+      "docker",
+      [
+        "exec",
+        `clawforce-${configName}-ollama`,
+        "ollama",
+        "pull",
+        model,
+      ],
+      { cwd: deployDir },
+    );
+    logger.success("Ollama model ready");
   },
 };
 

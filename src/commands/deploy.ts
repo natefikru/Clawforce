@@ -14,6 +14,7 @@ import { waitForHealthy } from "../docker/health.js";
 import { getDatabase, closeDatabase } from "../storage/database.js";
 import { logger } from "../utils/logger.js";
 import { runSecurityAudit } from "../openclaw/security-audit.js";
+import { getRuntimeEngineAdapter } from "../config/engines/registry.js";
 
 export async function deployCommand(configPath: string): Promise<void> {
   logger.header("Clawforce Deploy");
@@ -91,32 +92,27 @@ export async function deployCommand(configPath: string): Promise<void> {
     logger.success("Dashboard image built");
   }
 
-  // 8. Pull Ollama model if configured as a managed container runtime
-  const runtimeEngine = config.runtime?.engine;
-  const runtimeLocation = config.runtime?.location ?? "container";
-  const shouldPullOllamaModel =
-    runtimeEngine === "ollama" && runtimeLocation === "container";
-  const ollamaModelToPull = shouldPullOllamaModel
-    ? (config.runtime?.model ?? "llama3.3:8b")
-    : undefined;
-
-  if (shouldPullOllamaModel && ollamaModelToPull) {
-    logger.step(`Starting Ollama and pulling model: ${ollamaModelToPull}...`);
-    await exec("docker", ["compose", "up", "-d", "ollama"], {
-      cwd: deployDir,
-    });
-    await exec(
-      "docker",
-      [
-        "exec",
-        `clawforce-${config.name}-ollama`,
-        "ollama",
-        "pull",
-        ollamaModelToPull,
-      ],
-      { cwd: deployDir },
-    );
-    logger.success("Ollama model ready");
+  // 8. Run runtime pre-start hooks for managed container runtimes
+  if (config.runtime?.location !== "host") {
+    const runtimeEngine = config.runtime?.engine ?? "sglang";
+    const adapter = getRuntimeEngineAdapter(runtimeEngine);
+    if (adapter.preGatewayStart) {
+      await adapter.preGatewayStart({
+        configName: config.name,
+        deployDir,
+        runtime: config.runtime ?? {
+          engine: runtimeEngine,
+          location: "container",
+          model: "qwen3-32b",
+          port: adapter.defaultPort,
+        },
+        exec,
+        logger: {
+          step: logger.step,
+          success: logger.success,
+        },
+      });
+    }
   }
 
   // 9. Start gateway
