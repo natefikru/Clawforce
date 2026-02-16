@@ -510,5 +510,27 @@ describe("generateOpenClawConfig", () => {
         },
       });
     });
+
+    it("should not include connector-specific alert notification keys", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: { enabled: true },
+          alerts: {
+            enabled: true,
+            notifications: {
+              dashboard: true,
+              email: { enabled: false, smtp_port: 587 },
+            },
+          } as any,
+        }),
+      );
+
+      const alerts = result.plugins?.entries?.["clawforce-router"].config
+        ?.alerts as Record<string, unknown>;
+      const notifications = alerts.notifications as Record<string, unknown>;
+      expect(notifications.slack).toBeUndefined();
+      expect(notifications.telegram).toBeUndefined();
+      expect(notifications.webhook_url).toBeUndefined();
+    });
   });
 });

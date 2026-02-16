@@ -64,4 +64,19 @@ describe("ClawforceConfigSchema — alerts", () => {
     );
     expect(result.success).toBe(false);
   });
+
+  it("strips connector-specific keys from notifications", () => {
+    const result = ClawforceConfigSchema.safeParse(
+      baseConfig({
+        notifications: {
+          dashboard: true,
+          email: { enabled: false },
+          slack: { enabled: true, webhook_url: "https://hooks.slack.com/services/T/B/X" },
+        },
+      }),
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.data.alerts?.notifications as Record<string, unknown>).slack).toBeUndefined();
+  });
 });
