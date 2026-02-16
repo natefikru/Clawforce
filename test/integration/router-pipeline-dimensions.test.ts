@@ -305,6 +305,10 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
   // ─── Health Failover ───────────────────────────────────────────────────
 
   describe("Health failover in full router pipeline", () => {
+    beforeEach(() => {
+      vi.useRealTimers();
+    });
+
     afterEach(() => {
       vi.useRealTimers();
       vi.unstubAllGlobals();
