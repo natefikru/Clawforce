@@ -129,6 +129,12 @@ export async function deployCommand(configPath: string): Promise<void> {
 
   // 11. Run OpenClaw security audit gate
   const skipSecurityAudit = process.env.CLAWFORCE_SKIP_SECURITY_AUDIT === "1";
+  const bypassAllowed = isAuditBypassAllowed();
+  if (skipSecurityAudit && !bypassAllowed) {
+    throw new Error(
+      "Security audit bypass is not allowed in CI or production. Unset CLAWFORCE_SKIP_SECURITY_AUDIT.",
+    );
+  }
   if (skipSecurityAudit) {
     logger.warn(
       "Skipping OpenClaw security audit because CLAWFORCE_SKIP_SECURITY_AUDIT=1 is set.",
@@ -165,4 +171,10 @@ export async function deployCommand(configPath: string): Promise<void> {
   logger.info("  clawforce status   - Check container status");
   logger.info("  clawforce audit    - View audit log");
   logger.info("  clawforce stop     - Stop deployment");
+}
+
+function isAuditBypassAllowed(): boolean {
+  if (process.env.CI === "true") return false;
+  if (process.env.NODE_ENV === "production") return false;
+  return true;
 }

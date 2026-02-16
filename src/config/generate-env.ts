@@ -40,5 +40,21 @@ export function generateEnv(config: ClawforceConfig): string {
     lines.push(`AUTH_SECRET=${authSecret}`);
   }
 
+  const slackWebhookUrl = config.alerts?.notifications?.slack?.webhook_url;
+  if (typeof slackWebhookUrl === "string" && slackWebhookUrl.length > 0) {
+    lines.push("");
+    lines.push("# Alert notification secrets");
+    lines.push(`CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL=${slackWebhookUrl}`);
+  }
+
+  const emailPassword = config.alerts?.notifications?.email?.password;
+  if (typeof emailPassword === "string" && emailPassword.length > 0) {
+    if (!lines.includes("# Alert notification secrets")) {
+      lines.push("");
+      lines.push("# Alert notification secrets");
+    }
+    lines.push(`CLAWFORCE_ALERTS_EMAIL_PASSWORD=${emailPassword}`);
+  }
+
   return lines.join("\n") + "\n";
 }

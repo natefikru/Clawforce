@@ -74,6 +74,7 @@ export interface RouterAlertConfig {
     slack?: {
       enabled?: boolean;
       webhookUrl?: string;
+      webhookUrlEnv?: string;
     };
     email?: {
       enabled?: boolean;
@@ -81,6 +82,7 @@ export interface RouterAlertConfig {
       smtpPort?: number;
       username?: string;
       password?: string;
+      passwordEnv?: string;
       from?: string;
       to?: string[];
     };
@@ -109,6 +111,7 @@ interface ResolvedRouterAlertConfig {
     slack: {
       enabled: boolean;
       webhookUrl?: string;
+      webhookUrlEnv?: string;
     };
     email: {
       enabled: boolean;
@@ -116,6 +119,7 @@ interface ResolvedRouterAlertConfig {
       smtpPort: number;
       username?: string;
       password?: string;
+      passwordEnv?: string;
       from?: string;
       to?: string[];
     };
@@ -809,10 +813,18 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
           typeof cfg.notifications?.slack?.enabled === "boolean"
             ? cfg.notifications.slack.enabled
             : DEFAULT_ALERT_CONFIG.notifications.slack.enabled,
-        webhookUrl:
-          typeof cfg.notifications?.slack?.webhookUrl === "string"
+        webhookUrlEnv:
+          typeof cfg.notifications?.slack?.webhookUrlEnv === "string"
+            ? cfg.notifications.slack.webhookUrlEnv
+            : undefined,
+        webhookUrl: resolveSecretFromEnvName(
+          typeof cfg.notifications?.slack?.webhookUrlEnv === "string"
+            ? cfg.notifications.slack.webhookUrlEnv
+            : undefined,
+        ) ??
+          (typeof cfg.notifications?.slack?.webhookUrl === "string"
             ? cfg.notifications.slack.webhookUrl
-            : DEFAULT_ALERT_CONFIG.notifications.slack.webhookUrl,
+            : DEFAULT_ALERT_CONFIG.notifications.slack.webhookUrl),
       },
       email: {
         enabled:
@@ -831,10 +843,18 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
           typeof cfg.notifications?.email?.username === "string"
             ? cfg.notifications.email.username
             : DEFAULT_ALERT_CONFIG.notifications.email.username,
-        password:
-          typeof cfg.notifications?.email?.password === "string"
+        passwordEnv:
+          typeof cfg.notifications?.email?.passwordEnv === "string"
+            ? cfg.notifications.email.passwordEnv
+            : undefined,
+        password: resolveSecretFromEnvName(
+          typeof cfg.notifications?.email?.passwordEnv === "string"
+            ? cfg.notifications.email.passwordEnv
+            : undefined,
+        ) ??
+          (typeof cfg.notifications?.email?.password === "string"
             ? cfg.notifications.email.password
-            : DEFAULT_ALERT_CONFIG.notifications.email.password,
+            : DEFAULT_ALERT_CONFIG.notifications.email.password),
         from:
           typeof cfg.notifications?.email?.from === "string"
             ? cfg.notifications.email.from
@@ -846,6 +866,12 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
       },
     },
   };
+}
+
+function resolveSecretFromEnvName(envName?: string): string | undefined {
+  if (!envName) return undefined;
+  const value = process.env[envName];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function resolveHealthCheckConfig(value: unknown): HealthCheckConfig {
