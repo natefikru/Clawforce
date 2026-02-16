@@ -243,6 +243,9 @@ async function probeProviderOnce(
   const timeout = timeoutSeconds * 1000;
   const host = providerHost(provider);
   const adapter = getRuntimeEngineAdapter(provider);
+  if (adapter.healthProbePaths.length === 0) {
+    throw new Error(`Runtime engine "${provider}" has no health probe paths configured`);
+  }
   for (const path of adapter.healthProbePaths) {
     if (await probe(`${host}${path}`, timeout)) {
       return true;

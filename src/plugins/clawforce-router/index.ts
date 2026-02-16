@@ -44,6 +44,7 @@ import {
   ModelHealthMonitor,
   type HealthCheckConfig,
   type ProviderHealthState,
+  parseLocalProvider,
 } from "./health-monitor.js";
 import { IdleMonitor } from "./idle-monitor.js";
 import { dispatchAlertNotifications } from "../../alerts/dispatcher.js";
@@ -353,8 +354,19 @@ export function activate(api: RouterPluginApi): void {
       });
     },
   });
-  for (const model of collectConfiguredLocalModels(config)) {
+  const configuredLocalModels = collectConfiguredLocalModels(config);
+  for (const model of configuredLocalModels) {
     healthMonitor.trackModel(model);
+  }
+  const localModelsWithoutHealthProbe = configuredLocalModels.filter((model) =>
+    parseLocalProvider(model) === null
+  );
+  if (localModelsWithoutHealthProbe.length > 0) {
+    api.logger.warn(
+      `Router config contains local model refs without health probes: ${
+        localModelsWithoutHealthProbe.join(", ")
+      }. Use a registered runtime provider prefix (e.g. sglang/, vllm/, ollama/) for health-gated failover.`,
+    );
   }
   healthMonitor.start();
   const instanceId = `router-${++instanceCounter}`;

@@ -147,6 +147,33 @@ describe("Router Plugin", () => {
     );
   });
 
+  it("warns with all unknown custom conditions in stable order", () => {
+    const api = createMockApi({
+      rules: [
+        { condition: "custom_condition_x", model: "anthropic/claude-sonnet-4-5" },
+        { condition: "custom_condition_y", model: "openai/gpt-4o" },
+        { condition: "custom_condition_x", model: "openai/gpt-4o-mini" },
+      ],
+    });
+    activate(api);
+    expect(api.logger.warn).toHaveBeenCalledWith(
+      'Router config contains unsupported custom rule conditions: custom_condition_x, custom_condition_y. They are ignored unless handled by a custom router extension.',
+    );
+  });
+
+  it("warns when local model refs cannot be health-probed", () => {
+    const api = createMockApi({
+      defaultLocalModel: "local/custom",
+      rules: [
+        { condition: "pii_detected", model: "local/sensitive-model" },
+      ],
+    });
+    activate(api);
+    expect(api.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("local model refs without health probes: local/custom, local/sensitive-model"),
+    );
+  });
+
   it("keeps both monitors active when activating multiple instances", () => {
     const stopSpy = vi.spyOn(ModelHealthMonitor.prototype, "stop");
     const apiA = createMockApi();
