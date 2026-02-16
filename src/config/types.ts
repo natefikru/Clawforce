@@ -122,6 +122,12 @@ export const ClawforceConfigSchema = z.object({
     api_key: z.string().optional(),
   }),
 
+  gateway: z
+    .object({
+      bind: z.enum(["loopback", "lan"]).default("loopback"),
+    })
+    .optional(),
+
   approval: z
     .object({
       mode: z.enum(["autonomous", "human-in-the-loop", "hybrid"]),

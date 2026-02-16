@@ -34,6 +34,7 @@ interface ComposeConfig {
 
 export function generateCompose(config: ClawforceConfig): string {
   const containerPrefix = `clawforce-${config.name}`;
+  const gatewayBind = config.gateway?.bind ?? "loopback";
 
   const compose: ComposeConfig = {
     services: {
@@ -47,7 +48,7 @@ export function generateCompose(config: ClawforceConfig): string {
           "HOME=/home/node",
           "TERM=xterm-256color",
           "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
-          "OPENCLAW_GATEWAY_BIND=lan",
+          `OPENCLAW_GATEWAY_BIND=${gatewayBind}`,
           "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}",
           "NODE_ENV=production",
         ],
@@ -61,7 +62,7 @@ export function generateCompose(config: ClawforceConfig): string {
           "dist/index.js",
           "gateway",
           "--bind",
-          "lan",
+          gatewayBind,
           "--port",
           "18789",
         ],

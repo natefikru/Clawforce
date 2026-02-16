@@ -70,6 +70,7 @@ const DEFAULT_ROUTER_ALERTS_CONFIG: RouterAlertsConfig = {
 export interface OpenClawConfig {
   gateway?: {
     mode: string;
+    bind?: "loopback" | "lan";
   };
   agents: {
     defaults: {
@@ -128,6 +129,7 @@ export function generateOpenClawConfig(
   const result: OpenClawConfig = {
     gateway: {
       mode: "local",
+      bind: config.gateway?.bind ?? "loopback",
     },
     agents: {
       defaults: {

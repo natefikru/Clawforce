@@ -139,4 +139,15 @@ describe("parseConfig", () => {
       parseConfig(join(fixturesDir, "invalid-alerts-config.yaml")),
     ).toThrow("alerts.notifications.slack.webhook_url is required");
   });
+
+  it("should parse explicit gateway bind override", () => {
+    const config = parseConfig(join(fixturesDir, "valid-gateway-bind.yaml"));
+    expect(config.gateway?.bind).toBe("lan");
+  });
+
+  it("should reject invalid gateway bind value", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-gateway-bind.yaml")),
+    ).toThrow("Config validation failed");
+  });
 });

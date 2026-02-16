@@ -73,6 +73,20 @@ describe("generateOpenClawConfig", () => {
     expect(result.session.dmScope).toBe("per-channel-peer");
   });
 
+  it("should default gateway bind to loopback", () => {
+    const result = generateOpenClawConfig(makeConfig());
+    const gateway = result.gateway as Record<string, unknown>;
+    expect(gateway.bind).toBe("loopback");
+  });
+
+  it("should allow explicit gateway bind override", () => {
+    const result = generateOpenClawConfig(
+      makeConfig({ gateway: { bind: "lan" } }),
+    );
+    const gateway = result.gateway as Record<string, unknown>;
+    expect(gateway.bind).toBe("lan");
+  });
+
   it("should enable cron for inbox-analyst role", () => {
     const result = generateOpenClawConfig(makeConfig({ role: "inbox-analyst" }));
     expect(result.cron?.enabled).toBe(true);
