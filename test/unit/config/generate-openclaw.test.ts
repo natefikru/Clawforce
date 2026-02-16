@@ -538,14 +538,14 @@ describe("generateOpenClawConfig", () => {
         dashboard: true,
         slack: {
           enabled: true,
-          webhookUrl: "https://hooks.slack.com/services/T000/B000/TEST",
+          webhookUrlEnv: "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL",
         },
         email: {
           enabled: true,
           smtpHost: "smtp.example.com",
           smtpPort: 2525,
           username: "alerts@example.com",
-          password: "secret",
+          passwordEnv: "CLAWFORCE_ALERTS_EMAIL_PASSWORD",
           from: "alerts@example.com",
           to: ["ops@example.com"],
         },

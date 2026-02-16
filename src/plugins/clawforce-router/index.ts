@@ -73,14 +73,14 @@ export interface RouterAlertConfig {
     dashboard?: boolean;
     slack?: {
       enabled?: boolean;
-      webhookUrl?: string;
+      webhookUrlEnv?: string;
     };
     email?: {
       enabled?: boolean;
       smtpHost?: string;
       smtpPort?: number;
       username?: string;
-      password?: string;
+      passwordEnv?: string;
       from?: string;
       to?: string[];
     };
@@ -760,6 +760,33 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
     };
   }
   const cfg = value as RouterAlertConfig;
+  const slackEnabled =
+    typeof cfg.notifications?.slack?.enabled === "boolean"
+      ? cfg.notifications.slack.enabled
+      : DEFAULT_ALERT_CONFIG.notifications.slack.enabled;
+  const emailEnabled =
+    typeof cfg.notifications?.email?.enabled === "boolean"
+      ? cfg.notifications.email.enabled
+      : DEFAULT_ALERT_CONFIG.notifications.email.enabled;
+  const slackWebhookUrl = resolveSecretFromEnvName(
+    cfg.notifications?.slack?.webhookUrlEnv,
+  );
+  const emailPassword = resolveSecretFromEnvName(
+    cfg.notifications?.email?.passwordEnv,
+  );
+
+  if (slackEnabled && !slackWebhookUrl) {
+    throw new Error(
+      "Router alerts slack is enabled but webhook secret env is missing or empty",
+    );
+  }
+
+  if (emailEnabled && !emailPassword) {
+    throw new Error(
+      "Router alerts email is enabled but password secret env is missing or empty",
+    );
+  }
+
   return {
     enabled: typeof cfg.enabled === "boolean" ? cfg.enabled : DEFAULT_ALERT_CONFIG.enabled,
     types: {
@@ -805,20 +832,11 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
           ? cfg.notifications.dashboard
           : DEFAULT_ALERT_CONFIG.notifications.dashboard,
       slack: {
-        enabled:
-          typeof cfg.notifications?.slack?.enabled === "boolean"
-            ? cfg.notifications.slack.enabled
-            : DEFAULT_ALERT_CONFIG.notifications.slack.enabled,
-        webhookUrl:
-          typeof cfg.notifications?.slack?.webhookUrl === "string"
-            ? cfg.notifications.slack.webhookUrl
-            : DEFAULT_ALERT_CONFIG.notifications.slack.webhookUrl,
+        enabled: slackEnabled,
+        webhookUrl: slackWebhookUrl ?? DEFAULT_ALERT_CONFIG.notifications.slack.webhookUrl,
       },
       email: {
-        enabled:
-          typeof cfg.notifications?.email?.enabled === "boolean"
-            ? cfg.notifications.email.enabled
-            : DEFAULT_ALERT_CONFIG.notifications.email.enabled,
+        enabled: emailEnabled,
         smtpHost:
           typeof cfg.notifications?.email?.smtpHost === "string"
             ? cfg.notifications.email.smtpHost
@@ -831,10 +849,7 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
           typeof cfg.notifications?.email?.username === "string"
             ? cfg.notifications.email.username
             : DEFAULT_ALERT_CONFIG.notifications.email.username,
-        password:
-          typeof cfg.notifications?.email?.password === "string"
-            ? cfg.notifications.email.password
-            : DEFAULT_ALERT_CONFIG.notifications.email.password,
+        password: emailPassword ?? DEFAULT_ALERT_CONFIG.notifications.email.password,
         from:
           typeof cfg.notifications?.email?.from === "string"
             ? cfg.notifications.email.from
@@ -846,6 +861,16 @@ function resolveAlertConfig(value: unknown): ResolvedRouterAlertConfig {
       },
     },
   };
+}
+
+function resolveSecretFromEnvName(envName: unknown): string | undefined {
+  if (typeof envName !== "string") return undefined;
+  const key = envName.trim();
+  if (key === "") return undefined;
+  const value = process.env[key];
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
 }
 
 function resolveHealthCheckConfig(value: unknown): HealthCheckConfig {

@@ -39,10 +39,14 @@ function createMockApi(
 describe("router alerts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL;
+    delete process.env.CLAWFORCE_ALERTS_EMAIL_PASSWORD;
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    delete process.env.CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL;
+    delete process.env.CLAWFORCE_ALERTS_EMAIL_PASSWORD;
   });
 
   it("emits budget_exceeded with cooldown", () => {
@@ -162,6 +166,62 @@ describe("router alerts", () => {
     vi.advanceTimersByTime(61_000);
     expect(writer.writeAlert).toHaveBeenCalledWith(
       expect.objectContaining({ type: "agent_idle" }),
+    );
+  });
+
+  it("rejects legacy plaintext slack webhook configuration", () => {
+    const api = createMockApi({
+      alerts: {
+        notifications: {
+          slack: {
+            enabled: true,
+            webhookUrl: "https://hooks.slack.com/services/T000/B000/TEST",
+          },
+        },
+      },
+    });
+
+    expect(() => activate(api)).toThrow(
+      "Router alerts slack is enabled but webhook secret env is missing or empty",
+    );
+  });
+
+  it("fails closed when slack notifier env secret is missing", () => {
+    const api = createMockApi({
+      alerts: {
+        notifications: {
+          slack: {
+            enabled: true,
+            webhookUrlEnv: "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL",
+          },
+        },
+      },
+    });
+
+    expect(() => activate(api)).toThrow(
+      "Router alerts slack is enabled but webhook secret env is missing or empty",
+    );
+  });
+
+  it("fails closed when email notifier env secret is missing", () => {
+    const api = createMockApi({
+      alerts: {
+        notifications: {
+          email: {
+            enabled: true,
+            smtpHost: "smtp.example.com",
+            smtpPort: 587,
+            username: "alerts@example.com",
+            from: "alerts@example.com",
+            to: ["ops@example.com"],
+            passwordEnv: "CLAWFORCE_ALERTS_EMAIL_PASSWORD",
+          },
+        },
+      },
+    });
+
+    expect(() => activate(api)).toThrow(
+      "Router alerts email is enabled but password secret env is missing or empty",
     );
   });
 });

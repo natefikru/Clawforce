@@ -35,6 +35,8 @@ describe("deployCommand", () => {
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAWFORCE_SKIP_SECURITY_AUDIT;
+    delete process.env.CI;
+    delete process.env.NODE_ENV;
     if (existsSync(deployDir)) {
       rmSync(deployDir, { recursive: true });
     }
@@ -184,6 +186,37 @@ describe("deployCommand", () => {
   it("should skip security audit when bypass flag is set", async () => {
     process.env.CLAWFORCE_SKIP_SECURITY_AUDIT = "1";
     await deployCommand(join(fixturesDir, "valid-config.yaml"));
+    expect(exec).not.toHaveBeenCalledWith(
+      "docker",
+      expect.arrayContaining(["security", "audit", "--deep"]),
+      expect.anything(),
+    );
+  });
+
+  it.each(["1", "yes", "TRUE"])(
+    "should reject security audit bypass in CI when CI=%s",
+    async (ciValue) => {
+      process.env.CLAWFORCE_SKIP_SECURITY_AUDIT = "1";
+      process.env.CI = ciValue;
+
+      await expect(
+        deployCommand(join(fixturesDir, "valid-config.yaml")),
+      ).rejects.toThrow("Security audit bypass is not allowed in CI or production");
+
+      expect(exec).not.toHaveBeenCalledWith(
+        "docker",
+        expect.arrayContaining(["security", "audit", "--deep"]),
+        expect.anything(),
+      );
+    },
+  );
+
+  it("should allow bypass when CI is explicitly disabled", async () => {
+    process.env.CLAWFORCE_SKIP_SECURITY_AUDIT = "1";
+    process.env.CI = "false";
+
+    await deployCommand(join(fixturesDir, "valid-config.yaml"));
+
     expect(exec).not.toHaveBeenCalledWith(
       "docker",
       expect.arrayContaining(["security", "audit", "--deep"]),

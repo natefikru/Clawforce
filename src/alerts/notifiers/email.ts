@@ -29,6 +29,7 @@ export async function sendEmailAlert(
       host: config.smtpHost,
       port: config.smtpPort,
       secure: config.smtpPort === 465,
+      requireTLS: true,
       auth: {
         user: config.username,
         pass: config.password,

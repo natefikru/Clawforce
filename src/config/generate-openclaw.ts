@@ -29,19 +29,22 @@ interface RouterAlertsConfig {
     dashboard: boolean;
     slack: {
       enabled: boolean;
-      webhookUrl?: string;
+      webhookUrlEnv?: string;
     };
     email: {
       enabled: boolean;
       smtpHost?: string;
       smtpPort: number;
       username?: string;
-      password?: string;
+      passwordEnv?: string;
       from?: string;
       to?: string[];
     };
   };
 }
+
+const ALERT_SLACK_WEBHOOK_ENV = "CLAWFORCE_ALERTS_SLACK_WEBHOOK_URL";
+const ALERT_EMAIL_PASSWORD_ENV = "CLAWFORCE_ALERTS_EMAIL_PASSWORD";
 
 const DEFAULT_ROUTER_ALERTS_CONFIG: RouterAlertsConfig = {
   enabled: true,
@@ -336,7 +339,7 @@ function mapRouterAlertsConfig(config: ClawforceConfig): RouterAlertsConfig {
           alerts?.notifications?.slack?.enabled
           ?? DEFAULT_ROUTER_ALERTS_CONFIG.notifications.slack.enabled,
         ...(alerts?.notifications?.slack?.webhook_url
-          ? { webhookUrl: alerts.notifications.slack.webhook_url }
+          ? { webhookUrlEnv: ALERT_SLACK_WEBHOOK_ENV }
           : {}),
       },
       email: {
@@ -353,7 +356,7 @@ function mapRouterAlertsConfig(config: ClawforceConfig): RouterAlertsConfig {
           ? { username: alerts.notifications.email.username }
           : {}),
         ...(alerts?.notifications?.email?.password
-          ? { password: alerts.notifications.email.password }
+          ? { passwordEnv: ALERT_EMAIL_PASSWORD_ENV }
           : {}),
         ...(alerts?.notifications?.email?.from
           ? { from: alerts.notifications.email.from }

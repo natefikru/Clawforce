@@ -10,6 +10,9 @@ export async function sendSlackAlert(
   alert: AlertEntry,
 ): Promise<void> {
   if (!config.enabled || !config.webhookUrl) return;
+  if (!config.webhookUrl.startsWith("https://")) {
+    throw new Error("Slack webhook URL must use https");
+  }
 
   const response = await fetch(config.webhookUrl, {
     method: "POST",
