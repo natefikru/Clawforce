@@ -9,6 +9,21 @@ interface ActivityEntry {
   [key: string]: unknown;
 }
 
+interface CostData {
+  spent: number;
+  requestCount: number;
+}
+
+interface AgentStatus {
+  containerName: string;
+  status: "running" | "stopped" | "unknown";
+  uptime?: string;
+}
+
+interface StatusData {
+  agents: AgentStatus[];
+}
+
 const EVENT_COLORS: Record<string, string> = {
   tool_call: "text-blue-400",
   message_received: "text-yellow-400",
@@ -46,6 +61,8 @@ export function ActivityFeed() {
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState(false);
+  const [costData, setCostData] = useState<CostData | null>(null);
+  const [agentStatus, setAgentStatus] = useState<StatusData | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchActivity = useCallback(async () => {
@@ -84,21 +101,45 @@ export function ActivityFeed() {
       eventSource = new EventSource("/api/activity/stream");
       setStreaming(true);
 
-      eventSource.onmessage = (event) => {
+      // Named event: activity — individual compliance events
+      eventSource.addEventListener("activity", (event) => {
         try {
-          const newEntries = JSON.parse(event.data) as ActivityEntry[];
-          setEntries((prev) => {
-            const combined = [...newEntries, ...prev];
-            return combined.slice(0, MAX_ENTRIES);
-          });
-          setTotal((prev) => prev + newEntries.length);
+          const entry = JSON.parse(event.data) as ActivityEntry;
+          setEntries((prev) => [entry, ...prev].slice(0, MAX_ENTRIES));
+          setTotal((prev) => prev + 1);
           setLoading(false);
           setError(false);
           clearTimeout(loadingTimeout);
         } catch {
           // Ignore parse errors
         }
-      };
+      });
+
+      // Named event: cost — budget state updates
+      eventSource.addEventListener("cost", (event) => {
+        try {
+          const cost = JSON.parse(event.data) as CostData;
+          setCostData(cost);
+        } catch {
+          // Ignore parse errors
+        }
+      });
+
+      // Named event: status — Docker container state changes
+      eventSource.addEventListener("status", (event) => {
+        try {
+          const status = JSON.parse(event.data) as StatusData;
+          setAgentStatus(status);
+        } catch {
+          // Ignore parse errors
+        }
+      });
+
+      // Named event: sync — reconnection truncation, reset and refetch
+      eventSource.addEventListener("sync", () => {
+        setTotal(0);
+        fetchActivity();
+      });
 
       eventSource.onerror = () => {
         eventSource?.close();
@@ -119,7 +160,7 @@ export function ActivityFeed() {
         clearInterval(pollIntervalRef.current);
       }
     };
-  }, [startPolling]);
+  }, [startPolling, fetchActivity]);
 
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-800 p-6">
@@ -130,6 +171,16 @@ export function ActivityFeed() {
             <span className="inline-flex items-center gap-1 text-xs text-green-400">
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
               Live
+            </span>
+          )}
+          {costData && (
+            <span className="text-xs text-gray-400">
+              ${costData.spent.toFixed(4)} ({costData.requestCount} reqs)
+            </span>
+          )}
+          {agentStatus && agentStatus.agents.length > 0 && (
+            <span className="text-xs text-gray-400">
+              {agentStatus.agents.filter((a) => a.status === "running").length}/{agentStatus.agents.length} agents
             </span>
           )}
           {total > 0 && (
