@@ -28,7 +28,7 @@ export async function auditCommand(
   }
 
   if (source === "database") {
-    readFromDatabase(deployDir, tailLines, opts);
+    await readFromDatabase(deployDir, tailLines, opts);
     return;
   }
 
@@ -193,11 +193,11 @@ function formatComplianceDetails(
   }
 }
 
-function readFromDatabase(
+async function readFromDatabase(
   deployDir: string,
   tailLines: number,
   opts?: AuditOptions,
-): void {
+): Promise<void> {
   const dbPath = join(deployDir, "data", "clawforce.db");
 
   if (!existsSync(dbPath)) {
@@ -205,20 +205,21 @@ function readFromDatabase(
     return;
   }
 
+  let db: import("node:sqlite").DatabaseSync | null = null;
   try {
-    const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
-    const db = new DatabaseSync(dbPath, { readOnly: true });
+    const { DatabaseSync } = await import("node:sqlite");
+    db = new DatabaseSync(dbPath, { readOnly: true });
     const reader = new StorageReader(db);
 
     const entries = reader.getRecentEvents({
       limit: tailLines,
       event: opts?.event,
       agentId: opts?.agent,
+      since: opts?.since,
     });
 
     if (entries.length === 0) {
       logger.info("No events found matching the criteria.");
-      db.close();
       return;
     }
 
@@ -247,10 +248,10 @@ function readFromDatabase(
         }
       }
     }
-
-    db.close();
   } catch (err) {
     logger.error(`Failed to read database: ${String(err)}`);
+  } finally {
+    db?.close();
   }
 }
 

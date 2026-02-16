@@ -27,6 +27,7 @@ export class StorageReader {
     limit: number;
     event?: string;
     agentId?: string;
+    since?: string;
   }): ComplianceEntry[] {
     if (opts.limit <= 0) return [];
 
@@ -40,6 +41,10 @@ export class StorageReader {
     if (opts.agentId) {
       conditions.push("agent_id = ?");
       params.push(opts.agentId);
+    }
+    if (opts.since) {
+      conditions.push("ts >= ?");
+      params.push(opts.since);
     }
 
     const where =
@@ -105,7 +110,7 @@ export class StorageReader {
 
     const rows = this.db
       .prepare(
-        `SELECT selected_model, is_local, estimated_cost FROM routing_decisions ${where}`,
+        `SELECT selected_model, is_local, estimated_cost FROM routing_decisions ${where} LIMIT 100000`,
       )
       .all(...params) as {
       selected_model: string;

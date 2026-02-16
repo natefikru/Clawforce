@@ -52,6 +52,8 @@ export async function GET(request: Request) {
 
       return NextResponse.json({ entries, total: countRow.total });
     } catch {
+      // Reset cached DB so next request retries the connection
+      cachedDb = null;
       // Fall through to JSONL
     }
   }

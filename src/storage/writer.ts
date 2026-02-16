@@ -19,9 +19,9 @@ export class StorageWriter {
   private routingLogPath: string;
   private dirCache = new Set<string>();
 
-  private stmtCompliance: StatementSync;
-  private stmtRouting: StatementSync;
-  private stmtBudget: StatementSync;
+  private stmtCompliance: StatementSync | null;
+  private stmtRouting: StatementSync | null;
+  private stmtBudget: StatementSync | null;
 
   constructor(
     db: DatabaseSync,
@@ -32,25 +32,37 @@ export class StorageWriter {
     this.complianceLogPath = complianceLogPath;
     this.routingLogPath = routingLogPath;
 
-    this.stmtCompliance = db.prepare(
-      `INSERT INTO compliance_events (ts, event, agent_id, channel, data) VALUES (?, ?, ?, ?, ?)`,
-    );
-    this.stmtRouting = db.prepare(
-      `INSERT INTO routing_decisions (ts, agent_id, selected_model, selected_provider, has_pii, pii_types, complexity, domain, data_tier, is_local, estimated_cost, data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-    this.stmtBudget = db.prepare(
-      `INSERT INTO budget_state (agent_id, date, spent, request_count, updated_at)
-       VALUES (?, ?, ?, ?, datetime('now'))
-       ON CONFLICT(agent_id, date) DO UPDATE SET
-         spent = excluded.spent,
-         request_count = excluded.request_count,
-         updated_at = datetime('now')`,
-    );
+    // Cache prepared statements. If DB schema is missing/corrupt, degrade
+    // gracefully — JSONL writes still succeed, SQLite inserts are skipped.
+    try {
+      this.stmtCompliance = db.prepare(
+        `INSERT INTO compliance_events (ts, event, agent_id, channel, data) VALUES (?, ?, ?, ?, ?)`,
+      );
+      this.stmtRouting = db.prepare(
+        `INSERT INTO routing_decisions (ts, agent_id, selected_model, selected_provider, has_pii, pii_types, complexity, domain, data_tier, is_local, estimated_cost, data)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      this.stmtBudget = db.prepare(
+        `INSERT INTO budget_state (agent_id, date, spent, request_count, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(agent_id, date) DO UPDATE SET
+           spent = excluded.spent,
+           request_count = excluded.request_count,
+           updated_at = datetime('now')`,
+      );
+    } catch (err) {
+      this.stmtCompliance = null;
+      this.stmtRouting = null;
+      this.stmtBudget = null;
+      process.stderr.write(
+        `[storage] Failed to prepare SQLite statements: ${String(err)}\n`,
+      );
+    }
   }
 
   writeComplianceEvent(entry: ComplianceEntry): void {
     this.appendJsonl(this.complianceLogPath, entry);
+    if (!this.stmtCompliance) return;
     try {
       this.stmtCompliance.run(
         entry.ts,
@@ -68,6 +80,7 @@ export class StorageWriter {
 
   writeRoutingDecision(entry: RoutingLogEntry): void {
     this.appendJsonl(this.routingLogPath, entry);
+    if (!this.stmtRouting) return;
     try {
       const model = entry.model ?? "";
       const provider = model.includes("/") ? model.split("/")[0] : null;
@@ -98,6 +111,7 @@ export class StorageWriter {
     spent: number,
     requestCount: number,
   ): void {
+    if (!this.stmtBudget) return;
     try {
       this.stmtBudget.run(agentId, date, spent, requestCount);
     } catch (err) {

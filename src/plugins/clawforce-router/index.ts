@@ -9,6 +9,7 @@
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import type { StorageWriter } from "../../storage/writer.js";
 import type { RoutingLogEntry } from "../../storage/types.js";
 import { detectPII, detectPIITypes } from "./pii-detector.js";
@@ -122,8 +123,9 @@ export function activate(api: RouterPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
   const writer = api.pluginConfig?.storageWriter as StorageWriter | undefined;
 
+  const storageDb = api.pluginConfig?.storageDb as DatabaseSync | undefined;
   const budgetTracker = config.budget
-    ? new BudgetTracker(config.budget)
+    ? new BudgetTracker(config.budget, undefined, storageDb)
     : null;
 
   function writeLog(entry: RoutingLogEntry): void {

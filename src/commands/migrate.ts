@@ -5,7 +5,7 @@
  * Uses byte-offset watermarking for idempotent reruns.
  */
 
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { logger } from "../utils/logger.js";
@@ -125,8 +125,13 @@ function migrateJsonlFile(
     return { inserted: 0, skipped: 0, errors: 0 };
   }
 
-  const content = readFileSync(filePath, "utf8");
-  const newContent = lastOffset > 0 ? content.slice(lastOffset) : content;
+  // Read only the unprocessed portion of the file to avoid OOM on large logs
+  const bytesToRead = fileSize - lastOffset;
+  const fd = openSync(filePath, "r");
+  const buf = Buffer.alloc(bytesToRead);
+  readSync(fd, buf, 0, bytesToRead, lastOffset);
+  closeSync(fd);
+  const newContent = buf.toString("utf8");
   const lines = newContent.split("\n").filter(Boolean);
 
   let inserted = 0;

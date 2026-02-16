@@ -44,9 +44,9 @@ export interface RoutingLogEntry {
   budgetRemaining?: number;
   redactedTypes?: string[];
   matchCount?: number;
-  toolName?: unknown;
-  success?: unknown;
-  durationMs?: unknown;
+  toolName?: string;
+  success?: boolean;
+  durationMs?: number;
   messageCount?: number;
 }
 
