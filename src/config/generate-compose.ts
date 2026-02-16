@@ -128,17 +128,24 @@ export function generateCompose(config: ClawforceConfig): string {
   if (config.dashboard && config.dashboard.enabled !== false) {
     const port = config.dashboard.port ?? 3000;
 
+    const dashboardEnv = [
+      "DATA_DIR=/data",
+      "CONFIG_DIR=/config",
+      "OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:18789",
+      "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
+    ];
+
+    if (config.dashboard!.auth?.enabled) {
+      dashboardEnv.push("AUTH_SECRET=${AUTH_SECRET}");
+      dashboardEnv.push("AUTH_TRUST_HOST=true");
+    }
+
     compose.services.dashboard = {
       image: "clawforce-dashboard:local",
       container_name: `${containerPrefix}-dashboard`,
       restart: "unless-stopped",
       ports: [`${port}:3000`],
-      environment: [
-        "DATA_DIR=/data",
-        "CONFIG_DIR=/config",
-        "OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:18789",
-        "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
-      ],
+      environment: dashboardEnv,
       volumes: [
         "./data:/data:ro",
         "./config:/config:ro",

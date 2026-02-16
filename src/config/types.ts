@@ -136,6 +136,17 @@ export const ClawforceConfigSchema = z.object({
     .object({
       enabled: z.boolean().default(true),
       port: z.number().default(3000),
+      auth: z
+        .object({
+          enabled: z.boolean().default(false),
+          username: z.string().min(1).optional(),
+          password: z.string().min(8).optional(),
+        })
+        .refine(
+          (val) => !val.enabled || (val.username && val.password),
+          { message: "username and password are required when auth is enabled" },
+        )
+        .optional(),
     })
     .optional(),
 
