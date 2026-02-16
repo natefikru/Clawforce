@@ -51,6 +51,10 @@ export function ActivityFeed() {
   const fetchActivity = useCallback(async () => {
     try {
       const res = await fetch("/api/activity?limit=50");
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
       const data = await res.json();
       setEntries(data.entries ?? []);
       setTotal(data.total ?? 0);
