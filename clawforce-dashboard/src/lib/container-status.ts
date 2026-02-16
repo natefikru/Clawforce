@@ -86,46 +86,57 @@ function readModelHealthSummary(
         }
         return summary;
       }
+      const fallback = readModelHealthSummaryFromAlerts(db);
+      if (Object.keys(fallback).length > 0) {
+        return fallback;
+      }
     } catch {
       // Fallback to transition-alert based inference for older schema versions.
-      try {
-        const rows = db
-          .prepare(
-            `SELECT data
-             FROM alerts
-             WHERE type = 'model_health'
-             ORDER BY ts DESC
-             LIMIT 100`,
-          )
-          .all() as { data: string | null }[];
-
-        const summary: Record<string, { status: string; circuit: string }> = {};
-        for (const row of rows) {
-          if (!row.data) continue;
-          try {
-            const parsed = JSON.parse(row.data) as {
-              provider?: string;
-              currentStatus?: string;
-              currentCircuit?: string;
-            };
-            if (!parsed.provider || summary[parsed.provider]) continue;
-            summary[parsed.provider] = {
-              status: parsed.currentStatus ?? "unknown",
-              circuit: parsed.currentCircuit ?? "closed",
-            };
-          } catch {
-            // Ignore malformed JSON payloads.
-          }
-        }
-        if (Object.keys(summary).length > 0) {
-          return summary;
-        }
-      } catch {
-        // Try next candidate DB path.
+      const fallback = readModelHealthSummaryFromAlerts(db);
+      if (Object.keys(fallback).length > 0) {
+        return fallback;
       }
     } finally {
       db.close();
     }
   }
   return {};
+}
+
+function readModelHealthSummaryFromAlerts(
+  db: DatabaseSync,
+): Record<string, { status: string; circuit: string }> {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT data
+         FROM alerts
+         WHERE type = 'model_health'
+         ORDER BY ts DESC
+         LIMIT 100`,
+      )
+      .all() as { data: string | null }[];
+
+    const summary: Record<string, { status: string; circuit: string }> = {};
+    for (const row of rows) {
+      if (!row.data) continue;
+      try {
+        const parsed = JSON.parse(row.data) as {
+          provider?: string;
+          currentStatus?: string;
+          currentCircuit?: string;
+        };
+        if (!parsed.provider || summary[parsed.provider]) continue;
+        summary[parsed.provider] = {
+          status: parsed.currentStatus ?? "unknown",
+          circuit: parsed.currentCircuit ?? "closed",
+        };
+      } catch {
+        // Ignore malformed JSON payloads.
+      }
+    }
+    return summary;
+  } catch {
+    return {};
+  }
 }

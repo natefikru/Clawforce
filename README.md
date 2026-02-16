@@ -45,6 +45,21 @@ Routes every request across 5 dimensions to pick the right model:
 
 PII never routes to cloud models. This is enforced as a post-routing safety invariant regardless of configuration.
 
+### Model Health and Failover
+
+Local model runtimes are actively health-checked (Ollama, SGLang, vLLM) with circuit-breaker behavior. When a selected local provider is unhealthy:
+
+- `block` denies the request.
+- `failover-safe` allows only non-sensitive requests to fall back to cloud.
+- `queue` is currently not implemented as deferred execution and is treated as fail-closed.
+
+```yaml
+router:
+  health_check:
+    enabled: true
+    failover_policy: block      # block | failover-safe
+```
+
 ```yaml
 router:
   enabled: true
@@ -91,7 +106,7 @@ Pre-built profiles for common regulatory frameworks:
 ### Activity Dashboard
 
 Next.js dashboard with 4 panels:
-- **Agent Status** — Container health, uptime
+- **Agent Status** — Container health, uptime, and local model health state
 - **Activity Feed** — Real-time event streaming from compliance log
 - **Cost Tracker** — Gateway-sourced cost data with Summary, Timeline, and What-If analysis tabs
 - **Task Log** — Recent agent runs with duration and outcome
@@ -223,7 +238,7 @@ The router plugin hooks into `before_agent_start` to override model selection, `
 git clone https://github.com/natefikru/clawforce.git
 cd clawforce
 npm install
-npm test           # 666 tests
+npm test           # 693 tests
 ```
 
 Dashboard:
@@ -231,7 +246,7 @@ Dashboard:
 ```bash
 cd clawforce-dashboard
 npm install
-npm test           # 78 tests
+npm test           # 127 tests
 ```
 
 ### Test Coverage

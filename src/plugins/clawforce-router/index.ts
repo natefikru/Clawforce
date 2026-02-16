@@ -554,6 +554,9 @@ function collectConfiguredLocalModels(config: ResolvedRouterConfig): string[] {
 }
 
 function registerProcessCleanup(monitor: ModelHealthMonitor): void {
+  if (currentHealthMonitor && currentHealthMonitor !== monitor) {
+    currentHealthMonitor.stop();
+  }
   currentHealthMonitor = monitor;
   if (cleanupHandlersRegistered) return;
 

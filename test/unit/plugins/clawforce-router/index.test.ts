@@ -7,6 +7,7 @@ import {
   buildScanText,
   type RouterPluginApi,
 } from "../../../../src/plugins/clawforce-router/index.js";
+import { ModelHealthMonitor } from "../../../../src/plugins/clawforce-router/health-monitor.js";
 
 vi.mock("node:fs", () => ({
   appendFileSync: vi.fn(),
@@ -76,6 +77,34 @@ describe("Router Plugin", () => {
     expect(api.logger.info).toHaveBeenCalledWith(
       expect.stringContaining("Router plugin activated"),
     );
+  });
+
+  it("stops previous monitor when re-activating in the same process", () => {
+    const stopSpy = vi.spyOn(ModelHealthMonitor.prototype, "stop");
+    const apiA = createMockApi();
+    const apiB = createMockApi();
+
+    activate(apiA);
+    const callsAfterFirstActivate = stopSpy.mock.calls.length;
+    activate(apiB);
+    const callsAfterSecondActivate = stopSpy.mock.calls.length;
+
+    expect(callsAfterSecondActivate - callsAfterFirstActivate).toBe(1);
+    stopSpy.mockRestore();
+  });
+
+  it("does not re-register process cleanup listeners on second activation", () => {
+    const onceSpy = vi.spyOn(process, "once");
+    const apiA = createMockApi();
+    const apiB = createMockApi();
+
+    activate(apiA);
+    const callsAfterFirstActivate = onceSpy.mock.calls.length;
+    activate(apiB);
+    const callsAfterSecondActivate = onceSpy.mock.calls.length;
+
+    expect(callsAfterSecondActivate).toBe(callsAfterFirstActivate);
+    onceSpy.mockRestore();
   });
 
   it("should route PII-containing prompt to local model", () => {

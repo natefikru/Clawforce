@@ -76,4 +76,60 @@ describe("getContainerStatus", () => {
     const result = await getContainerStatus();
     expect(result).toEqual([]);
   });
+
+  it("falls back to alerts when canonical model health query returns empty rows", async () => {
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(
+        null,
+        { stdout: "clawforce-test-gateway|Up 2 minutes\n", stderr: "" } as never,
+      );
+    });
+    existsSyncMock.mockReturnValue(true);
+    allMock
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([
+        {
+          data: JSON.stringify({
+            provider: "sglang",
+            currentStatus: "degraded",
+            currentCircuit: "half_open",
+          }),
+        },
+      ]);
+
+    const result = await getContainerStatus();
+    expect(result).toHaveLength(1);
+    expect(result[0].modelHealth).toEqual({
+      sglang: { status: "degraded", circuit: "half_open" },
+    });
+  });
+
+  it("uses the first candidate path with usable health data", async () => {
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(
+        null,
+        { stdout: "clawforce-test-gateway|Up 2 minutes\n", stderr: "" } as never,
+      );
+    });
+    existsSyncMock.mockImplementation((path) => (
+      path === "/tmp/data/clawforce.db" || path === "/data/clawforce.db"
+    ));
+    allMock
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([
+        {
+          data: JSON.stringify({
+            provider: "vllm",
+            currentStatus: "down",
+            currentCircuit: "open",
+          }),
+        },
+      ]);
+
+    const result = await getContainerStatus();
+    expect(result[0].modelHealth).toEqual({
+      vllm: { status: "down", circuit: "open" },
+    });
+    expect(existsSyncMock).not.toHaveBeenCalledWith("/data/clawforce.db");
+  });
 });

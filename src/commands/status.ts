@@ -109,47 +109,52 @@ function readModelHealth(dbPaths: string[]): ModelHealthSummary[] {
           circuit: row.circuit,
         }));
       }
+      const fallback = readModelHealthFromAlerts(db);
+      if (fallback.length > 0) return fallback;
     } catch {
       // Fallback to transition-alert based inference for older schemas.
-      try {
-        const rows = db
-          .prepare(
-            `SELECT data
-             FROM alerts
-             WHERE type = 'model_health'
-             ORDER BY ts DESC
-             LIMIT 100`,
-          )
-          .all() as { data: string | null }[];
-
-        const byProvider = new Map<string, ModelHealthSummary>();
-        for (const row of rows) {
-          if (!row.data) continue;
-          try {
-            const parsed = JSON.parse(row.data) as {
-              provider?: string;
-              currentStatus?: string;
-              currentCircuit?: string;
-            };
-            if (!parsed.provider || byProvider.has(parsed.provider)) continue;
-            byProvider.set(parsed.provider, {
-              provider: parsed.provider,
-              status: parsed.currentStatus ?? "unknown",
-              circuit: parsed.currentCircuit ?? "closed",
-            });
-          } catch {
-            // Ignore malformed alert payload rows.
-          }
-        }
-        if (byProvider.size > 0) {
-          return [...byProvider.values()];
-        }
-      } catch {
-        // Try next candidate path.
-      }
+      const fallback = readModelHealthFromAlerts(db);
+      if (fallback.length > 0) return fallback;
     } finally {
       db.close();
     }
   }
   return [];
+}
+
+function readModelHealthFromAlerts(db: DatabaseSync): ModelHealthSummary[] {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT data
+         FROM alerts
+         WHERE type = 'model_health'
+         ORDER BY ts DESC
+         LIMIT 100`,
+      )
+      .all() as { data: string | null }[];
+
+    const byProvider = new Map<string, ModelHealthSummary>();
+    for (const row of rows) {
+      if (!row.data) continue;
+      try {
+        const parsed = JSON.parse(row.data) as {
+          provider?: string;
+          currentStatus?: string;
+          currentCircuit?: string;
+        };
+        if (!parsed.provider || byProvider.has(parsed.provider)) continue;
+        byProvider.set(parsed.provider, {
+          provider: parsed.provider,
+          status: parsed.currentStatus ?? "unknown",
+          circuit: parsed.currentCircuit ?? "closed",
+        });
+      } catch {
+        // Ignore malformed alert payload rows.
+      }
+    }
+    return [...byProvider.values()];
+  } catch {
+    return [];
+  }
 }
