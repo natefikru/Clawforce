@@ -96,6 +96,8 @@ Next.js dashboard with 4 panels:
 - **Cost Tracker** — Gateway-sourced cost data with Summary, Timeline, and What-If analysis tabs
 - **Task Log** — Recent agent runs with duration and outcome
 
+**Authentication** — Optional multi-user auth with Auth.js v5. When enabled, the dashboard requires login with username/password credentials stored in SQLite. JWT sessions with role-based access control (admin/viewer). Backward compatible: dashboard remains open when auth is not configured.
+
 ### Agent Role Templates
 
 Three starter templates included:
@@ -118,6 +120,9 @@ clawforce audit -n 100                  # Last 100 entries
 clawforce migrate --data-dir ./data     # Backfill JSONL logs into SQLite
 clawforce migrate --dry-run             # Preview migration without writing
 clawforce route-test "your prompt"      # Test routing decision without deploying
+clawforce user add admin -p "password" -r admin   # Add dashboard user
+clawforce user list                     # List dashboard users
+clawforce user remove admin             # Remove dashboard user
 ```
 
 ### Route Test
@@ -165,6 +170,10 @@ compliance:
 dashboard:
   enabled: true
   port: 3000
+  auth:                          # Optional — omit for open dashboard
+    enabled: true
+    username: admin
+    password: "your-secure-password"  # Min 8 characters
 
 ollama:
   enabled: true
@@ -214,7 +223,7 @@ The router plugin hooks into `before_agent_start` to override model selection, `
 git clone https://github.com/natefikru/clawforce.git
 cd clawforce
 npm install
-npm test           # 632 tests
+npm test           # 666 tests
 ```
 
 Dashboard:
@@ -222,7 +231,7 @@ Dashboard:
 ```bash
 cd clawforce-dashboard
 npm install
-npm test           # 45 tests
+npm test           # 78 tests
 ```
 
 ### Test Coverage

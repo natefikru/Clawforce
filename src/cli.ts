@@ -8,6 +8,7 @@ import { stopCommand } from "./commands/stop.js";
 import { auditCommand } from "./commands/audit.js";
 import { migrateCommand } from "./commands/migrate.js";
 import { routeTestCommand } from "./commands/route-test.js";
+import { userAddCommand, userListCommand, userRemoveCommand } from "./commands/user.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -108,6 +109,62 @@ export function createProgram(): Command {
       } catch (error) {
         console.error(
           "Route test failed:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
+    });
+
+  const user = program
+    .command("user")
+    .description("Manage dashboard users");
+
+  user
+    .command("add")
+    .description("Add a dashboard user")
+    .argument("<username>", "Username for the new user")
+    .requiredOption("-p, --password <password>", "User password (min 8 chars)")
+    .option("-r, --role <role>", "User role: admin or viewer", "viewer")
+    .option("-d, --data-dir <dir>", "Data directory", "./data")
+    .action(async (username: string, options: { password: string; role: string; dataDir: string }) => {
+      try {
+        await userAddCommand(username, options);
+      } catch (error) {
+        console.error(
+          "Failed to add user:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
+    });
+
+  user
+    .command("list")
+    .description("List all dashboard users")
+    .option("-d, --data-dir <dir>", "Data directory", "./data")
+    .action(async (options: { dataDir: string }) => {
+      try {
+        await userListCommand(options);
+      } catch (error) {
+        console.error(
+          "Failed to list users:",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
+    });
+
+  user
+    .command("remove")
+    .description("Remove a dashboard user")
+    .argument("<username>", "Username to remove")
+    .option("-d, --data-dir <dir>", "Data directory", "./data")
+    .action(async (username: string, options: { dataDir: string }) => {
+      try {
+        await userRemoveCommand(username, options);
+      } catch (error) {
+        console.error(
+          "Failed to remove user:",
           error instanceof Error ? error.message : error,
         );
         process.exit(1);

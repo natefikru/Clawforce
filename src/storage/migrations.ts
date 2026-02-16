@@ -101,6 +101,24 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    description: "Dashboard users table for authentication",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dashboard_users (
+          id TEXT PRIMARY KEY,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'viewer',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dashboard_users_username ON dashboard_users(username);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: DatabaseSync): void {

@@ -1,4 +1,5 @@
 import { writeFileSync, mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +11,7 @@ import { generateEnv } from "../config/generate-env.js";
 import { setupWorkspace } from "../workspace/setup.js";
 import { exec } from "../docker/exec.js";
 import { waitForHealthy } from "../docker/health.js";
+import { getDatabase, closeDatabase } from "../storage/database.js";
 import { logger } from "../utils/logger.js";
 
 export async function deployCommand(configPath: string): Promise<void> {
@@ -51,6 +53,32 @@ export async function deployCommand(configPath: string): Promise<void> {
   const env = generateEnv(config);
   writeFileSync(join(deployDir, ".env"), env, { mode: 0o600, flag: "w" });
   logger.success(".env generated");
+
+  // 6b. Seed admin user if dashboard auth is enabled
+  if (config.dashboard?.auth?.enabled && config.dashboard.auth.username && config.dashboard.auth.password) {
+    logger.step("Seeding dashboard admin user...");
+    const dataDir = join(deployDir, "data");
+    mkdirSync(dataDir, { recursive: true });
+    const db = getDatabase(join(dataDir, "clawforce.db"));
+    try {
+      const existing = db
+        .prepare("SELECT id FROM dashboard_users WHERE username = ?")
+        .get(config.dashboard.auth.username) as { id: string } | undefined;
+
+      if (!existing) {
+        const { hash } = await import("bcryptjs");
+        const passwordHash = await hash(config.dashboard.auth.password, 10);
+        db.prepare(
+          "INSERT INTO dashboard_users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+        ).run(randomUUID(), config.dashboard.auth.username, passwordHash, "admin");
+        logger.success(`Admin user "${config.dashboard.auth.username}" seeded.`);
+      } else {
+        logger.info(`Admin user "${config.dashboard.auth.username}" already exists, skipping.`);
+      }
+    } finally {
+      closeDatabase();
+    }
+  }
 
   // 7. Build dashboard image if enabled
   if (config.dashboard && config.dashboard.enabled !== false) {

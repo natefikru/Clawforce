@@ -16,5 +16,12 @@ export function generateEnv(config: ClawforceConfig): string {
     `ANTHROPIC_API_KEY=${config.models.api_key ?? ""}`,
   ];
 
+  if (config.dashboard?.auth?.enabled) {
+    const authSecret = randomBytes(32).toString("hex");
+    lines.push("");
+    lines.push("# Dashboard authentication");
+    lines.push(`AUTH_SECRET=${authSecret}`);
+  }
+
   return lines.join("\n") + "\n";
 }
