@@ -59,6 +59,23 @@ describe("generateCompose", () => {
     expect(env).toContain("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
   });
 
+  it("should omit provider API key in auth_profile credential mode", () => {
+    const parsed = parseYaml(
+      generateCompose(
+        makeConfig({
+          models: {
+            primary: "anthropic/claude-sonnet-4-5",
+            credential_mode: "auth_profile",
+            auth_profile: "corp-prod",
+          },
+        }),
+      ),
+    );
+    const env = parsed.services["openclaw-gateway"].environment;
+    expect(env).not.toContain("ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}");
+    expect(env).toContain("OPENCLAW_AUTH_PROFILE=${OPENCLAW_AUTH_PROFILE}");
+  });
+
   it("should default gateway bind to loopback", () => {
     const parsed = parseYaml(generateCompose(makeConfig()));
     const cmd = parsed.services["openclaw-gateway"].command;
