@@ -1,18 +1,18 @@
 # Clawforce: Forward Roadmap
 
 **Date**: 2026-02-15
-**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, and Phase 2A.1 complete)
+**Starting Point**: Post-MVP (Phases 0, 1, partial Phase 3, Phase 2A.1, and Phase 2A.2 complete)
 **Built On**: OpenClaw (open-source personal AI assistant)
 
 ---
 
 ## Current State (What's Shipped)
 
-All work shipped on `main` branch. 632 tests passing across 33 test files with 80% coverage enforced.
+All work shipped on `main` branch. 744 tests passing (666 root + 78 dashboard) with 80% coverage enforced.
 
 | Component | Status | Tests | Notes |
 |-----------|--------|-------|-------|
-| CLI (deploy, status, stop, audit, route-test, migrate) | Complete | 632 | Full lifecycle management + SQLite migration |
+| CLI (deploy, status, stop, audit, route-test, migrate, user) | Complete | 666 | Full lifecycle management + SQLite migration + user management |
 | 5-Dimension Model Router | Complete | ~200 | PII, complexity, domain, budget, data policy |
 | PII Detection (11 types + adversarial defense) | Complete | ~80 | Unicode normalization, homoglyph folding |
 | Output Filtering (PII redaction) | Complete | ~30 | message_sending + tool_result_persist hooks |
@@ -20,13 +20,14 @@ All work shipped on `main` branch. 632 tests passing across 33 test files with 8
 | Compliance Profiles (HIPAA, PCI-DSS, GDPR, CCPA, SOX) | Complete | ~20 | Framework-specific policy enforcement |
 | Budget Tracking (daily limits, SQLite-backed) | Complete | ~23 | Auto-fallback to local models, SQLite upsert |
 | SQLite Storage Layer | **Complete** | 87 | Dual-write, StorageWriter/Reader, migrations, migrate CLI |
+| Dashboard Auth (Auth.js v5, RBAC) | **Complete** | 112 | Multi-user, JWT sessions, login page, middleware, user CLI |
 | Dashboard (Status, Activity, Cost, Tasks) | Complete | 45 | Next.js, SQLite-first queries, 4 panels, 3 cost tabs |
 | Docker Compose Generation (OpenClaw + Ollama) | Complete | ~30 | Includes SGLang/vLLM runtime options |
 | 3 Role Templates | Complete | ~10 | Inbox Analyst, Research Agent, Process Automator |
 | Config System (clawforce.yaml -> openclaw.json) | Complete | ~30 | Zod validation, capability profiles |
 | OpenClaw Plugin Integration | Complete | — | before_agent_start hook with modelOverride/providerOverride |
 
-**What's NOT built**: Multi-agent orchestration, dashboard auth, real-time streaming, alert system, billing, onboarding wizard, health monitoring/failover, cross-tool coordination layer, expanded template library.
+**What's NOT built**: Multi-agent orchestration, real-time streaming, alert system, billing, onboarding wizard, health monitoring/failover, cross-tool coordination layer, expanded template library.
 
 ---
 
@@ -78,12 +79,21 @@ These are blockers that must be resolved before putting Clawforce in front of an
 - **Merged**: PR #3, 9 commits, 25 files, +4317/-28 lines
 - **Detailed plan**: [`docs/plans/sqlite-storage-layer.md`](docs/plans/sqlite-storage-layer.md)
 
-#### 2A.2 Dashboard Authentication
-- JWT-based auth with API key fallback
-- Login page with configurable credentials (from clawforce.yaml)
-- Auth middleware on all API routes and SSE streams
-- Session management with token refresh
-- **Why**: Anyone reaching port 3000 can currently read compliance data. Blocker for any external deployment.
+#### 2A.2 Dashboard Authentication — COMPLETE ✅
+- Auth.js v5 (NextAuth) with Credentials provider, JWT sessions (stateless, no session table)
+- Multi-user support with role-based access control (`admin` / `viewer`)
+- User storage in SQLite `dashboard_users` table (V2 migration) with bcrypt password hashing
+- Login page with server actions, dark theme matching dashboard design
+- Next.js middleware protects all routes: pages redirect to `/login`, API routes return 401
+- Backward compatible: dashboard remains open when `AUTH_SECRET` env var is absent
+- `clawforce user add/list/remove` CLI commands for user management with password and role validation
+- Admin user seeded host-side during `clawforce deploy` (data volume is `:ro` in Docker)
+- Config schema extended: `dashboard.auth` with `.refine()` validation (requires username + password when enabled)
+- `generate-env` produces `AUTH_SECRET`, `generate-compose` passes `AUTH_SECRET` + `AUTH_TRUST_HOST`
+- ActivityFeed component handles 401 errors with redirect to login
+- 112 new tests (744 total: 666 root + 78 dashboard)
+- **Merged**: PR #4
+- **Why**: Anyone reaching port 3000 could previously read compliance data. Blocker for any external deployment.
 
 #### 2A.3 Real-Time Event Streaming
 - Replace polling with Server-Sent Events (SSE) for activity feed
@@ -391,7 +401,7 @@ integrations:
 | Feature | Business Value | Technical Risk | Dependencies | Phase |
 |---------|---------------|----------------|--------------|-------|
 | ~~SQLite Storage Layer~~ | ~~CRITICAL (foundation)~~ | ~~LOW~~ | ~~None~~ | ~~2A.1~~ ✅ |
-| Dashboard Auth | HIGH (security blocker) | LOW | SQLite (2A.1) | 2A.2 |
+| ~~Dashboard Auth~~ | ~~HIGH (security blocker)~~ | ~~LOW~~ | ~~SQLite (2A.1)~~ | ~~2A.2~~ ✅ |
 | Real-Time Streaming | MEDIUM (demo quality) | LOW | SQLite (2A.1) | 2A.3 |
 | Model Health/Failover | HIGH (security invariant) | MEDIUM | SQLite (2A.1) | 2A.4 |
 | Alert System | HIGH (operational need) | LOW | SQLite + Streaming + Health (2A.1-4) | 2A.5 |
