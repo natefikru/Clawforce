@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type ClawforceConfig, isSingleAgentConfig } from "./types.js";
+import { type ClawforceConfig, isSingleAgentConfig, isMultiAgentConfig } from "./types.js";
 import { resolveProfile } from "./capability-profiles.js";
 import { discoverPlugins } from "../plugins/registry.js";
 
@@ -65,6 +65,23 @@ const DEFAULT_ROUTER_ALERTS_CONFIG: RouterAlertsConfig = {
   },
 };
 
+export interface OpenClawAgentProfile {
+  id: string;
+  workspace: string;
+  model?: {
+    primary: string;
+    fallbacks?: string[];
+  };
+}
+
+export interface OpenClawBinding {
+  agentId: string;
+  match: {
+    channel?: string[];
+    peer?: string[];
+  };
+}
+
 export interface OpenClawConfig {
   gateway?: {
     mode: string;
@@ -79,7 +96,9 @@ export interface OpenClawConfig {
         fallbacks?: string[];
       };
     };
+    list?: OpenClawAgentProfile[];
   };
+  bindings?: OpenClawBinding[];
   channels: {
   } & Record<string, unknown>;
   cron?: {
@@ -147,6 +166,39 @@ export function generateOpenClawConfig(
       dmScope: "per-channel-peer",
     },
   };
+
+  // Multi-agent: populate agents.list and bindings
+  if (isMultiAgentConfig(config)) {
+    result.agents.list = config.agents.map((agent) => {
+      const profile: OpenClawAgentProfile = {
+        id: agent.name,
+        workspace: `/home/node/.openclaw/workspace/${agent.name}`,
+      };
+      return profile;
+    });
+
+    const bindings: OpenClawBinding[] = [];
+    for (const agent of config.agents) {
+      if (agent.channels) {
+        for (const ch of agent.channels) {
+          const binding: OpenClawBinding = {
+            agentId: agent.name,
+            match: {},
+          };
+          if (ch.type === "channel" && ch.channels) {
+            binding.match.channel = ch.channels;
+          }
+          if (ch.type === "dm" && ch.users) {
+            binding.match.peer = ch.users;
+          }
+          bindings.push(binding);
+        }
+      }
+    }
+    if (bindings.length > 0) {
+      result.bindings = bindings;
+    }
+  }
 
   // Determine role(s) for template merging
   const role = isSingleAgentConfig(config) ? config.role : undefined;
@@ -328,6 +380,58 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
   }
   if (config.sensitivity?.pii_pattern_thresholds) {
     routerConfig.piiPatternThresholds = config.sensitivity.pii_pattern_thresholds;
+  }
+
+  // Multi-agent: per-agent budgets and routing overrides
+  if (isMultiAgentConfig(config)) {
+    const agentBudgets: Record<string, { dailyLimit: number; perRequestCap?: number; fallbackModel?: string }> = {};
+    const agentRules: Record<string, Array<{ condition: string; model: string }>> = {};
+    let hasAgentBudgets = false;
+    let hasAgentRules = false;
+
+    for (const agent of config.agents) {
+      if (agent.routing?.budget_daily) {
+        agentBudgets[agent.name] = {
+          dailyLimit: agent.routing.budget_daily,
+          ...(agent.routing.per_request_cap !== undefined
+            ? { perRequestCap: agent.routing.per_request_cap }
+            : {}),
+          ...(agent.routing.fallback_model
+            ? { fallbackModel: agent.routing.fallback_model }
+            : {}),
+        };
+        hasAgentBudgets = true;
+      }
+      if (agent.routing?.rules && agent.routing.rules.length > 0) {
+        agentRules[agent.name] = agent.routing.rules;
+        hasAgentRules = true;
+      }
+    }
+
+    if (hasAgentBudgets) {
+      routerConfig.agentBudgets = agentBudgets;
+    }
+    if (hasAgentRules) {
+      routerConfig.agentRules = agentRules;
+    }
+
+    // Pass defaults router config for multi-agent
+    if (config.defaults.router?.rules) {
+      routerConfig.rules = config.defaults.router.rules;
+    }
+    if (config.defaults.router?.sensitivity_keywords) {
+      routerConfig.sensitivityKeywords = config.defaults.router.sensitivity_keywords;
+    }
+    if (config.defaults.router?.priority) {
+      routerConfig.priority = config.defaults.router.priority;
+    }
+    if (config.defaults.router?.budget) {
+      routerConfig.budget = {
+        dailyLimit: config.defaults.router.budget.daily_limit,
+        perRequestCap: config.defaults.router.budget.per_request_cap,
+        fallbackModel: config.defaults.router.budget.fallback_model,
+      };
+    }
   }
 
   return routerConfig;

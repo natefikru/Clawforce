@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   generateOpenClawConfig,
   type OpenClawConfig,
+  type OpenClawAgentProfile,
+  type OpenClawBinding,
 } from "../../../src/config/generate-openclaw.js";
 import type { ClawforceConfig } from "../../../src/config/types.js";
 
@@ -613,5 +615,166 @@ describe("generateOpenClawConfig", () => {
       expect(notifications.unsupportedConnectorB).toBeUndefined();
       expect(notifications.webhook_url).toBeUndefined();
     });
+  });
+});
+
+function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
+  return {
+    name: "test-workforce",
+    agents: [
+      {
+        name: "inbox-analyst",
+        role: "inbox-analyst",
+        channels: [{ type: "channel", channels: ["#inbox-triage"] }],
+        routing: { budget_daily: 5.0 },
+      },
+      {
+        name: "research-agent",
+        role: "research-agent",
+        channels: [
+          { type: "channel", channels: ["#research"] },
+          { type: "dm", users: ["alice", "bob"] },
+        ],
+        routing: {
+          budget_daily: 8.0,
+          rules: [{ condition: "high_complexity", model: "anthropic/claude-sonnet-4-5" }],
+        },
+      },
+    ],
+    defaults: {
+      models: {
+        cloud: "anthropic/claude-sonnet-4-5",
+        local: "ollama/llama3.3:8b",
+      },
+    },
+    openclaw: {
+      channels: {
+        discord: { enabled: true },
+      },
+    },
+    ...overrides,
+  };
+}
+
+describe("generateOpenClawConfig — multi-agent", () => {
+  it("should generate agents.list with correct IDs and workspaces", () => {
+    const result = generateOpenClawConfig(makeMultiAgentConfig());
+    expect(result.agents.list).toHaveLength(2);
+    expect(result.agents.list![0]).toEqual({
+      id: "inbox-analyst",
+      workspace: "/home/node/.openclaw/workspace/inbox-analyst",
+    });
+    expect(result.agents.list![1]).toEqual({
+      id: "research-agent",
+      workspace: "/home/node/.openclaw/workspace/research-agent",
+    });
+  });
+
+  it("should generate bindings from channel assignments", () => {
+    const result = generateOpenClawConfig(makeMultiAgentConfig());
+    expect(result.bindings).toHaveLength(3);
+    expect(result.bindings![0]).toEqual({
+      agentId: "inbox-analyst",
+      match: { channel: ["#inbox-triage"] },
+    });
+    expect(result.bindings![1]).toEqual({
+      agentId: "research-agent",
+      match: { channel: ["#research"] },
+    });
+    expect(result.bindings![2]).toEqual({
+      agentId: "research-agent",
+      match: { peer: ["alice", "bob"] },
+    });
+  });
+
+  it("should use defaults.models.cloud as primary model", () => {
+    const result = generateOpenClawConfig(makeMultiAgentConfig());
+    expect(result.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
+  });
+
+  it("should use defaults.models.local as fallback", () => {
+    const result = generateOpenClawConfig(makeMultiAgentConfig());
+    expect(result.agents.defaults.model.fallbacks).toEqual(["ollama/llama3.3:8b"]);
+  });
+
+  it("should not generate agents.list for single-agent config", () => {
+    const result = generateOpenClawConfig(makeConfig());
+    expect(result.agents.list).toBeUndefined();
+  });
+
+  it("should not generate bindings for single-agent config", () => {
+    const result = generateOpenClawConfig(makeConfig());
+    expect(result.bindings).toBeUndefined();
+  });
+
+  it("should include agentBudgets in router plugin config", () => {
+    const result = generateOpenClawConfig(
+      makeMultiAgentConfig({ router: { enabled: true } }),
+    );
+    const routerCfg = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+    const budgets = routerCfg.agentBudgets as Record<string, unknown>;
+    expect(budgets).toBeDefined();
+    expect(budgets["inbox-analyst"]).toEqual({ dailyLimit: 5.0 });
+    expect(budgets["research-agent"]).toEqual({ dailyLimit: 8.0 });
+  });
+
+  it("should include agentRules in router plugin config when per-agent rules defined", () => {
+    const result = generateOpenClawConfig(
+      makeMultiAgentConfig({ router: { enabled: true } }),
+    );
+    const routerCfg = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+    const rules = routerCfg.agentRules as Record<string, unknown>;
+    expect(rules).toBeDefined();
+    expect(rules["research-agent"]).toEqual([
+      { condition: "high_complexity", model: "anthropic/claude-sonnet-4-5" },
+    ]);
+    expect(rules["inbox-analyst"]).toBeUndefined();
+  });
+
+  it("should pass defaults.router config into router plugin", () => {
+    const result = generateOpenClawConfig(
+      makeMultiAgentConfig({
+        defaults: {
+          models: {
+            cloud: "anthropic/claude-sonnet-4-5",
+            local: "ollama/llama3.3:8b",
+          },
+          router: {
+            enabled: true,
+            priority: ["domain", "sensitivity", "complexity"],
+            sensitivity_keywords: ["password", "secret"],
+          },
+        },
+      }),
+    );
+    const routerCfg = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+    expect(routerCfg.priority).toEqual(["domain", "sensitivity", "complexity"]);
+    expect(routerCfg.sensitivityKeywords).toEqual(["password", "secret"]);
+  });
+
+  it("should omit agentBudgets when no agents have budget config", () => {
+    const result = generateOpenClawConfig(
+      makeMultiAgentConfig({
+        agents: [
+          { name: "agent-a", role: "inbox-analyst", channels: [{ type: "channel", channels: ["#a"] }] },
+          { name: "agent-b", role: "research-agent", channels: [{ type: "channel", channels: ["#b"] }] },
+        ],
+        router: { enabled: true },
+      }),
+    );
+    const routerCfg = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+    expect(routerCfg.agentBudgets).toBeUndefined();
+  });
+
+  it("should merge role partials for all unique roles in multi-agent", () => {
+    const result = generateOpenClawConfig(makeMultiAgentConfig());
+    // inbox-analyst role partial enables cron
+    expect(result.cron?.enabled).toBe(true);
+  });
+
+  it("should preserve openclaw passthrough in multi-agent mode", () => {
+    const result = generateOpenClawConfig(makeMultiAgentConfig());
+    const channels = result.channels as Record<string, unknown>;
+    expect(channels.discord).toEqual({ enabled: true });
   });
 });
