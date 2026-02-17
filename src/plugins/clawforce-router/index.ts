@@ -58,7 +58,9 @@ import {
 export interface RouterPluginConfig {
   defaultModel?: string;
   rules?: RoutingRule[];
+  agentRules?: Record<string, Array<{ condition: string; model: string }>>;
   sensitivityKeywords?: string[];
+  piiDetection?: boolean;
   logPath?: string;
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
@@ -438,8 +440,10 @@ export function activate(api: RouterPluginApi): void {
       const messages = Array.isArray(event.messages) ? event.messages : undefined;
       const textToScan = buildScanText(prompt, messages);
       const piiOptions = buildPIIOptions(config);
-      const hasPII = detectPII(textToScan, piiOptions);
-      const piiTypes = hasPII
+      const hasPII = config.piiDetection
+        ? detectPII(textToScan, piiOptions)
+        : false;
+      const piiTypes = config.piiDetection && hasPII
         ? detectPIITypes(textToScan, piiOptions)
         : [];
 
@@ -499,13 +503,17 @@ export function activate(api: RouterPluginApi): void {
         }
       }
 
+      const effectiveRules = ctx.agentId && config.agentRules?.[ctx.agentId]
+        ? config.agentRules[ctx.agentId]
+        : config.rules;
+
       let decision = selectModel({
         hasPII,
         complexity,
         domain: domainSignals.domain,
         budgetCheck,
         dataTier: effectiveDataTier,
-        rules: config.rules,
+        rules: effectiveRules,
         defaultModel: config.defaultModel,
         defaultLocalModel: config.defaultLocalModel,
         priority: config.priority,
@@ -762,6 +770,7 @@ interface ResolvedRouterConfig {
   defaultLocalModel?: string;
   rules: RoutingRule[];
   sensitivityKeywords: string[];
+  piiDetection: boolean;
   logPath: string;
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
@@ -791,6 +800,9 @@ function resolveConfig(
     rules,
     sensitivityKeywords: Array.isArray(pluginConfig?.sensitivityKeywords)
       ? (pluginConfig.sensitivityKeywords as string[]) : [],
+    piiDetection: typeof pluginConfig?.piiDetection === "boolean"
+      ? pluginConfig.piiDetection
+      : true,
     logPath: typeof pluginConfig?.logPath === "string"
       ? pluginConfig.logPath : "/home/node/.openclaw/data/routing.jsonl",
     priority: Array.isArray(pluginConfig?.priority)

@@ -292,6 +292,8 @@ router:
   rules:                               # Custom routing rules (first match wins per dimension)
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"      # Must be a local model — cloud models are overridden
+    - condition: "medium_complexity"
+      model: "openai/gpt-4o-mini"
     - condition: "high_complexity"
       model: "anthropic/claude-sonnet-4-5"
     - condition: "low_complexity"
@@ -302,7 +304,7 @@ router:
       model: "anthropic/claude-sonnet-4-5"
     - condition: "over_budget"
       model: "ollama/llama3.3:8b"
-  sensitivity_keywords:                # Additional blocklist words that trigger PII routing
+  sensitivity_keywords:                # Additional blocklist words that trigger PII routing (merged with sensitivity.blocklist)
     - "password"
     - "secret"
     - "confidential"
@@ -325,6 +327,11 @@ router:
     recovery_threshold: 2              # Consecutive successes to close circuit
     retry_attempts: 2                  # Retries per probe (0 disables)
     retry_delay_ms: 500                # Delay between retries
+
+sensitivity:
+  pii_detection: true                  # Enabled by default; disable only for controlled experiments
+  blocklist:                           # Merged into router.sensitivity_keywords
+    - "internal-only"
 
 compliance:
   enabled: true
@@ -400,6 +407,7 @@ openclaw:
 |-----------|---------------|
 | `pii_detected` | Any PII pattern matches in prompt or recent history |
 | `low_complexity` | Prompt scores as low complexity (short, simple) |
+| `medium_complexity` | Prompt scores as medium complexity (moderate scope/structure) |
 | `high_complexity` | Prompt scores as high complexity (long, multi-step) |
 | `domain_code` | Prompt classified as programming/technical |
 | `domain_writing` | Prompt classified as writing/creative |
