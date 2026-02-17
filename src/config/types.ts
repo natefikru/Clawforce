@@ -104,6 +104,7 @@ const alertsSchema = z.object({
 const routingConditionEnum = z.enum([
   "pii_detected",
   "low_complexity",
+  "medium_complexity",
   "high_complexity",
   "domain_code",
   "domain_writing",

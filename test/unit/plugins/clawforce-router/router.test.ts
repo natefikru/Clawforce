@@ -85,7 +85,7 @@ describe("selectModel", () => {
       expect(result.reason).toContain("capable");
     });
 
-    it("should use default model for medium complexity", () => {
+    it("should use default model for medium complexity without explicit rule", () => {
       const result = selectModel({
         hasPII: false,
         complexity: "medium",
@@ -94,6 +94,20 @@ describe("selectModel", () => {
       });
       expect(result.model).toBe(DEFAULT_MODEL);
       expect(result.reason).toContain("default");
+    });
+
+    it("should route medium complexity when medium_complexity rule exists", () => {
+      const rules: RoutingRule[] = [
+        { condition: "medium_complexity", model: "openai/gpt-4o-mini" },
+      ];
+      const result = selectModel({
+        hasPII: false,
+        complexity: "medium",
+        rules,
+        defaultModel: DEFAULT_MODEL,
+      });
+      expect(result.model).toBe("openai/gpt-4o-mini");
+      expect(result.reason).toContain("balanced");
     });
   });
 

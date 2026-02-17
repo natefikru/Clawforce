@@ -11,11 +11,16 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { activate, type RouterPluginApi } from "../../src/plugins/clawforce-router/index.js";
+import { generateOpenClawConfig } from "../../src/config/generate-openclaw.js";
 
-vi.mock("node:fs", () => ({
-  appendFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-}));
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    appendFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+  };
+});
 
 type HookResult = {
   prependContext?: string;
@@ -210,6 +215,35 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
       expect(effectiveProvider).toBe("anthropic");
       expect(effectiveModel).toBe("claude-sonnet-4-5");
     });
+
+    it("applies policy tiers from generated plugin config (snake_case config input)", () => {
+      const generated = generateOpenClawConfig({
+        name: "policy-mapping-check",
+        role: "inbox-analyst",
+        models: {
+          primary: "anthropic/claude-sonnet-4-5",
+          credential_mode: "env",
+          provider_keys: { anthropic: "${ANTHROPIC_API_KEY}" },
+        },
+        router: { enabled: true },
+        policy: {
+          default_tier: "public",
+          channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+        },
+      });
+
+      const pluginConfig = generated.plugins?.entries?.["clawforce-router"]
+        ?.config as Record<string, unknown>;
+      const pipeline = createPluginPipeline(pluginConfig);
+      const { effectiveProvider } = pipeline.simulateAgentRun(
+        "Summarize this update",
+        { agentId: "main", channelId: "C_SECURE" },
+      );
+
+      expect(effectiveProvider).not.toBe("anthropic");
+      expect(effectiveProvider).not.toBe("openai");
+      expect(effectiveProvider).not.toBe("google");
+    });
   });
 
   // ─── Sensitivity Thresholds ─────────────────────────────────────────────
@@ -239,6 +273,44 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
 
       expect(effectiveProvider).toBe("sglang");
       expect(effectiveModel).toBe("qwen3-32b");
+    });
+
+    it("piiDetection=false disables PII routing and falls through to complexity/default logic", () => {
+      const pipeline = createPluginPipeline({
+        piiDetection: false,
+        priority: ["sensitivity", "complexity"],
+        rules: [
+          { condition: "pii_detected", model: "sglang/qwen3-32b" },
+          { condition: "high_complexity", model: "anthropic/claude-sonnet-4-5" },
+        ],
+      });
+
+      const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
+        "My SSN is 123-45-6789",
+      );
+
+      expect(effectiveProvider).toBe("anthropic");
+      expect(effectiveModel).toBe("claude-sonnet-4-5");
+    });
+  });
+
+  // ─── Complexity Dimension ──────────────────────────────────────────────
+
+  describe("Complexity dimension — medium complexity routing", () => {
+    it("routes medium prompts using medium_complexity rule when configured", () => {
+      const pipeline = createPluginPipeline({
+        priority: ["complexity"],
+        rules: [
+          { condition: "medium_complexity", model: "openai/gpt-4o-mini" },
+        ],
+      });
+
+      const { effectiveProvider, effectiveModel } = pipeline.simulateAgentRun(
+        "Please compare two deployment approaches for our API platform and provide pros, cons, risks, migration steps, and a concise recommendation for the team.",
+      );
+
+      expect(effectiveProvider).toBe("openai");
+      expect(effectiveModel).toBe("gpt-4o-mini");
     });
   });
 
@@ -530,6 +602,27 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
       // With PII: post-routing invariant still catches cloud → forces local
       const pii = pipeline.simulateAgentRun("My SSN is 123-45-6789");
       expect(pii.effectiveProvider).not.toBe("anthropic");
+    });
+  });
+
+  describe("Per-agent routing rules", () => {
+    it("uses agentRules for matching ctx.agentId and falls back to global rules otherwise", () => {
+      const pipeline = createPluginPipeline({
+        rules: [
+          { condition: "low_complexity", model: "anthropic/claude-sonnet-4-5" },
+        ],
+        agentRules: {
+          "agent-local": [
+            { condition: "low_complexity", model: "ollama/llama3.3:8b" },
+          ],
+        },
+      });
+
+      const forAgentLocal = pipeline.simulateAgentRun("summarize this quickly", { agentId: "agent-local" });
+      expect(forAgentLocal.effectiveProvider).toBe("ollama");
+
+      const forAgentOther = pipeline.simulateAgentRun("summarize this quickly", { agentId: "agent-other" });
+      expect(forAgentOther.effectiveProvider).toBe("anthropic");
     });
   });
 });

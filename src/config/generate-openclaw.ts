@@ -369,7 +369,7 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
     defaultModel: primaryModel,
     ...(localModel ? { defaultLocalModel: localModel } : {}),
     alerts: mapRouterAlertsConfig(config),
-    ...(config.policy ? { policy: config.policy } : {}),
+    ...(config.policy ? { policy: normalizePolicyConfig(config.policy) } : {}),
     ...(config.compliance_frameworks
       ? { complianceFrameworks: config.compliance_frameworks }
       : {}),
@@ -380,6 +380,15 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
   }
   if (config.router?.sensitivity_keywords) {
     routerConfig.sensitivityKeywords = config.router.sensitivity_keywords;
+  }
+  if (config.sensitivity?.blocklist) {
+    const existing = Array.isArray(routerConfig.sensitivityKeywords)
+      ? routerConfig.sensitivityKeywords as string[]
+      : [];
+    routerConfig.sensitivityKeywords = [...new Set([...existing, ...config.sensitivity.blocklist])];
+  }
+  if (config.sensitivity?.pii_detection !== undefined) {
+    routerConfig.piiDetection = config.sensitivity.pii_detection;
   }
   if (config.router?.priority) {
     routerConfig.priority = config.router.priority;
@@ -465,6 +474,30 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
   }
 
   return routerConfig;
+}
+
+function normalizePolicyConfig(policy: ClawforceConfig["policy"]): Record<string, unknown> {
+  if (!policy) return {};
+  return {
+    defaultTier: policy.default_tier,
+    ...(policy.channels
+      ? {
+        channels: policy.channels.map((channel) => ({
+          channelId: channel.channel_id,
+          tier: channel.tier,
+          ...(channel.description ? { description: channel.description } : {}),
+        })),
+      }
+      : {}),
+    ...(policy.users
+      ? {
+        users: policy.users.map((user) => ({
+          userId: user.user_id,
+          tier: user.tier,
+        })),
+      }
+      : {}),
+  };
 }
 
 function mapRouterAlertsConfig(config: ClawforceConfig): RouterAlertsConfig {

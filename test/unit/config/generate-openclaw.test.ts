@@ -442,21 +442,42 @@ describe("generateOpenClawConfig", () => {
       });
     });
 
-    it("should pass policy config through to router plugin config", () => {
+    it("should normalize policy config for router plugin config", () => {
       const result = generateOpenClawConfig(
         makeConfig({
           router: { enabled: true },
           policy: {
             default_tier: "internal",
-            channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+            channels: [{ channel_id: "C_SECURE", tier: "restricted", description: "secure channel" }],
+            users: [{ user_id: "U_FINANCE", tier: "confidential" }],
           },
         }),
       );
       const pluginConfig = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
       expect(pluginConfig.policy).toEqual({
-        default_tier: "internal",
-        channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+        defaultTier: "internal",
+        channels: [{ channelId: "C_SECURE", tier: "restricted", description: "secure channel" }],
+        users: [{ userId: "U_FINANCE", tier: "confidential" }],
       });
+    });
+
+    it("should merge sensitivity blocklist with router sensitivity keywords", () => {
+      const result = generateOpenClawConfig(
+        makeConfig({
+          router: {
+            enabled: true,
+            sensitivity_keywords: ["password", "secret"],
+          },
+          sensitivity: {
+            blocklist: ["secret", "confidential"],
+            pii_detection: false,
+          },
+        }),
+      );
+
+      const pluginConfig = result.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+      expect(pluginConfig.sensitivityKeywords).toEqual(["password", "secret", "confidential"]);
+      expect(pluginConfig.piiDetection).toBe(false);
     });
 
     it("should pass compliance frameworks through to router plugin config", () => {

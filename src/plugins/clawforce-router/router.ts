@@ -1,7 +1,7 @@
 /**
  * Multi-dimensional model selection logic.
  * Evaluates dimensions in configurable priority order:
- * sensitivity → cost → domain → complexity (default).
+ * policy → sensitivity → cost → domain → complexity (default).
  * First matching dimension wins.
  */
 
@@ -14,6 +14,7 @@ import { tierRequiresLocal, type DataTier } from "./data-policy.js";
 export type RoutingCondition =
   | "pii_detected"
   | "low_complexity"
+  | "medium_complexity"
   | "high_complexity"
   | "domain_code"
   | "domain_writing"
@@ -31,6 +32,7 @@ export interface RoutingRule {
 const SUPPORTED_ROUTING_CONDITIONS: RoutingCondition[] = [
   "pii_detected",
   "low_complexity",
+  "medium_complexity",
   "high_complexity",
   "domain_code",
   "domain_writing",
@@ -254,6 +256,16 @@ function evaluateComplexity(ctx: DimensionContext) {
       return {
         model: rule.model,
         reason: "Low complexity — routing to cost-efficient model",
+        matchedRule: rule,
+      };
+    }
+  }
+  if (ctx.complexity === "medium") {
+    const rule = ctx.rules.find((r) => r.condition === "medium_complexity");
+    if (rule) {
+      return {
+        model: rule.model,
+        reason: "Medium complexity — routing to balanced model",
         matchedRule: rule,
       };
     }

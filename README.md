@@ -8,29 +8,30 @@
 
 Clawforce deploys, routes, and monitors autonomous AI agents on your infrastructure — with built-in PII protection, compliance logging, and intelligent cost optimization. Your data never leaves your network. Sensitive requests route to local models automatically.
 
-Built on [OpenClaw](https://github.com/natefikru/openclaw), the open-source multi-channel AI gateway.
+Built on [OpenClaw](https://github.com/openclaw/openclaw), the open-source multi-channel AI gateway.
 
 ---
 
-## The Problem
+## 30-Second Overview
 
-Businesses want AI agents handling real work — email triage, research, process automation — but face three blockers:
+Clawforce is a control plane for OpenClaw that answers three practical questions:
 
-1. **Data sovereignty** — Regulated industries can't send customer PII to cloud AI providers. Period.
-2. **Cost unpredictability** — Cloud AI bills scale with usage and are hard to forecast or control.
-3. **No audit trail** — Compliance teams need to know exactly what the AI did, when, and with whose data.
+1. **Which model should handle this message?**  
+   Route by sensitivity, policy, complexity, domain, and budget.
+2. **Can we prove what the agent did?**  
+   Capture structured audit events (JSONL + SQLite) and compliance-friendly records.
+3. **Can we run this safely in production?**  
+   Deploy with secure defaults, model health checks, and runtime visibility.
 
-OpenClaw solves the runtime problem (channels, tools, sandboxing). Clawforce solves the business problem: how do you deploy, secure, monitor, and control AI agents at scale?
+Use Clawforce when you want OpenClaw agents in production with stronger controls for security, spend, and operations.
 
-## The Solution
+## What It Adds On Top of OpenClaw
 
-Clawforce is an orchestration and management layer that wraps OpenClaw with:
-
-- **Intelligent model routing** — A 5-dimension router (PII sensitivity, data policy, complexity, domain, budget) picks the right model for every request. Simple tasks go to cheap local models. Complex tasks go to capable cloud models. PII never touches the cloud.
-- **Cost intelligence** — Daily budget caps, automatic fallback to local models when spend limits are hit, and a cost dashboard showing exactly where money goes.
-- **Compliance-ready logging** — Every agent action is captured as structured audit logs (JSONL + SQLite) with pre-built profiles for HIPAA, PCI-DSS, GDPR, CCPA, and SOX.
-- **Real-time monitoring** — Dashboard with agent health, activity feeds, alerts, and cost tracking. Know what your agents are doing at all times.
-- **One-command deployment** — A single YAML config generates the full stack: gateway, local models, compliance plugins, and monitoring dashboard — all via Docker Compose.
+- **Intelligent model routing** — A 5-dimension router (PII sensitivity, data policy, complexity, domain, budget) selects the right model per request.
+- **Cost controls** — Daily budget caps plus automatic fallback to local models when limits are exceeded.
+- **Compliance-ready logging** — Structured logs and a queryable SQLite store, with profiles for HIPAA, PCI-DSS, GDPR, CCPA, and SOX.
+- **Operational dashboard** — Agent health, activity, alerts, and cost trends in one place.
+- **One-command deployment** — One YAML config and `clawforce deploy` to generate and run the stack with Docker Compose.
 
 ```
 Customer Infrastructure (channels, tools, data)
@@ -46,10 +47,10 @@ Customer Infrastructure (channels, tools, data)
 
 | Value | Proof Point |
 |-------|------------|
-| **Cost savings** | Router reduces cloud AI spend 40-65% by routing simple tasks to local models |
-| **Data sovereignty** | PII enforced at 3 independent layers — never reaches cloud models regardless of config |
-| **Compliance** | Full audit trail for SOC 2 / HIPAA. Every action logged with model, reason, and PII classification |
-| **Operational visibility** | Real-time dashboard with health, activity, alerts, cost tracking, and what-if analysis |
+| **Cost savings** | Mixed workloads can reduce cloud spend by routing simple tasks to local models first |
+| **Data sovereignty** | PII is enforced as a safety invariant and blocked from cloud routing |
+| **Compliance** | Full audit trail with model, reason, and PII classification per decision |
+| **Operational visibility** | Dashboard with health, activity, alerts, cost tracking, and what-if analysis |
 | **Time to value** | One YAML file, one command: `clawforce deploy` |
 
 ---
@@ -124,13 +125,15 @@ router:
   rules:
     - condition: "pii_detected"
       model: "sglang/qwen3-32b"
+    - condition: "medium_complexity"
+      model: "openai/gpt-4o-mini"
     - condition: "high_complexity"
       model: "anthropic/claude-sonnet-4-5"
     - condition: "domain_code"
       model: "openai/gpt-4o"
     - condition: "over_budget"
       model: "sglang/qwen3-32b"
-  sensitivity_keywords: ["password", "secret", "confidential"]
+  sensitivity_keywords: ["password", "secret", "confidential"] # merged with sensitivity.blocklist
   priority: ["sensitivity", "cost", "domain", "complexity"]
   budget:
     daily_limit: 10.00
@@ -157,7 +160,8 @@ PII confidence filtering is configurable globally and per pattern:
 
 ```yaml
 sensitivity:
-  pii_detection: true
+  pii_detection: true      # default true; set false only for controlled experiments
+  blocklist: ["secret"]    # additional keywords merged into router.sensitivity_keywords
   pii_confidence_threshold: 0.80
   pii_pattern_thresholds:
     ip_address: 0.50
@@ -292,8 +296,8 @@ gateway:
 
 router:
   enabled: true
-  rules: []                      # Custom routing rules
-  sensitivity_keywords: []       # Additional PII keywords
+  rules: []                      # Custom routing rules (pii_detected | low_complexity | medium_complexity | high_complexity | domain_* | over_budget)
+  sensitivity_keywords: []       # Router-level sensitivity keywords (merged with sensitivity.blocklist)
   priority:                      # Dimension evaluation order
     - policy
     - sensitivity
@@ -310,7 +314,8 @@ router:
     retry_delay_ms: 500          # 0..5000, default 500
 
 sensitivity:
-  pii_detection: true
+  pii_detection: true            # Enabled by default
+  blocklist: []                  # Additional keywords merged into router.sensitivity_keywords
   pii_confidence_threshold: 0.80 # 0.0..1.0 global minimum confidence
   pii_pattern_thresholds:        # Optional per-pattern overrides
     ip_address: 0.50
