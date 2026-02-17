@@ -318,4 +318,76 @@ describe("BudgetTracker", () => {
       expect(state.spent).toBe(0);
     });
   });
+
+  describe("per-agent budget config", () => {
+    let db: DatabaseSync;
+
+    beforeEach(() => {
+      db = createTestDatabase();
+    });
+
+    afterEach(() => {
+      db.close();
+    });
+
+    it("should isolate limits per agent with per-agent config map", () => {
+      const tracker = new BudgetTracker(
+        {
+          "agent-a": { dailyLimit: 5, fallbackModel: "ollama/llama3.3:8b" },
+          "agent-b": { dailyLimit: 10, fallbackModel: "ollama/llama3.3:8b" },
+        },
+        STATE_PATH,
+        db,
+      );
+
+      tracker.recordSpend(4.0, "agent-a");
+      tracker.recordSpend(4.0, "agent-b");
+
+      const checkA = tracker.checkBudget(2.0, "agent-a");
+      const checkB = tracker.checkBudget(2.0, "agent-b");
+
+      expect(checkA.withinBudget).toBe(false);
+      expect(checkA.suggestedModel).toBe("ollama/llama3.3:8b");
+      expect(checkB.withinBudget).toBe(true);
+    });
+
+    it("should return allow-all for agent without config in per-agent map", () => {
+      const tracker = new BudgetTracker(
+        {
+          "agent-a": { dailyLimit: 5, fallbackModel: "ollama/llama3.3:8b" },
+        },
+        STATE_PATH,
+        db,
+      );
+
+      const check = tracker.checkBudget(1000, "agent-unknown");
+      expect(check.withinBudget).toBe(true);
+      expect(check.remainingBudget).toBe(Infinity);
+    });
+
+    it("should not interfere between concurrent agent state lookups", () => {
+      const tracker = new BudgetTracker(
+        {
+          "agent-a": { dailyLimit: 10, fallbackModel: "ollama/llama3.3:8b" },
+          "agent-b": { dailyLimit: 10, fallbackModel: "ollama/llama3.3:8b" },
+        },
+        STATE_PATH,
+        db,
+      );
+
+      // Interleave operations between agents
+      tracker.recordSpend(1.0, "agent-a");
+      tracker.recordSpend(2.0, "agent-b");
+      tracker.recordSpend(3.0, "agent-a");
+      tracker.recordSpend(4.0, "agent-b");
+
+      const stateA = tracker.getState("agent-a");
+      const stateB = tracker.getState("agent-b");
+
+      expect(stateA.spent).toBe(4.0);
+      expect(stateA.requestCount).toBe(2);
+      expect(stateB.spent).toBe(6.0);
+      expect(stateB.requestCount).toBe(2);
+    });
+  });
 });

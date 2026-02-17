@@ -22,7 +22,11 @@ export async function deployCommand(configPath: string): Promise<void> {
   // 1. Parse and validate config
   logger.step("Parsing config...");
   const config = parseConfig(configPath);
-  logger.success(`Config valid: ${config.name} (${config.role})`);
+  if (config.role) {
+    logger.success(`Config valid: ${config.name} (${config.role})`);
+  } else {
+    logger.success(`Config valid: ${config.name} (${config.agents!.length} agents)`);
+  }
 
   // 2. Create deployment directory
   const deployDir = resolve(`./clawforce-${config.name}`);
@@ -164,7 +168,11 @@ export async function deployCommand(configPath: string): Promise<void> {
 
   logger.header("Deployment successful!");
   logger.info(`Gateway:          ws://127.0.0.1:18789`);
-  logger.info(`Role:             ${config.role}`);
+  if (config.role) {
+    logger.info(`Role:             ${config.role}`);
+  } else {
+    logger.info(`Agents:           ${config.agents!.map((a) => `${a.name} (${a.role})`).join(", ")}`);
+  }
   logger.info(`Deploy dir:       ${deployDir}`);
   if (config.dashboard && config.dashboard.enabled !== false) {
     const port = config.dashboard.port ?? 3000;

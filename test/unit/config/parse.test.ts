@@ -22,9 +22,9 @@ describe("parseConfig", () => {
     expect(config.openclaw?.channels).toEqual({
       discord: { enabled: true },
     });
-    expect(config.models.primary).toBe("anthropic/claude-sonnet-4-5");
-    expect(config.models.local).toBe("ollama/llama3.3:8b");
-    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-test123");
+    expect(config.models!.primary).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.models!.local).toBe("ollama/llama3.3:8b");
+    expect(config.models!.provider_keys?.anthropic).toBe("sk-ant-test123");
     expect(config.approval?.mode).toBe("hybrid");
     expect(config.approval?.require_approval_for).toEqual([
       "browser",
@@ -50,7 +50,7 @@ describe("parseConfig", () => {
   it("should expand environment variables", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-expanded";
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
-    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-expanded");
+    expect(config.models!.provider_keys?.anthropic).toBe("sk-ant-expanded");
   });
 
   it("should throw on missing env var", () => {
@@ -188,8 +188,8 @@ describe("parseConfig", () => {
 
   it("should parse auth_profile credential mode when profile is provided", () => {
     const config = parseConfig(join(fixturesDir, "valid-auth-profile-config.yaml"));
-    expect(config.models.credential_mode).toBe("auth_profile");
-    expect(config.models.auth_profile).toBe("corp-prod");
+    expect(config.models!.credential_mode).toBe("auth_profile");
+    expect(config.models!.auth_profile).toBe("corp-prod");
   });
 
   it("should reject auth_profile credential mode without profile", () => {
@@ -206,8 +206,75 @@ describe("parseConfig", () => {
 
   it("should allow env credential mode without provider key for local models", () => {
     const config = parseConfig(join(fixturesDir, "valid-env-local-without-api-key.yaml"));
-    expect(config.models.credential_mode).toBe("env");
-    expect(config.models.provider_keys).toBeUndefined();
-    expect(config.models.primary).toBe("ollama/llama3.3:8b");
+    expect(config.models!.credential_mode).toBe("env");
+    expect(config.models!.provider_keys).toBeUndefined();
+    expect(config.models!.primary).toBe("ollama/llama3.3:8b");
+  });
+});
+
+describe("parseConfig — multi-agent", () => {
+  beforeEach(() => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test123";
+  });
+
+  afterEach(() => {
+    delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it("should parse a multi-agent config with 2 agents", () => {
+    const config = parseConfig(join(fixturesDir, "multi-agent-basic.yaml"));
+
+    expect(config.name).toBe("test-workforce");
+    expect(config.role).toBeUndefined();
+    expect(config.models).toBeUndefined();
+    expect(config.agents).toHaveLength(2);
+    expect(config.agents![0].name).toBe("inbox-analyst");
+    expect(config.agents![0].role).toBe("inbox-analyst");
+    expect(config.agents![0].routing?.budget_daily).toBe(5.0);
+    expect(config.agents![1].name).toBe("research-agent");
+    expect(config.agents![1].routing?.rules).toHaveLength(1);
+    expect(config.defaults?.models.cloud).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.defaults?.models.local).toBe("ollama/llama3.3:8b");
+  });
+
+  it("should parse a multi-agent config with supervisor references", () => {
+    const config = parseConfig(join(fixturesDir, "multi-agent-supervisor.yaml"));
+
+    expect(config.agents).toHaveLength(3);
+    const ultron = config.agents!.find((a) => a.name === "ultron");
+    expect(ultron?.role).toBe("process-automator");
+    expect(ultron?.supervises).toEqual(["inbox-analyst", "research-agent"]);
+  });
+
+  it("should reject config with both role and agents", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-multi-agent-both-role-and-agents.yaml")),
+    ).toThrow("EITHER 'role' (single-agent) OR 'agents' (multi-agent)");
+  });
+
+  it("should reject config with duplicate agent names", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-multi-agent-duplicate-names.yaml")),
+    ).toThrow("Duplicate agent name");
+  });
+
+  it("should reject config with invalid supervisor references", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-multi-agent-bad-supervisor-ref.yaml")),
+    ).toThrow("supervises 'nonexistent-agent', but no agent with that name exists");
+  });
+
+  it("should reject multi-agent config without defaults.models.cloud", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-multi-agent-no-defaults.yaml")),
+    ).toThrow("defaults.models.cloud is required");
+  });
+
+  it("should preserve backward compatibility with single-agent configs", () => {
+    const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
+    expect(config.role).toBe("research-agent");
+    expect(config.models!.primary).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.agents).toBeUndefined();
+    expect(config.defaults).toBeUndefined();
   });
 });

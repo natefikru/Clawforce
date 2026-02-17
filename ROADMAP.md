@@ -73,7 +73,9 @@ The alternative (one gateway container per agent) adds complexity for port alloc
 
 ---
 
-### 2B.1 Multi-Agent Configuration Schema
+### 2B.1 Multi-Agent Configuration Schema ✅
+
+**Status**: Complete. See [docs/MULTI-AGENT.md](docs/MULTI-AGENT.md) for the full reference.
 
 **Goal**: Extend `clawforce.yaml` to define multiple agents with distinct roles, channels, routing rules, and budgets.
 

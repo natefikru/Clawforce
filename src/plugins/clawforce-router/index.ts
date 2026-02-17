@@ -308,9 +308,22 @@ export function activate(api: RouterPluginApi): void {
   };
 
   const storageDb = api.pluginConfig?.storageDb as DatabaseSync | undefined;
-  const budgetTracker = config.budget
-    ? new BudgetTracker(config.budget, undefined, storageDb)
-    : null;
+  const agentBudgets = config.agentBudgets as Record<string, { dailyLimit: number; perRequestCap?: number; fallbackModel?: string }> | undefined;
+  const budgetTracker = agentBudgets
+    ? new BudgetTracker(
+        Object.fromEntries(
+          Object.entries(agentBudgets).map(([id, b]) => [id, {
+            dailyLimit: b.dailyLimit,
+            perRequestCap: b.perRequestCap,
+            fallbackModel: b.fallbackModel ?? config.defaultLocalModel ?? "ollama/llama3.3:8b",
+          }]),
+        ),
+        undefined,
+        storageDb,
+      )
+    : config.budget
+      ? new BudgetTracker(config.budget, undefined, storageDb)
+      : null;
   const healthMonitor = new ModelHealthMonitor({
     config: config.healthCheck,
     onState: (state) => {
@@ -752,6 +765,8 @@ interface ResolvedRouterConfig {
   logPath: string;
   priority?: RoutingDimension[];
   budget?: BudgetConfig;
+  agentBudgets?: Record<string, { dailyLimit: number; perRequestCap?: number; fallbackModel?: string }>;
+  agentRules?: Record<string, Array<{ condition: string; model: string }>>;
   policy?: DataPolicy;
   complianceFrameworks: ComplianceFramework[];
   minimumComplianceTier?: ReturnType<typeof getMinimumTier>;
@@ -782,6 +797,10 @@ function resolveConfig(
       ? (pluginConfig.priority as RoutingDimension[]) : undefined,
     budget: pluginConfig?.budget && typeof pluginConfig.budget === "object"
       ? (pluginConfig.budget as BudgetConfig) : undefined,
+    agentBudgets: pluginConfig?.agentBudgets && typeof pluginConfig.agentBudgets === "object"
+      ? (pluginConfig.agentBudgets as Record<string, { dailyLimit: number; perRequestCap?: number; fallbackModel?: string }>) : undefined,
+    agentRules: pluginConfig?.agentRules && typeof pluginConfig.agentRules === "object"
+      ? (pluginConfig.agentRules as Record<string, Array<{ condition: string; model: string }>>) : undefined,
     policy: pluginConfig?.policy && typeof pluginConfig.policy === "object"
       ? (pluginConfig.policy as DataPolicy) : undefined,
     complianceFrameworks: Array.isArray(pluginConfig?.complianceFrameworks)

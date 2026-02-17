@@ -99,6 +99,154 @@ const alertsSchema = z.object({
   notifications: alertNotificationsSchema,
 }).default({});
 
+// -- Routing rule condition enum (shared between top-level router and per-agent overrides) --
+
+const routingConditionEnum = z.enum([
+  "pii_detected",
+  "low_complexity",
+  "high_complexity",
+  "domain_code",
+  "domain_writing",
+  "domain_analysis",
+  "domain_data",
+  "over_budget",
+]);
+
+const routingRuleSchema = z.object({
+  condition: routingConditionEnum,
+  model: z.string(),
+});
+
+const routingPriorityEnum = z.enum(["policy", "sensitivity", "cost", "domain", "complexity"]);
+
+// -- Multi-agent schemas --
+
+const ChannelAssignmentSchema = z.object({
+  type: z.enum(["channel", "dm"]),
+  channels: z.array(z.string().min(1)).optional(),
+  users: z.array(z.string().min(1)).optional(),
+}).superRefine((data, ctx) => {
+  if (data.type === "channel" && (!data.channels || data.channels.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "channels is required when type is 'channel'",
+      path: ["channels"],
+    });
+  }
+  if (data.type === "dm" && (!data.users || data.users.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "users is required when type is 'dm'",
+      path: ["users"],
+    });
+  }
+});
+
+const AgentRoutingOverrideSchema = z.object({
+  budget_daily: z.number().positive().optional(),
+  per_request_cap: z.number().positive().optional(),
+  fallback_model: z.string().optional(),
+  rules: z.array(routingRuleSchema).optional(),
+  sensitivity_keywords: z.array(z.string()).optional(),
+  priority: z.array(routingPriorityEnum).optional(),
+});
+
+const AgentConfigSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, "Agent name must be lowercase alphanumeric with hyphens"),
+  role: z.enum(["inbox-analyst", "research-agent", "process-automator"]),
+  channels: z.array(ChannelAssignmentSchema).optional(),
+  routing: AgentRoutingOverrideSchema.optional(),
+  skills: z.array(z.string()).optional(),
+  supervises: z.array(z.string()).optional(),
+  sandbox: z
+    .object({
+      mode: z.enum(["off", "non-main", "all"]).default("off"),
+    })
+    .optional(),
+});
+
+const healthCheckSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    interval_seconds: z.number().int().positive().default(10),
+    timeout_seconds: z.number().int().positive().default(3),
+    stale_after_seconds: z.number().int().positive().default(30),
+    failover_policy: z.enum(["block", "queue", "failover-safe"]).default("block"),
+    failure_threshold: z.number().int().positive().default(3),
+    recovery_threshold: z.number().int().positive().default(2),
+    retry_attempts: z.number().int().min(0).max(5).default(2),
+    retry_delay_ms: z.number().int().min(0).max(5000).default(500),
+  })
+  .superRefine((value, ctx) => {
+    if (value.failover_policy === "queue") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "router.health_check.failover_policy=queue is not implemented yet; use block or failover-safe",
+      });
+    }
+  });
+
+const routerSchema = z.object({
+  enabled: z.boolean().default(true),
+  rules: z.array(routingRuleSchema).optional(),
+  sensitivity_keywords: z.array(z.string()).optional(),
+  priority: z.array(routingPriorityEnum).optional(),
+  budget: z
+    .object({
+      daily_limit: z.number().positive(),
+      per_request_cap: z.number().positive().optional(),
+      fallback_model: z.string(),
+    })
+    .optional(),
+  health_check: healthCheckSchema.optional(),
+});
+
+const dashboardSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    port: z.number().default(3000),
+    auth: z
+      .object({
+        enabled: z.boolean().default(false),
+        username: z.string().min(1).optional(),
+        password: z.string().min(8).optional(),
+      })
+      .refine(
+        (val) => !val.enabled || (val.username && val.password),
+        { message: "username and password are required when auth is enabled" },
+      )
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.enabled !== false && value.auth === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "dashboard.auth must be explicitly configured when dashboard is enabled; set auth.enabled=false to opt out",
+        path: ["auth"],
+      });
+    }
+  });
+
+const DefaultsSchema = z.object({
+  models: z.object({
+    cloud: z.string().min(1),
+    local: z.string().optional(),
+    provider_keys: z.record(z.string(), z.string().min(1)).optional(),
+    credential_mode: z.enum(["env", "auth_profile"]).optional(),
+    auth_profile: z.string().min(1).optional(),
+  }),
+  router: routerSchema.optional(),
+  dashboard: dashboardSchema.optional(),
+});
+
+// -- Top-level config schema --
+
 export const ClawforceConfigSchema = z.object({
   name: z
     .string()
@@ -106,40 +254,21 @@ export const ClawforceConfigSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Name must be lowercase alphanumeric with hyphens"),
 
-  role: z.enum(["inbox-analyst", "research-agent", "process-automator"]),
+  // Single-agent mode (backward compatible)
+  role: z.enum(["inbox-analyst", "research-agent", "process-automator"]).optional(),
 
+  // Multi-agent mode
+  agents: z.array(AgentConfigSchema).min(1).optional(),
+  defaults: DefaultsSchema.optional(),
+
+  // Single-agent models (required for single-agent, absent for multi-agent)
   models: z.object({
     primary: z.string().min(1),
     local: z.string().optional(),
     provider_keys: z.record(z.string(), z.string().min(1)).optional(),
     credential_mode: z.enum(["env", "auth_profile"]).optional(),
     auth_profile: z.string().min(1).optional(),
-  }).superRefine((value, ctx) => {
-    const credentialMode = value.credential_mode ?? "env";
-    if (credentialMode === "auth_profile" && !value.auth_profile) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "models.auth_profile is required when models.credential_mode=auth_profile",
-        path: ["auth_profile"],
-      });
-    }
-    if (
-      credentialMode === "env" &&
-      modelRequiresProviderApiKey(value.primary)
-    ) {
-      const provider = getModelProvider(value.primary);
-      const providerKey = provider ? value.provider_keys?.[provider] : undefined;
-      if (!provider || !providerKey) {
-        const providerLabel = provider ?? "<provider>";
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            `models.provider_keys.${providerLabel} is required when models.credential_mode=env and models.primary is a cloud provider model`,
-          path: ["provider_keys", providerLabel],
-        });
-      }
-    }
-  }),
+  }).optional(),
 
   plugins: z
     .object({
@@ -183,61 +312,7 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
-  router: z
-    .object({
-      enabled: z.boolean().default(true),
-      rules: z
-        .array(
-          z.object({
-            condition: z.enum([
-              "pii_detected",
-              "low_complexity",
-              "high_complexity",
-              "domain_code",
-              "domain_writing",
-              "domain_analysis",
-              "domain_data",
-              "over_budget",
-            ]),
-            model: z.string(),
-          }),
-        )
-        .optional(),
-      sensitivity_keywords: z.array(z.string()).optional(),
-      priority: z
-        .array(z.enum(["policy", "sensitivity", "cost", "domain", "complexity"]))
-        .optional(),
-      budget: z
-        .object({
-          daily_limit: z.number().positive(),
-          per_request_cap: z.number().positive().optional(),
-          fallback_model: z.string(),
-        })
-        .optional(),
-      health_check: z
-        .object({
-          enabled: z.boolean().default(true),
-          interval_seconds: z.number().int().positive().default(10),
-          timeout_seconds: z.number().int().positive().default(3),
-          stale_after_seconds: z.number().int().positive().default(30),
-          failover_policy: z.enum(["block", "queue", "failover-safe"]).default("block"),
-          failure_threshold: z.number().int().positive().default(3),
-          recovery_threshold: z.number().int().positive().default(2),
-          retry_attempts: z.number().int().min(0).max(5).default(2),
-          retry_delay_ms: z.number().int().min(0).max(5000).default(500),
-        })
-        .superRefine((value, ctx) => {
-          if (value.failover_policy === "queue") {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message:
-                "router.health_check.failover_policy=queue is not implemented yet; use block or failover-safe",
-            });
-          }
-        })
-        .optional(),
-    })
-    .optional(),
+  router: routerSchema.optional(),
 
   policy: z
     .object({
@@ -274,54 +349,218 @@ export const ClawforceConfigSchema = z.object({
     .array(z.enum(["hipaa", "pci-dss", "gdpr", "ccpa", "sox"]))
     .optional(),
 
-  dashboard: z
-    .object({
-      enabled: z.boolean().default(true),
-      port: z.number().default(3000),
-      auth: z
-        .object({
-          enabled: z.boolean().default(false),
-          username: z.string().min(1).optional(),
-          password: z.string().min(8).optional(),
-        })
-        .refine(
-          (val) => !val.enabled || (val.username && val.password),
-          { message: "username and password are required when auth is enabled" },
-        )
-        .optional(),
-    })
-    .superRefine((value, ctx) => {
-      if (value.enabled !== false && value.auth === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            "dashboard.auth must be explicitly configured when dashboard is enabled; set auth.enabled=false to opt out",
-          path: ["auth"],
-        });
-      }
-    })
-    .optional(),
+  dashboard: dashboardSchema.optional(),
 
   alerts: alertsSchema.optional(),
 
   capabilities: z.enum(["minimal", "standard", "full"]).optional(),
 
   openclaw: z.record(z.unknown()).optional(),
-}).refine(
-  (data) => {
+}).superRefine((data, ctx) => {
+  const hasRole = !!data.role;
+  const hasAgents = !!data.agents && data.agents.length > 0;
+
+  // 1. Mutual exclusivity: role XOR agents
+  if (hasRole && hasAgents) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Config must use EITHER 'role' (single-agent) OR 'agents' (multi-agent), not both",
+      path: ["agents"],
+    });
+    return;
+  }
+
+  if (!hasRole && !hasAgents) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Config must specify either 'role' (single-agent) or 'agents' (multi-agent)",
+      path: ["role"],
+    });
+    return;
+  }
+
+  // 2. Single-agent validation
+  if (hasRole) {
+    if (!data.models) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "models is required for single-agent configs",
+        path: ["models"],
+      });
+      return;
+    }
+
+    // Credential mode validation
+    const credentialMode = data.models.credential_mode ?? "env";
+    if (credentialMode === "auth_profile" && !data.models.auth_profile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "models.auth_profile is required when models.credential_mode=auth_profile",
+        path: ["models", "auth_profile"],
+      });
+    }
+    if (
+      credentialMode === "env" &&
+      modelRequiresProviderApiKey(data.models.primary)
+    ) {
+      const provider = getModelProvider(data.models.primary);
+      const providerKey = provider ? data.models.provider_keys?.[provider] : undefined;
+      if (!provider || !providerKey) {
+        const providerLabel = provider ?? "<provider>";
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            `models.provider_keys.${providerLabel} is required when models.credential_mode=env and models.primary is a cloud provider model`,
+          path: ["models", "provider_keys", providerLabel],
+        });
+      }
+    }
+
+    // Connector requirement for single-agent
     const openclaw = data.openclaw;
-    if (!openclaw || typeof openclaw !== "object") return false;
+    if (!openclaw || typeof openclaw !== "object") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one connector must be configured via openclaw.channels",
+        path: ["openclaw"],
+      });
+      return;
+    }
     const channels = (openclaw as Record<string, unknown>).channels;
-    return !!(
-      channels &&
-      typeof channels === "object" &&
-      Object.keys(channels as Record<string, unknown>).length > 0
+    if (
+      !channels ||
+      typeof channels !== "object" ||
+      Object.keys(channels as Record<string, unknown>).length === 0
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one connector must be configured via openclaw.channels",
+        path: ["openclaw", "channels"],
+      });
+    }
+  }
+
+  // 3. Multi-agent validation
+  if (hasAgents) {
+    // defaults.models.cloud is required
+    if (!data.defaults?.models?.cloud) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "defaults.models.cloud is required for multi-agent configs",
+        path: ["defaults", "models", "cloud"],
+      });
+    }
+
+    // Credential mode validation for multi-agent
+    if (data.defaults?.models) {
+      const credentialMode = data.defaults.models.credential_mode ?? "env";
+      if (credentialMode === "auth_profile" && !data.defaults.models.auth_profile) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "defaults.models.auth_profile is required when defaults.models.credential_mode=auth_profile",
+          path: ["defaults", "models", "auth_profile"],
+        });
+      }
+      if (
+        credentialMode === "env" &&
+        modelRequiresProviderApiKey(data.defaults.models.cloud)
+      ) {
+        const provider = getModelProvider(data.defaults.models.cloud);
+        const providerKey = provider ? data.defaults.models.provider_keys?.[provider] : undefined;
+        if (!provider || !providerKey) {
+          const providerLabel = provider ?? "<provider>";
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message:
+              `defaults.models.provider_keys.${providerLabel} is required for cloud model when defaults.models.credential_mode=env`,
+            path: ["defaults", "models", "provider_keys", providerLabel],
+          });
+        }
+      }
+    }
+
+    // Unique agent names
+    const agentNames = data.agents!.map((a) => a.name);
+    const seen = new Set<string>();
+    for (const name of agentNames) {
+      if (seen.has(name)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate agent name '${name}' — agent names must be unique`,
+          path: ["agents"],
+        });
+        break;
+      }
+      seen.add(name);
+    }
+
+    // Supervisor references must point to existing agents (not self)
+    const nameSet = new Set(agentNames);
+    for (let i = 0; i < data.agents!.length; i++) {
+      const agent = data.agents![i];
+      if (agent.supervises) {
+        for (const supervisedName of agent.supervises) {
+          if (supervisedName === agent.name) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Agent '${agent.name}' cannot supervise itself`,
+              path: ["agents", i, "supervises"],
+            });
+            continue;
+          }
+          if (!nameSet.has(supervisedName)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Agent '${agent.name}' supervises '${supervisedName}', but no agent with that name exists`,
+              path: ["agents", i, "supervises"],
+            });
+          }
+        }
+      }
+    }
+
+    // At least one connector: agents with channels OR openclaw.channels
+    const hasAgentChannels = data.agents!.some(
+      (a) => a.channels && a.channels.length > 0,
     );
-  },
-  {
-    message:
-      "At least one connector must be configured via openclaw.channels",
-  },
-);
+    const hasOpenclawChannels = (() => {
+      const openclaw = data.openclaw;
+      if (!openclaw || typeof openclaw !== "object") return false;
+      const channels = (openclaw as Record<string, unknown>).channels;
+      return !!(
+        channels &&
+        typeof channels === "object" &&
+        Object.keys(channels as Record<string, unknown>).length > 0
+      );
+    })();
+
+    if (!hasAgentChannels && !hasOpenclawChannels) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "At least one agent must have channels configured, or openclaw.channels must be set",
+        path: ["agents"],
+      });
+    }
+  }
+});
 
 export type ClawforceConfig = z.infer<typeof ClawforceConfigSchema>;
+export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+export type DefaultsConfig = z.infer<typeof DefaultsSchema>;
+
+/** Returns true if the config is in single-agent mode (has `role`). */
+export function isSingleAgentConfig(config: ClawforceConfig): config is ClawforceConfig & {
+  role: string;
+  models: NonNullable<ClawforceConfig["models"]>;
+} {
+  return !!config.role;
+}
+
+/** Returns true if the config is in multi-agent mode (has `agents`). */
+export function isMultiAgentConfig(config: ClawforceConfig): config is ClawforceConfig & {
+  agents: NonNullable<ClawforceConfig["agents"]>;
+  defaults: NonNullable<ClawforceConfig["defaults"]>;
+} {
+  return !!config.agents && config.agents.length > 0 && !!config.defaults;
+}

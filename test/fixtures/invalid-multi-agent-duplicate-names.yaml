@@ -1,0 +1,24 @@
+name: "invalid-dupes"
+
+defaults:
+  models:
+    cloud: "anthropic/claude-sonnet-4-5"
+    provider_keys:
+      anthropic: "${ANTHROPIC_API_KEY}"
+
+agents:
+  - name: my-agent
+    role: inbox-analyst
+    channels:
+      - type: channel
+        channels: ["#inbox"]
+  - name: my-agent
+    role: research-agent
+    channels:
+      - type: channel
+        channels: ["#research"]
+
+openclaw:
+  channels:
+    discord:
+      enabled: true

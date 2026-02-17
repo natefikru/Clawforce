@@ -1,0 +1,41 @@
+name: "test-workforce"
+
+defaults:
+  models:
+    cloud: "anthropic/claude-sonnet-4-5"
+    local: "ollama/llama3.3:8b"
+    credential_mode: env
+    provider_keys:
+      anthropic: "${ANTHROPIC_API_KEY}"
+  router:
+    priority: [policy, sensitivity, cost, domain, complexity]
+    sensitivity_keywords: [password, secret]
+  dashboard:
+    enabled: true
+    auth:
+      enabled: false
+
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
+    channels:
+      - type: channel
+        channels: ["111111111111111111"]
+    routing:
+      budget_daily: 5.00
+
+  - name: research-agent
+    role: research-agent
+    channels:
+      - type: channel
+        channels: ["222222222222222222"]
+    routing:
+      budget_daily: 8.00
+      rules:
+        - condition: high_complexity
+          model: anthropic/claude-sonnet-4-5
+
+openclaw:
+  channels:
+    discord:
+      enabled: true
