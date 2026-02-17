@@ -49,6 +49,47 @@ jobs:
       - name: Run integration tests
         run: pnpm test:integration
 
+  runtime-e2e:
+    name: Runtime E2E (Docker)
+    runs-on: ubuntu-latest
+    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install dashboard dependencies
+        run: pnpm --dir clawforce-dashboard install --frozen-lockfile
+      - name: Start Ollama runtime for local/hybrid e2e checks
+        run: docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
+      - name: Wait for Ollama health endpoint
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
+              echo "Ollama is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Ollama failed to become healthy"
+          exit 1
+      - name: Run runtime pipeline e2e suite
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm test:e2e:runtime:ci
+      - name: Upload runtime e2e report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-e2e-report
+          path: docs/validation-evidence/**/runtime-e2e-report.json
+
   smoke-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest

@@ -1,0 +1,158 @@
+#!/usr/bin/env node
+
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { createServer } from "node:net";
+
+const ROOT = resolve(new URL("..", import.meta.url).pathname);
+
+function todayDateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function ensureDir(path) {
+  mkdirSync(path, { recursive: true });
+}
+
+function run(command, args, env = {}, timeoutMs = 15_000) {
+  return spawnSync(command, args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: {
+      ...process.env,
+      ...env,
+    },
+  });
+}
+
+async function isPortFree(port) {
+  return await new Promise((resolvePort) => {
+    const server = createServer();
+    server.unref();
+    server.on("error", () => resolvePort(false));
+    server.listen(port, "0.0.0.0", () => {
+      server.close(() => resolvePort(true));
+    });
+  });
+}
+
+async function checkOllamaHealth() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4_000);
+  try {
+    const res = await fetch("http://127.0.0.1:11434/api/tags", {
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function writeReport(report) {
+  const outDir = join(ROOT, "docs", "validation-evidence", todayDateStamp());
+  ensureDir(outDir);
+  const outPath = join(outDir, "runtime-e2e-report.json");
+  writeFileSync(outPath, JSON.stringify(report, null, 2), "utf8");
+  return outPath;
+}
+
+async function main() {
+  const startedAt = new Date().toISOString();
+  const requiredPorts = [4411, 4412, 4413];
+  const portResults = {};
+
+  for (const port of requiredPorts) {
+    portResults[port] = await isPortFree(port);
+  }
+
+  const dockerVersion = run("docker", ["--version"]);
+  const dockerInfo = run("docker", ["info"], {}, 20_000);
+  const ollamaHealthy = await checkOllamaHealth();
+  const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+
+  const preflight = {
+    anthropicApiKeyPresent: hasAnthropicKey,
+    dockerAvailable: dockerVersion.status === 0,
+    dockerDaemonHealthy: dockerInfo.status === 0,
+    ollamaHealthy,
+    portsFree: portResults,
+  };
+
+  const failures = [];
+  if (!preflight.anthropicApiKeyPresent) {
+    failures.push("Missing required env var: ANTHROPIC_API_KEY");
+  }
+  if (!preflight.dockerAvailable) {
+    failures.push("Docker CLI not available in PATH");
+  }
+  if (!preflight.dockerDaemonHealthy) {
+    failures.push("Docker daemon is not healthy (docker info failed)");
+  }
+  if (!preflight.ollamaHealthy) {
+    failures.push("Local runtime check failed: Ollama not reachable at http://127.0.0.1:11434/api/tags");
+  }
+  for (const [port, free] of Object.entries(preflight.portsFree)) {
+    if (!free) failures.push(`Required port is already in use: ${port}`);
+  }
+
+  if (failures.length > 0) {
+    const failedReport = {
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      status: "preflight_failed",
+      preflight,
+      failures,
+    };
+    const path = writeReport(failedReport);
+    console.error("Runtime e2e preflight failed.");
+    console.error(`Report: ${path}`);
+    for (const failure of failures) {
+      console.error(`- ${failure}`);
+    }
+    process.exit(1);
+  }
+
+  const testRun = run(
+    "pnpm",
+    ["test:e2e:runtime"],
+    {
+      CLAWFORCE_RUN_E2E: "1",
+      // local validation safety gate control
+      CI: "",
+      CLAWFORCE_SKIP_SECURITY_AUDIT: "1",
+    },
+    20 * 60_000,
+  );
+
+  const testResult = {
+    statusCode: testRun.status,
+    stdout: testRun.stdout,
+    stderr: testRun.stderr,
+  };
+
+  const report = {
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    status: testRun.status === 0 ? "passed" : "failed",
+    preflight,
+    testResult,
+  };
+  const path = writeReport(report);
+
+  if (testRun.status !== 0) {
+    console.error("Runtime e2e execution failed.");
+    console.error(`Report: ${path}`);
+    process.exit(testRun.status ?? 1);
+  }
+
+  console.log("Runtime e2e execution passed.");
+  console.log(`Report: ${path}`);
+}
+
+await main();
+
