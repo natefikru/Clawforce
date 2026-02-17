@@ -1,39 +1,33 @@
 name: "test-ultron"
 
-defaults:
-  models:
-    cloud: "anthropic/claude-sonnet-4-5"
-    credential_mode: env
-    provider_keys:
-      anthropic: "${ANTHROPIC_API_KEY}"
+models:
+  cloud: "anthropic/claude-sonnet-4-5"
+  credential_mode: env
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
 
 agents:
   - name: inbox-analyst
     role: inbox-analyst
-    channels:
-      - type: channel
-        channels: ["111111111111111111"]
     routing:
-      budget_daily: 5.00
+      budget:
+        daily_limit: 5.00
 
   - name: research-agent
     role: research-agent
-    channels:
-      - type: channel
-        channels: ["222222222222222222"]
     routing:
-      budget_daily: 8.00
+      budget:
+        daily_limit: 8.00
 
   - name: ultron
     role: supervisor
-    channels:
-      - type: channel
-        channels: ["333333333333333333"]
     supervises: [inbox-analyst, research-agent]
     routing:
-      budget_daily: 3.00
+      budget:
+        daily_limit: 3.00
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true

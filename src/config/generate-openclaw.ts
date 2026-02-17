@@ -2,8 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type ClawforceConfig, isSingleAgentConfig, isMultiAgentConfig } from "./types.js";
-import { validateBindings } from "./validate-openclaw-bindings.js";
+import { type ClawforceConfig, resolveAgentOpenclawInstance } from "./types.js";
 import { resolveProfile } from "./capability-profiles.js";
 import { discoverPlugins } from "../plugins/registry.js";
 
@@ -133,126 +132,59 @@ export interface OpenClawConfig {
   };
 }
 
-function getEnabledConnectors(config: ClawforceConfig): string[] {
-  const channels = config.openclaw?.channels;
-  if (!channels || typeof channels !== "object") return [];
-  return Object.keys(channels as Record<string, unknown>).filter((key) => {
-    const ch = (channels as Record<string, unknown>)[key];
-    return ch && typeof ch === "object" && (ch as Record<string, unknown>).enabled !== false;
-  });
-}
-
 export function generateOpenClawConfig(
   config: ClawforceConfig,
-): OpenClawConfig {
-  // Resolve models: single-agent uses config.models, multi-agent uses config.defaults.models
-  const primaryModel = isSingleAgentConfig(config)
-    ? config.models.primary
-    : config.defaults!.models.cloud;
-  const localModel = isSingleAgentConfig(config)
-    ? config.models.local
-    : config.defaults?.models.local;
-  const credentialMode = isSingleAgentConfig(config)
-    ? config.models.credential_mode
-    : config.defaults?.models.credential_mode;
-  const authProfile = isSingleAgentConfig(config)
-    ? config.models.auth_profile
-    : config.defaults?.models.auth_profile;
+): Map<string, OpenClawConfig> {
+  const primaryModel = config.models.cloud;
+  const localModel = config.models.local;
+  const credentialMode = config.models.credential_mode;
+  const authProfile = config.models.auth_profile;
 
-  const result: OpenClawConfig = {
-    gateway: {
-      mode: "local",
-      bind: config.gateway?.bind ?? "loopback",
-    },
-    agents: {
-      defaults: {
-        workspace: "/home/node/.openclaw/workspace",
-        ...(credentialMode === "auth_profile" && authProfile
-          ? { authProfile }
-          : {}),
-        model: {
-          primary: primaryModel,
-          ...(localModel
-            ? { fallbacks: [localModel] }
-            : {}),
-        },
-      },
-    },
-    channels: {},
-    session: {
-      dmScope: "per-channel-peer",
-    },
-  };
+  const results = new Map<string, OpenClawConfig>();
 
-  // Multi-agent: populate agents.list and bindings
-  if (isMultiAgentConfig(config)) {
-    result.agents.list = config.agents.map((agent) => ({
-      id: agent.name,
-      workspace: `/home/node/.openclaw/workspace/${agent.name}`,
-    }));
-
-    const connectors = getEnabledConnectors(config);
-
-    const bindings: OpenClawBinding[] = [];
-    for (const agent of config.agents) {
-      if (!agent.channels) continue;
-      for (const ch of agent.channels) {
-        const connector = connectors[0];
-        if (!connector) {
-          throw new Error(
-            `Agent '${agent.name}' has channel assignments but no connector is configured in openclaw.channels`,
-          );
-        }
-        if (ch.type === "channel" && ch.channels) {
-          for (const channelId of ch.channels) {
-            bindings.push({
-              agentId: agent.name,
-              match: { channel: connector, peer: { kind: "channel", id: channelId } },
-            });
-          }
-        }
-        if (ch.type === "dm" && ch.users) {
-          for (const userId of ch.users) {
-            bindings.push({
-              agentId: agent.name,
-              match: { channel: connector, peer: { kind: "direct", id: userId } },
-            });
-          }
-        }
-      }
-    }
-    if (bindings.length > 0) {
-      result.bindings = bindings;
-    }
-  }
-
-  // Determine role(s) for template merging
-  const role = isSingleAgentConfig(config) ? config.role : undefined;
-
-  // Load and merge role-specific config partial
-  const rolePartialPath = role
-    ? join(templatesDir, "roles", role, "config.partial.json")
-    : null;
-  if (rolePartialPath && existsSync(rolePartialPath)) {
-    const roleConfig = JSON.parse(
-      readFileSync(rolePartialPath, "utf8"),
-    ) as Partial<OpenClawConfig>;
-    mergeInto(
-      result as unknown as Record<string, unknown>,
-      roleConfig as unknown as Record<string, unknown>,
+  for (const [instanceName, instanceRawConfig] of Object.entries(config.openclaw)) {
+    // Determine which agents are assigned to this instance
+    const instanceAgents = config.agents.filter(
+      (agent) => resolveAgentOpenclawInstance(agent, config) === instanceName,
     );
-  }
 
-  // Multi-agent: merge role partials for all unique roles
-  if (!role && config.agents) {
-    const roles = [...new Set(config.agents.map((a) => a.role))];
+    const result: OpenClawConfig = {
+      gateway: {
+        mode: "local",
+        bind: config.gateway?.bind ?? "loopback",
+      },
+      agents: {
+        defaults: {
+          workspace: "/home/node/.openclaw/workspace",
+          ...(credentialMode === "auth_profile" && authProfile
+            ? { authProfile }
+            : {}),
+          model: {
+            primary: primaryModel,
+            ...(localModel
+              ? { fallbacks: [localModel] }
+              : {}),
+          },
+        },
+        list: instanceAgents.map((agent) => ({
+          id: agent.name,
+          workspace: `/home/node/.openclaw/workspace/${agent.name}`,
+        })),
+      },
+      channels: {},
+      session: {
+        dmScope: "per-channel-peer",
+      },
+    };
+
+    // Merge role partials for all unique roles in this instance's agents
+    const roles = [...new Set(instanceAgents.map((a) => a.role))];
     for (const agentRole of roles) {
       const partialPath = join(templatesDir, "roles", agentRole, "config.partial.json");
       if (existsSync(partialPath)) {
         const roleConfig = JSON.parse(
           readFileSync(partialPath, "utf8"),
         ) as Partial<OpenClawConfig>;
-        // Only merge cron/hooks from role partials (avoid per-agent conflicts)
         if (roleConfig.cron && !result.cron) result.cron = roleConfig.cron;
         if (roleConfig.hooks) {
           if (!result.hooks) {
@@ -261,53 +193,48 @@ export function generateOpenClawConfig(
         }
       }
     }
-  }
 
-  // Apply capability profile (after role partial, before passthrough)
-  if (config.capabilities) {
-    const profileConfig = resolveProfile(config.capabilities);
+    // Apply capability profile (after role partial, before passthrough)
+    if (config.capabilities) {
+      const profileConfig = resolveProfile(config.capabilities);
+      mergeInto(
+        result as unknown as Record<string, unknown>,
+        profileConfig as Record<string, unknown>,
+      );
+    }
+
+    result.plugins = {
+      enabled: true,
+      entries: buildPluginEntries(config),
+    };
+    if (result.plugins.entries && Object.keys(result.plugins.entries).length === 0) {
+      result.plugins.enabled = false;
+    }
+
+    // Enable command-logger hook for audit trail
+    const hooksToken = randomBytes(32).toString("hex");
+    if (!result.hooks) {
+      result.hooks = { enabled: true, token: hooksToken };
+    } else {
+      result.hooks.token = hooksToken;
+    }
+    result.hooks.internal = {
+      enabled: true,
+      entries: {
+        "command-logger": { enabled: true },
+      },
+    };
+
+    // OpenClaw passthrough: deep-merge user-provided instance config last
     mergeInto(
       result as unknown as Record<string, unknown>,
-      profileConfig as Record<string, unknown>,
+      instanceRawConfig as Record<string, unknown>,
     );
+
+    results.set(instanceName, result);
   }
 
-  result.plugins = {
-    enabled: true,
-    entries: buildPluginEntries(config),
-  };
-  if (result.plugins.entries && Object.keys(result.plugins.entries).length === 0) {
-    result.plugins.enabled = false;
-  }
-
-  // Enable command-logger hook for audit trail
-  const hooksToken = randomBytes(32).toString("hex");
-  if (!result.hooks) {
-    result.hooks = { enabled: true, token: hooksToken };
-  } else {
-    result.hooks.token = hooksToken;
-  }
-  result.hooks.internal = {
-    enabled: true,
-    entries: {
-      "command-logger": { enabled: true },
-    },
-  };
-
-  // OpenClaw passthrough: deep-merge user-provided OpenClaw config last
-  // This allows users to configure any OpenClaw setting not exposed by Clawforce
-  if (config.openclaw) {
-    mergeInto(
-      result as unknown as Record<string, unknown>,
-      config.openclaw as Record<string, unknown>,
-    );
-  }
-
-  if (result.bindings) {
-    validateBindings(result.bindings);
-  }
-
-  return result;
+  return results;
 }
 
 function buildPluginEntries(
@@ -323,7 +250,7 @@ function buildPluginEntries(
       continue;
     }
     if (!enabledSet || enabledSet.size === 0) {
-      if (plugin.id === "clawforce-router" && config.router?.enabled === false) {
+      if (plugin.id === "clawforce-router" && !config.routing) {
         continue;
       }
       if (plugin.id === "clawforce-compliance" && config.compliance?.enabled === false) {
@@ -358,125 +285,95 @@ function buildPluginEntries(
 }
 
 function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknown> {
-  const primaryModel = isSingleAgentConfig(config)
-    ? config.models.primary
-    : config.defaults!.models.cloud;
-  const localModel = isSingleAgentConfig(config)
-    ? config.models.local
-    : config.defaults?.models.local;
+  const primaryModel = config.models.cloud;
+  const localModel = config.models.local;
 
   const routerConfig: Record<string, unknown> = {
     defaultModel: primaryModel,
     ...(localModel ? { defaultLocalModel: localModel } : {}),
     alerts: mapRouterAlertsConfig(config),
-    ...(config.policy ? { policy: normalizePolicyConfig(config.policy) } : {}),
-    ...(config.compliance_frameworks
-      ? { complianceFrameworks: config.compliance_frameworks }
+    ...(config.routing?.policy ? { policy: normalizePolicyConfig(config.routing.policy) } : {}),
+    ...(config.compliance?.frameworks
+      ? { complianceFrameworks: config.compliance.frameworks }
       : {}),
   };
 
-  if (config.router?.rules) {
-    routerConfig.rules = config.router.rules;
+  if (config.routing?.rules) {
+    routerConfig.rules = config.routing.rules;
   }
-  if (config.router?.sensitivity_keywords) {
-    routerConfig.sensitivityKeywords = config.router.sensitivity_keywords;
+  if (config.routing?.sensitivity?.keywords) {
+    routerConfig.sensitivityKeywords = config.routing.sensitivity.keywords;
   }
-  if (config.sensitivity?.blocklist) {
-    const existing = Array.isArray(routerConfig.sensitivityKeywords)
-      ? routerConfig.sensitivityKeywords as string[]
-      : [];
-    routerConfig.sensitivityKeywords = [...new Set([...existing, ...config.sensitivity.blocklist])];
+  if (config.routing?.sensitivity?.pii_detection !== undefined) {
+    routerConfig.piiDetection = config.routing.sensitivity.pii_detection;
   }
-  if (config.sensitivity?.pii_detection !== undefined) {
-    routerConfig.piiDetection = config.sensitivity.pii_detection;
+  if (config.routing?.priority) {
+    routerConfig.priority = config.routing.priority;
   }
-  if (config.router?.priority) {
-    routerConfig.priority = config.router.priority;
-  }
-  if (config.router?.budget) {
+  if (config.routing?.budget) {
     routerConfig.budget = {
-      dailyLimit: config.router.budget.daily_limit,
-      perRequestCap: config.router.budget.per_request_cap,
-      fallbackModel: config.router.budget.fallback_model,
+      dailyLimit: config.routing.budget.daily_limit,
+      perRequestCap: config.routing.budget.per_request_cap,
+      fallbackModel: config.routing.budget.fallback_model,
     };
   }
-  if (config.router?.health_check) {
+  if (config.routing?.health_check) {
     routerConfig.healthCheck = {
-      enabled: config.router.health_check.enabled,
-      intervalSeconds: config.router.health_check.interval_seconds,
-      timeoutSeconds: config.router.health_check.timeout_seconds,
-      staleAfterSeconds: config.router.health_check.stale_after_seconds,
-      failoverPolicy: config.router.health_check.failover_policy,
-      failureThreshold: config.router.health_check.failure_threshold,
-      recoveryThreshold: config.router.health_check.recovery_threshold,
-      retryAttempts: config.router.health_check.retry_attempts,
-      retryDelayMs: config.router.health_check.retry_delay_ms,
+      enabled: config.routing.health_check.enabled,
+      intervalSeconds: config.routing.health_check.interval_seconds,
+      timeoutSeconds: config.routing.health_check.timeout_seconds,
+      staleAfterSeconds: config.routing.health_check.stale_after_seconds,
+      failoverPolicy: config.routing.health_check.failover_policy,
+      failureThreshold: config.routing.health_check.failure_threshold,
+      recoveryThreshold: config.routing.health_check.recovery_threshold,
+      retryAttempts: config.routing.health_check.retry_attempts,
+      retryDelayMs: config.routing.health_check.retry_delay_ms,
     };
   }
 
-  if (config.sensitivity?.pii_confidence_threshold !== undefined) {
-    routerConfig.piiThreshold = config.sensitivity.pii_confidence_threshold;
+  if (config.routing?.sensitivity?.pii_confidence_threshold !== undefined) {
+    routerConfig.piiThreshold = config.routing.sensitivity.pii_confidence_threshold;
   }
-  if (config.sensitivity?.pii_pattern_thresholds) {
-    routerConfig.piiPatternThresholds = config.sensitivity.pii_pattern_thresholds;
+  if (config.routing?.sensitivity?.pii_pattern_thresholds) {
+    routerConfig.piiPatternThresholds = config.routing.sensitivity.pii_pattern_thresholds;
   }
 
-  // Multi-agent: per-agent budgets and routing overrides
-  if (isMultiAgentConfig(config)) {
-    const agentBudgets: Record<string, { dailyLimit: number; perRequestCap?: number; fallbackModel?: string }> = {};
-    const agentRules: Record<string, Array<{ condition: string; model: string }>> = {};
-    let hasAgentBudgets = false;
-    let hasAgentRules = false;
+  // Per-agent budgets and routing overrides
+  const agentBudgets: Record<string, { dailyLimit: number; perRequestCap?: number; fallbackModel?: string }> = {};
+  const agentRules: Record<string, Array<{ condition: string; model: string }>> = {};
+  let hasAgentBudgets = false;
+  let hasAgentRules = false;
 
-    for (const agent of config.agents) {
-      if (agent.routing?.budget_daily) {
-        agentBudgets[agent.name] = {
-          dailyLimit: agent.routing.budget_daily,
-          ...(agent.routing.per_request_cap !== undefined
-            ? { perRequestCap: agent.routing.per_request_cap }
-            : {}),
-          ...(agent.routing.fallback_model
-            ? { fallbackModel: agent.routing.fallback_model }
-            : {}),
-        };
-        hasAgentBudgets = true;
-      }
-      if (agent.routing?.rules && agent.routing.rules.length > 0) {
-        agentRules[agent.name] = agent.routing.rules;
-        hasAgentRules = true;
-      }
-    }
-
-    if (hasAgentBudgets) {
-      routerConfig.agentBudgets = agentBudgets;
-    }
-    if (hasAgentRules) {
-      routerConfig.agentRules = agentRules;
-    }
-
-    // Pass defaults router config for multi-agent
-    if (config.defaults.router?.rules) {
-      routerConfig.rules = config.defaults.router.rules;
-    }
-    if (config.defaults.router?.sensitivity_keywords) {
-      routerConfig.sensitivityKeywords = config.defaults.router.sensitivity_keywords;
-    }
-    if (config.defaults.router?.priority) {
-      routerConfig.priority = config.defaults.router.priority;
-    }
-    if (config.defaults.router?.budget) {
-      routerConfig.budget = {
-        dailyLimit: config.defaults.router.budget.daily_limit,
-        perRequestCap: config.defaults.router.budget.per_request_cap,
-        fallbackModel: config.defaults.router.budget.fallback_model,
+  for (const agent of config.agents) {
+    if (agent.routing?.budget?.daily_limit) {
+      agentBudgets[agent.name] = {
+        dailyLimit: agent.routing.budget.daily_limit,
+        ...(agent.routing.budget.per_request_cap !== undefined
+          ? { perRequestCap: agent.routing.budget.per_request_cap }
+          : {}),
+        ...(agent.routing.budget.fallback_model
+          ? { fallbackModel: agent.routing.budget.fallback_model }
+          : {}),
       };
+      hasAgentBudgets = true;
     }
+    if (agent.routing?.rules && agent.routing.rules.length > 0) {
+      agentRules[agent.name] = agent.routing.rules;
+      hasAgentRules = true;
+    }
+  }
+
+  if (hasAgentBudgets) {
+    routerConfig.agentBudgets = agentBudgets;
+  }
+  if (hasAgentRules) {
+    routerConfig.agentRules = agentRules;
   }
 
   return routerConfig;
 }
 
-function normalizePolicyConfig(policy: ClawforceConfig["policy"]): Record<string, unknown> {
+function normalizePolicyConfig(policy: NonNullable<NonNullable<ClawforceConfig["routing"]>["policy"]>): Record<string, unknown> {
   if (!policy) return {};
   return {
     defaultTier: policy.default_tier,

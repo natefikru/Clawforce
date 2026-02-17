@@ -38,7 +38,11 @@ describe("agent runtime adapter registry", () => {
 
     expect(openclawOutput).toBeDefined();
     const actual = openclawOutput?.content as unknown as Record<string, unknown>;
-    const expected = generateOpenClawConfig(config) as unknown as Record<string, unknown>;
+
+    // generateOpenClawConfig returns Map<string, OpenClawConfig>
+    const expectedMap = generateOpenClawConfig(config);
+    const expected = expectedMap.get("default") as unknown as Record<string, unknown>;
+    expect(expected).toBeDefined();
 
     const actualHooks = actual.hooks as Record<string, unknown> | undefined;
     const expectedHooks = expected.hooks as Record<string, unknown> | undefined;

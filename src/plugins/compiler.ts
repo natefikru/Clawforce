@@ -67,7 +67,7 @@ function selectedPluginIdsFromConfig(
 }
 
 function isEnabledByCoreToggle(config: ClawforceConfig, pluginId: string): boolean {
-  if (pluginId === "clawforce-router" && config.router?.enabled === false) {
+  if (pluginId === "clawforce-router" && !config.routing) {
     return false;
   }
   if (pluginId === "clawforce-compliance" && config.compliance?.enabled === false) {

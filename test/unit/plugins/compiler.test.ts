@@ -20,14 +20,16 @@ function makeTempDir(prefix: string): string {
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    role: "inbox-analyst",
+    agents: [{ name: "test-agent", role: "inbox-analyst" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
+      default: {
+        channels: {
+          discord: { enabled: true },
+        },
       },
     },
     models: {
-      primary: "anthropic/claude-sonnet-4-5",
+      cloud: "anthropic/claude-sonnet-4-5",
     },
     ...overrides,
   };
@@ -155,7 +157,6 @@ describe("plugin compiler", () => {
 
     const selected = enabledPluginsForConfig(
       makeConfig({
-        router: { enabled: false },
         compliance: { enabled: false },
       }),
       { pluginsRootDir },
@@ -201,7 +202,6 @@ describe("plugin compiler", () => {
         plugins: {
           enabled: ["clawforce-compliance"],
         },
-        router: { enabled: false },
       }),
       { pluginsRootDir },
     );
@@ -228,7 +228,7 @@ describe("plugin compiler", () => {
 
     const selected = enabledPluginsForConfig(
       makeConfig({
-        router: { enabled: true },
+        routing: {},
       }),
       { pluginsRootDir },
     );

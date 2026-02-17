@@ -1,11 +1,15 @@
 name: "env-local-no-api-key"
-role: "inbox-analyst"
+
+agents:
+  - name: "test-agent"
+    role: "inbox-analyst"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "ollama/llama3.3:8b"
+  cloud: "ollama/llama3.3:8b"
   credential_mode: "env"

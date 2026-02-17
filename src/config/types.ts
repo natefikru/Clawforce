@@ -14,6 +14,8 @@ function modelRequiresProviderApiKey(model: string): boolean {
   return !localModelPrefixes.some((prefix) => model.startsWith(prefix));
 }
 
+// -- Alert schemas (unchanged) --
+
 const alertTypesSchema = z.object({
   model_health: z.boolean().default(true),
   budget_exceeded: z.boolean().default(true),
@@ -99,7 +101,7 @@ const alertsSchema = z.object({
   notifications: alertNotificationsSchema,
 }).default({});
 
-// -- Routing rule condition enum (shared between top-level router and per-agent overrides) --
+// -- Routing schemas (unified: rules + sensitivity + policy + budget + health_check) --
 
 const routingConditionEnum = z.enum([
   "pii_detected",
@@ -120,54 +122,40 @@ const routingRuleSchema = z.object({
 
 const routingPriorityEnum = z.enum(["policy", "sensitivity", "cost", "domain", "complexity"]);
 
-// -- Multi-agent schemas --
-
-const ChannelAssignmentSchema = z.object({
-  type: z.enum(["channel", "dm"]),
-  channels: z.array(z.string().min(1)).optional(),
-  users: z.array(z.string().min(1)).optional(),
-}).superRefine((data, ctx) => {
-  if (data.type === "channel" && (!data.channels || data.channels.length === 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "channels is required when type is 'channel'",
-      path: ["channels"],
-    });
-  }
-  if (data.type === "dm" && (!data.users || data.users.length === 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "users is required when type is 'dm'",
-      path: ["users"],
-    });
-  }
+const routingSensitivitySchema = z.object({
+  keywords: z.array(z.string()).optional(),
+  pii_detection: z.boolean().optional(),
+  pii_confidence_threshold: z.number().min(0).max(1).optional(),
+  pii_pattern_thresholds: z.record(z.string(), z.number().min(0).max(1)).optional(),
 });
 
-const AgentRoutingOverrideSchema = z.object({
-  budget_daily: z.number().positive().optional(),
-  per_request_cap: z.number().positive().optional(),
-  fallback_model: z.string().optional(),
-  rules: z.array(routingRuleSchema).optional(),
-  sensitivity_keywords: z.array(z.string()).optional(),
-  priority: z.array(routingPriorityEnum).optional(),
-});
-
-const AgentConfigSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(50)
-    .regex(/^[a-z0-9-]+$/, "Agent name must be lowercase alphanumeric with hyphens"),
-  role: z.enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"]),
-  channels: z.array(ChannelAssignmentSchema).optional(),
-  routing: AgentRoutingOverrideSchema.optional(),
-  skills: z.array(z.string()).optional(),
-  supervises: z.array(z.string()).optional(),
-  sandbox: z
-    .object({
-      mode: z.enum(["off", "non-main", "all"]).default("off"),
-    })
+const routingPolicySchema = z.object({
+  default_tier: z
+    .enum(["restricted", "confidential", "internal", "public"])
+    .default("internal"),
+  channels: z
+    .array(
+      z.object({
+        channel_id: z.string(),
+        tier: z.enum(["restricted", "confidential", "internal", "public"]),
+        description: z.string().optional(),
+      }),
+    )
     .optional(),
+  users: z
+    .array(
+      z.object({
+        user_id: z.string(),
+        tier: z.enum(["restricted", "confidential", "internal", "public"]),
+      }),
+    )
+    .optional(),
+});
+
+const routingBudgetSchema = z.object({
+  daily_limit: z.number().positive(),
+  per_request_cap: z.number().positive().optional(),
+  fallback_model: z.string(),
 });
 
 const healthCheckSchema = z
@@ -187,25 +175,64 @@ const healthCheckSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          "router.health_check.failover_policy=queue is not implemented yet; use block or failover-safe",
+          "routing.health_check.failover_policy=queue is not implemented yet; use block or failover-safe",
       });
     }
   });
 
-const routerSchema = z.object({
-  enabled: z.boolean().default(true),
+const routingSchema = z.object({
   rules: z.array(routingRuleSchema).optional(),
-  sensitivity_keywords: z.array(z.string()).optional(),
   priority: z.array(routingPriorityEnum).optional(),
-  budget: z
-    .object({
-      daily_limit: z.number().positive(),
-      per_request_cap: z.number().positive().optional(),
-      fallback_model: z.string(),
-    })
-    .optional(),
+  budget: routingBudgetSchema.optional(),
+  sensitivity: routingSensitivitySchema.optional(),
+  policy: routingPolicySchema.optional(),
   health_check: healthCheckSchema.optional(),
 });
+
+// -- Per-agent routing overrides (same nested shape as global routing) --
+
+const agentRoutingSchema = z.object({
+  budget: z.object({
+    daily_limit: z.number().positive().optional(),
+    per_request_cap: z.number().positive().optional(),
+    fallback_model: z.string().optional(),
+  }).optional(),
+  rules: z.array(routingRuleSchema).optional(),
+  sensitivity: routingSensitivitySchema.optional(),
+  priority: z.array(routingPriorityEnum).optional(),
+});
+
+// -- Agent schema --
+
+const AgentConfigSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, "Agent name must be lowercase alphanumeric with hyphens"),
+  role: z.enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"]),
+  openclaw: z.string().min(1).optional(),
+  routing: agentRoutingSchema.optional(),
+  skills: z.array(z.string()).optional(),
+  supervises: z.array(z.string()).optional(),
+  sandbox: z
+    .object({
+      mode: z.enum(["off", "non-main", "all"]).default("off"),
+    })
+    .optional(),
+});
+
+// -- Models schema (unified: always top-level) --
+
+const modelsSchema = z.object({
+  cloud: z.string().min(1),
+  local: z.string().optional(),
+  provider_keys: z.record(z.string(), z.string().min(1)).optional(),
+  credential_mode: z.enum(["env", "auth_profile"]).optional(),
+  auth_profile: z.string().min(1).optional(),
+});
+
+// -- Dashboard schema (unchanged) --
 
 const dashboardSchema = z
   .object({
@@ -234,17 +261,29 @@ const dashboardSchema = z
     }
   });
 
-const DefaultsSchema = z.object({
-  models: z.object({
-    cloud: z.string().min(1),
-    local: z.string().optional(),
-    provider_keys: z.record(z.string(), z.string().min(1)).optional(),
-    credential_mode: z.enum(["env", "auth_profile"]).optional(),
-    auth_profile: z.string().min(1).optional(),
-  }),
-  router: routerSchema.optional(),
-  dashboard: dashboardSchema.optional(),
+// -- Compliance schema (merged: enabled + frameworks) --
+
+const complianceSchema = z.object({
+  enabled: z.boolean().default(true),
+  frameworks: z
+    .array(z.enum(["hipaa", "pci-dss", "gdpr", "ccpa", "sox"]))
+    .optional(),
 });
+
+// -- Local model schema (renamed from runtime) --
+
+const localModelSchema = z.object({
+  engine: z.string().min(1).default("sglang"),
+  location: z.enum(["container", "host"]).default("container"),
+  host_url: z.string().url().optional(),
+  model: z.string().default("qwen3-32b"),
+  gpu: z.enum(["nvidia", "amd", "none"]).optional(),
+  quantization: z.enum(["fp16", "int8", "int4", "awq", "gptq"]).optional(),
+  port: z.number().default(30000),
+  options: z.record(z.unknown()).optional(),
+});
+
+// -- Deployment schema (unchanged) --
 
 const deploymentSchema = z.object({
   agent_runtime: z.enum(["openclaw"]).default("openclaw"),
@@ -259,35 +298,35 @@ export const ClawforceConfigSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Name must be lowercase alphanumeric with hyphens"),
 
-  // Single-agent mode (backward compatible)
-  role: z
-    .enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"])
+  models: modelsSchema,
+
+  agents: z.array(AgentConfigSchema).min(1),
+
+  routing: routingSchema.optional(),
+
+  // Named map of openclaw configs — each key is an instance name, value is raw passthrough
+  openclaw: z.record(z.string(), z.record(z.unknown())),
+
+  local_model: localModelSchema.optional(),
+
+  compliance: complianceSchema.optional(),
+
+  dashboard: dashboardSchema.optional(),
+
+  alerts: alertsSchema.optional(),
+
+  gateway: z
+    .object({
+      bind: z.enum(["loopback", "lan"]).default("loopback"),
+    })
     .optional(),
 
-  // Multi-agent mode
-  agents: z.array(AgentConfigSchema).min(1).optional(),
-  defaults: DefaultsSchema.optional(),
   deployment: deploymentSchema.optional(),
-
-  // Single-agent models (required for single-agent, absent for multi-agent)
-  models: z.object({
-    primary: z.string().min(1),
-    local: z.string().optional(),
-    provider_keys: z.record(z.string(), z.string().min(1)).optional(),
-    credential_mode: z.enum(["env", "auth_profile"]).optional(),
-    auth_profile: z.string().min(1).optional(),
-  }).optional(),
 
   plugins: z
     .object({
       enabled: z.array(z.string().min(1)).optional(),
       config: z.record(z.string(), z.record(z.unknown())).optional(),
-    })
-    .optional(),
-
-  gateway: z
-    .object({
-      bind: z.enum(["loopback", "lan"]).default("loopback"),
     })
     .optional(),
 
@@ -298,289 +337,147 @@ export const ClawforceConfigSchema = z.object({
     })
     .optional(),
 
-  sensitivity: z
-    .object({
-      blocklist: z.array(z.string()).optional(),
-      pii_detection: z.boolean().optional(),
-      pii_confidence_threshold: z.number().min(0).max(1).optional(),
-      pii_pattern_thresholds: z.record(z.string(), z.number().min(0).max(1)).optional(),
-    })
-    .optional(),
-
-  runtime: z
-    .object({
-      engine: z.string().min(1).default("sglang"),
-      location: z.enum(["container", "host"]).default("container"),
-      host_url: z.string().url().optional(),
-      model: z.string().default("qwen3-32b"),
-      gpu: z.enum(["nvidia", "amd", "none"]).optional(),
-      quantization: z.enum(["fp16", "int8", "int4", "awq", "gptq"]).optional(),
-      port: z.number().default(30000),
-      options: z.record(z.unknown()).optional(),
-    })
-    .optional(),
-
-  router: routerSchema.optional(),
-
-  policy: z
-    .object({
-      default_tier: z
-        .enum(["restricted", "confidential", "internal", "public"])
-        .default("internal"),
-      channels: z
-        .array(
-          z.object({
-            channel_id: z.string(),
-            tier: z.enum(["restricted", "confidential", "internal", "public"]),
-            description: z.string().optional(),
-          }),
-        )
-        .optional(),
-      users: z
-        .array(
-          z.object({
-            user_id: z.string(),
-            tier: z.enum(["restricted", "confidential", "internal", "public"]),
-          }),
-        )
-        .optional(),
-    })
-    .optional(),
-
-  compliance: z
-    .object({
-      enabled: z.boolean().default(true),
-    })
-    .optional(),
-
-  compliance_frameworks: z
-    .array(z.enum(["hipaa", "pci-dss", "gdpr", "ccpa", "sox"]))
-    .optional(),
-
-  dashboard: dashboardSchema.optional(),
-
-  alerts: alertsSchema.optional(),
-
   capabilities: z.enum(["minimal", "standard", "full"]).optional(),
 
-  openclaw: z.record(z.unknown()).optional(),
 }).superRefine((data, ctx) => {
-  const hasRole = !!data.role;
-  const hasAgents = !!data.agents && data.agents.length > 0;
+  const models = data.models as z.infer<typeof modelsSchema>;
+  const agents = data.agents as z.infer<typeof AgentConfigSchema>[];
+  const openclaw = data.openclaw as Record<string, Record<string, unknown>>;
 
-  // 1. Mutual exclusivity: role XOR agents
-  if (hasRole && hasAgents) {
+  // 1. OpenClaw must have at least one instance
+  const openclawInstanceNames = Object.keys(openclaw);
+  if (openclawInstanceNames.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Config must use EITHER 'role' (single-agent) OR 'agents' (multi-agent), not both",
-      path: ["agents"],
+      message: "openclaw must have at least one named instance",
+      path: ["openclaw"],
     });
     return;
   }
 
-  if (!hasRole && !hasAgents) {
+  // 2. Credential mode validation
+  const credentialMode = models.credential_mode ?? "env";
+  if (credentialMode === "auth_profile" && !models.auth_profile) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Config must specify either 'role' (single-agent) or 'agents' (multi-agent)",
-      path: ["role"],
+      message: "models.auth_profile is required when models.credential_mode=auth_profile",
+      path: ["models", "auth_profile"],
     });
-    return;
   }
-
-  // 2. Single-agent validation
-  if (hasRole) {
-    if (!data.models) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "models is required for single-agent configs",
-        path: ["models"],
-      });
-      return;
-    }
-
-    // Credential mode validation
-    const credentialMode = data.models.credential_mode ?? "env";
-    if (credentialMode === "auth_profile" && !data.models.auth_profile) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "models.auth_profile is required when models.credential_mode=auth_profile",
-        path: ["models", "auth_profile"],
-      });
-    }
-    if (
-      credentialMode === "env" &&
-      modelRequiresProviderApiKey(data.models.primary)
-    ) {
-      const provider = getModelProvider(data.models.primary);
-      const providerKey = provider ? data.models.provider_keys?.[provider] : undefined;
-      if (!provider || !providerKey) {
-        const providerLabel = provider ?? "<provider>";
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            `models.provider_keys.${providerLabel} is required when models.credential_mode=env and models.primary is a cloud provider model`,
-          path: ["models", "provider_keys", providerLabel],
-        });
-      }
-    }
-
-    // Connector requirement for single-agent
-    const openclaw = data.openclaw;
-    if (!openclaw || typeof openclaw !== "object") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one connector must be configured via openclaw.channels",
-        path: ["openclaw"],
-      });
-      return;
-    }
-    const channels = (openclaw as Record<string, unknown>).channels;
-    if (
-      !channels ||
-      typeof channels !== "object" ||
-      Object.keys(channels as Record<string, unknown>).length === 0
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one connector must be configured via openclaw.channels",
-        path: ["openclaw", "channels"],
-      });
-    }
-  }
-
-  // 3. Multi-agent validation
-  if (hasAgents) {
-    // defaults.models.cloud is required
-    if (!data.defaults?.models?.cloud) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "defaults.models.cloud is required for multi-agent configs",
-        path: ["defaults", "models", "cloud"],
-      });
-    }
-
-    // Credential mode validation for multi-agent
-    if (data.defaults?.models) {
-      const credentialMode = data.defaults.models.credential_mode ?? "env";
-      if (credentialMode === "auth_profile" && !data.defaults.models.auth_profile) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "defaults.models.auth_profile is required when defaults.models.credential_mode=auth_profile",
-          path: ["defaults", "models", "auth_profile"],
-        });
-      }
-      if (
-        credentialMode === "env" &&
-        modelRequiresProviderApiKey(data.defaults.models.cloud)
-      ) {
-        const provider = getModelProvider(data.defaults.models.cloud);
-        const providerKey = provider ? data.defaults.models.provider_keys?.[provider] : undefined;
-        if (!provider || !providerKey) {
-          const providerLabel = provider ?? "<provider>";
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message:
-              `defaults.models.provider_keys.${providerLabel} is required for cloud model when defaults.models.credential_mode=env`,
-            path: ["defaults", "models", "provider_keys", providerLabel],
-          });
-        }
-      }
-    }
-
-    // Unique agent names
-    const agentNames = data.agents!.map((a) => a.name);
-    const seen = new Set<string>();
-    for (const name of agentNames) {
-      if (seen.has(name)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Duplicate agent name '${name}' — agent names must be unique`,
-          path: ["agents"],
-        });
-        break;
-      }
-      seen.add(name);
-    }
-
-    // Supervisor references must point to existing agents (not self)
-    const nameSet = new Set(agentNames);
-    for (let i = 0; i < data.agents!.length; i++) {
-      const agent = data.agents![i];
-      if (agent.role === "supervisor" && (!agent.supervises || agent.supervises.length === 0)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Supervisor agent '${agent.name}' must define a non-empty supervises list`,
-          path: ["agents", i, "supervises"],
-        });
-      }
-      if (agent.supervises) {
-        for (const supervisedName of agent.supervises) {
-          if (supervisedName === agent.name) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: `Agent '${agent.name}' cannot supervise itself`,
-              path: ["agents", i, "supervises"],
-            });
-            continue;
-          }
-          if (!nameSet.has(supervisedName)) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: `Agent '${agent.name}' supervises '${supervisedName}', but no agent with that name exists`,
-              path: ["agents", i, "supervises"],
-            });
-          }
-        }
-      }
-    }
-
-    // At least one connector: agents with channels OR openclaw.channels
-    const hasAgentChannels = data.agents!.some(
-      (a) => a.channels && a.channels.length > 0,
-    );
-    const hasOpenclawChannels = (() => {
-      const openclaw = data.openclaw;
-      if (!openclaw || typeof openclaw !== "object") return false;
-      const channels = (openclaw as Record<string, unknown>).channels;
-      return !!(
-        channels &&
-        typeof channels === "object" &&
-        Object.keys(channels as Record<string, unknown>).length > 0
-      );
-    })();
-
-    if (!hasAgentChannels && !hasOpenclawChannels) {
+  if (credentialMode === "env" && modelRequiresProviderApiKey(models.cloud)) {
+    const provider = getModelProvider(models.cloud);
+    const providerKey = provider ? models.provider_keys?.[provider] : undefined;
+    if (!provider || !providerKey) {
+      const providerLabel = provider ?? "<provider>";
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          "At least one agent must have channels configured, or openclaw.channels must be set",
+          `models.provider_keys.${providerLabel} is required when models.credential_mode=env and models.cloud is a cloud provider model`,
+        path: ["models", "provider_keys", providerLabel],
+      });
+    }
+  }
+
+  // 3. Unique agent names
+  const agentNames = agents.map((a) => a.name);
+  const seen = new Set<string>();
+  for (const name of agentNames) {
+    if (seen.has(name)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Duplicate agent name '${name}' — agent names must be unique`,
         path: ["agents"],
       });
+      break;
+    }
+    seen.add(name);
+  }
+
+  // 4. OpenClaw instance references
+  const instanceSet = new Set(openclawInstanceNames);
+
+  if (openclawInstanceNames.length > 1) {
+    // Multiple instances: every agent must specify openclaw reference
+    for (let i = 0; i < agents.length; i++) {
+      const agent = agents[i];
+      if (!agent.openclaw) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Agent '${agent.name}' must specify 'openclaw' when multiple openclaw instances are defined`,
+          path: ["agents", i, "openclaw"],
+        });
+      } else if (!instanceSet.has(agent.openclaw)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Agent '${agent.name}' references openclaw instance '${agent.openclaw}', but no instance with that name exists`,
+          path: ["agents", i, "openclaw"],
+        });
+      }
+    }
+  } else if (openclawInstanceNames.length === 1) {
+    // Single instance: validate any explicit references
+    for (let i = 0; i < agents.length; i++) {
+      const agent = agents[i];
+      if (agent.openclaw && !instanceSet.has(agent.openclaw)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Agent '${agent.name}' references openclaw instance '${agent.openclaw}', but no instance with that name exists`,
+          path: ["agents", i, "openclaw"],
+        });
+      }
+    }
+  }
+
+  // 5. Supervisor validation
+  const nameSet = new Set(agentNames);
+  for (let i = 0; i < agents.length; i++) {
+    const agent = agents[i];
+    if (agent.role === "supervisor" && (!agent.supervises || agent.supervises.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Supervisor agent '${agent.name}' must define a non-empty supervises list`,
+        path: ["agents", i, "supervises"],
+      });
+    }
+    if (agent.supervises) {
+      for (const supervisedName of agent.supervises) {
+        if (supervisedName === agent.name) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Agent '${agent.name}' cannot supervise itself`,
+            path: ["agents", i, "supervises"],
+          });
+          continue;
+        }
+        if (!nameSet.has(supervisedName)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Agent '${agent.name}' supervises '${supervisedName}', but no agent with that name exists`,
+            path: ["agents", i, "supervises"],
+          });
+        }
+      }
     }
   }
 });
 
 export type ClawforceConfig = z.infer<typeof ClawforceConfigSchema>;
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
-export type DefaultsConfig = z.infer<typeof DefaultsSchema>;
 export type AgentRuntime = z.infer<typeof deploymentSchema>["agent_runtime"];
 
 export function resolveAgentRuntime(config: ClawforceConfig): AgentRuntime {
   return config.deployment?.agent_runtime ?? "openclaw";
 }
 
-/** Returns true if the config is in single-agent mode (has `role`). */
-export function isSingleAgentConfig(config: ClawforceConfig): config is ClawforceConfig & {
-  role: string;
-  models: NonNullable<ClawforceConfig["models"]>;
-} {
-  return !!config.role;
-}
-
-/** Returns true if the config is in multi-agent mode (has `agents`). */
-export function isMultiAgentConfig(config: ClawforceConfig): config is ClawforceConfig & {
-  agents: NonNullable<ClawforceConfig["agents"]>;
-  defaults: NonNullable<ClawforceConfig["defaults"]>;
-} {
-  return !!config.agents && config.agents.length > 0 && !!config.defaults;
+/**
+ * Resolves which openclaw instance each agent is assigned to.
+ * If only one instance exists, all agents are assigned to it.
+ */
+export function resolveAgentOpenclawInstance(
+  agent: AgentConfig,
+  config: ClawforceConfig,
+): string {
+  if (agent.openclaw) return agent.openclaw;
+  const instanceNames = Object.keys(config.openclaw);
+  return instanceNames[0];
 }

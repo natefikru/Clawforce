@@ -1,13 +1,17 @@
 name: "invalid-alerts"
-role: "research-agent"
+
+agents:
+  - name: "test-agent"
+    role: "research-agent"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
 

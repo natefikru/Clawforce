@@ -1,20 +1,14 @@
-name: "five-dim-test"
-
-agents:
-  - name: "test-agent"
-    role: "inbox-analyst"
-
-openclaw:
-  default:
-    channels:
-      discord:
-        enabled: true
+name: "full-routing"
 
 models:
   cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
+
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
 
 routing:
   rules:
@@ -26,18 +20,20 @@ routing:
       model: "anthropic/claude-sonnet-4-5"
     - condition: "domain_code"
       model: "openai/gpt-4o"
-    - condition: "domain_writing"
-      model: "anthropic/claude-sonnet-4-5"
     - condition: "over_budget"
       model: "ollama/llama3.3:8b"
+  priority: [policy, sensitivity, cost, domain, complexity]
+  budget:
+    daily_limit: 10.00
+    fallback_model: "ollama/llama3.3:8b"
   sensitivity:
-    keywords:
-      - "password"
-      - "secret"
+    keywords: ["password", "secret"]
     pii_detection: true
     pii_confidence_threshold: 0.80
     pii_pattern_thresholds:
       ip_address: 0.50
+  policy:
+    default_tier: internal
   health_check:
     enabled: true
     interval_seconds: 10
@@ -48,9 +44,6 @@ routing:
     recovery_threshold: 2
     retry_attempts: 2
     retry_delay_ms: 500
-  budget:
-    daily_limit: 10.00
-    fallback_model: "ollama/llama3.3:8b"
 
 local_model:
   engine: "sglang"
@@ -69,3 +62,9 @@ dashboard:
   enabled: true
   auth:
     enabled: false
+
+openclaw:
+  default:
+    channels:
+      discord:
+        enabled: true

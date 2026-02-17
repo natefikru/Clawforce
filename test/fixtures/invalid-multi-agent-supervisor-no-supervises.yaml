@@ -1,24 +1,18 @@
 name: "invalid-supervisor-no-supervises"
 
-defaults:
-  models:
-    cloud: "anthropic/claude-sonnet-4-5"
-    provider_keys:
-      anthropic: "${ANTHROPIC_API_KEY}"
+models:
+  cloud: "anthropic/claude-sonnet-4-5"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
 
 agents:
   - name: ultron
     role: supervisor
-    channels:
-      - type: channel
-        channels: ["#ai-ops"]
   - name: inbox-analyst
     role: inbox-analyst
-    channels:
-      - type: channel
-        channels: ["#ops"]
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true

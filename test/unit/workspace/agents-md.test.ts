@@ -5,13 +5,15 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "acme-corp",
-    role: "inbox-analyst",
+    agents: [{ name: "test-agent", role: "inbox-analyst" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
+      default: {
+        channels: {
+          discord: { enabled: true },
+        },
       },
     },
-    models: { primary: "anthropic/claude-sonnet-4-5" },
+    models: { cloud: "anthropic/claude-sonnet-4-5" },
     ...overrides,
   };
 }
@@ -28,12 +30,12 @@ describe("generateAgentsMd", () => {
   });
 
   it("should show Research Agent for research-agent role", () => {
-    const md = generateAgentsMd(makeConfig({ role: "research-agent" }));
+    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "research-agent" }] }));
     expect(md).toContain("Research Agent");
   });
 
   it("should show Process Automator for process-automator role", () => {
-    const md = generateAgentsMd(makeConfig({ role: "process-automator" }));
+    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "process-automator" }] }));
     expect(md).toContain("Process Automator");
   });
 
@@ -56,11 +58,13 @@ describe("generateAgentsMd", () => {
     expect(md).toContain("- message.send");
   });
 
-  it("should include sensitivity blocklist when configured", () => {
+  it("should include sensitivity keywords when configured", () => {
     const md = generateAgentsMd(
       makeConfig({
-        sensitivity: {
-          blocklist: ["ssn", "credit card"],
+        routing: {
+          sensitivity: {
+            keywords: ["ssn", "credit card"],
+          },
         },
       }),
     );
@@ -69,7 +73,7 @@ describe("generateAgentsMd", () => {
     expect(md).toContain("- credit card");
   });
 
-  it("should not include sensitivity section when no blocklist", () => {
+  it("should not include sensitivity section when no keywords", () => {
     const md = generateAgentsMd(makeConfig());
     expect(md).not.toContain("Data Sensitivity");
   });
@@ -82,27 +86,19 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
       {
         name: "inbox-analyst",
         role: "inbox-analyst",
-        channels: [{ type: "channel", channels: ["111111111111111111"] }],
       },
       {
         name: "research-agent",
         role: "research-agent",
-        channels: [
-          { type: "channel", channels: ["222222222222222222"] },
-          { type: "dm", users: ["333333333333333333", "444444444444444444"] },
-        ],
       },
       {
         name: "ultron",
         role: "process-automator",
         supervises: ["inbox-analyst", "research-agent"],
-        channels: [{ type: "channel", channels: ["555555555555555555"] }],
       },
     ],
-    defaults: {
-      models: { cloud: "anthropic/claude-sonnet-4-5" },
-    },
-    openclaw: { channels: { discord: { enabled: true } } },
+    models: { cloud: "anthropic/claude-sonnet-4-5" },
+    openclaw: { default: { channels: { discord: { enabled: true } } } },
     ...overrides,
   };
 }
@@ -118,13 +114,6 @@ describe("generateAgentsMd — multi-agent", () => {
     expect(md).toContain("inbox-analyst (Inbox Analyst)");
     expect(md).toContain("research-agent (Research Agent)");
     expect(md).toContain("ultron (Process Automator)");
-  });
-
-  it("should list channel assignments", () => {
-    const md = generateAgentsMd(makeMultiAgentConfig());
-    expect(md).toContain("111111111111111111");
-    expect(md).toContain("222222222222222222");
-    expect(md).toContain("DMs with 333333333333333333, 444444444444444444");
   });
 
   it("should list supervision relationships", () => {

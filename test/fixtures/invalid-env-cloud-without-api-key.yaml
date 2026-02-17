@@ -1,11 +1,15 @@
 name: "env-cloud-no-api-key"
-role: "inbox-analyst"
+
+agents:
+  - name: "test-agent"
+    role: "inbox-analyst"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   credential_mode: "env"

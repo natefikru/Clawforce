@@ -96,7 +96,7 @@ describe("deployCommand", () => {
   it("should setup workspace with SKILL.md and AGENTS.md", async () => {
     await deployCommand(join(fixturesDir, "valid-config.yaml"));
     expect(
-      existsSync(join(deployDir, "workspace/skills/inbox-analyst/SKILL.md")),
+      existsSync(join(deployDir, "workspace/test-agent/skills/inbox-analyst/SKILL.md")),
     ).toBe(true);
     expect(existsSync(join(deployDir, "workspace/AGENTS.md"))).toBe(true);
   });

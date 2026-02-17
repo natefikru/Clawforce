@@ -1,40 +1,39 @@
-name: "test-workforce"
+name: "test-ultron"
 
 models:
   cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
-
-routing:
-  priority: [policy, sensitivity, cost, domain, complexity]
-  sensitivity:
-    keywords: [password, secret]
-
-dashboard:
-  enabled: true
-  auth:
-    enabled: false
 
 agents:
   - name: inbox-analyst
     role: inbox-analyst
+    openclaw: support-instance
     routing:
       budget:
         daily_limit: 5.00
 
   - name: research-agent
     role: research-agent
+    openclaw: research-instance
     routing:
       budget:
         daily_limit: 8.00
-      rules:
-        - condition: high_complexity
-          model: anthropic/claude-sonnet-4-5
+
+  - name: ultron
+    role: supervisor
+    openclaw: support-instance
+    supervises: [inbox-analyst, research-agent]
+    routing:
+      budget:
+        daily_limit: 3.00
 
 openclaw:
-  default:
+  support-instance:
+    channels:
+      discord:
+        enabled: true
+  research-instance:
     channels:
       discord:
         enabled: true

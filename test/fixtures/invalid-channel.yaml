@@ -1,8 +1,12 @@
 name: "test"
-role: "inbox-analyst"
+
+agents:
+  - name: "test-agent"
+    role: "inbox-analyst"
 
 openclaw:
-  channels: {}
+  default:
+    channels: {}
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
