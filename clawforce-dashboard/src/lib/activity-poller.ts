@@ -8,6 +8,7 @@
 
 import type { DatabaseSync } from "node:sqlite";
 import type { SSEMessage, SyncPollSource, PollResult } from "./sse";
+import { buildAgentSqlFilter, normalizeAgentId } from "./agent-filter";
 
 const BACKFILL_LIMIT = 50;
 const RECONNECT_LIMIT = 500;
@@ -20,18 +21,21 @@ const POLL_BATCH = 100;
 export function createActivityPoller(
   db: DatabaseSync,
   initialCursor: number,
+  agentId?: string,
 ): SyncPollSource {
   let cursor = initialCursor;
+  const normalizedAgentId = normalizeAgentId(agentId);
 
   return {
     name: "activity",
     intervalMs: 1500,
     poll(): PollResult {
+      const { whereSql, params } = buildWhereSql(["id > ?"], [cursor], normalizedAgentId);
       const rows = db
         .prepare(
-          "SELECT id, data FROM compliance_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+          `SELECT id, data FROM compliance_events ${whereSql} ORDER BY id ASC LIMIT ?`,
         )
-        .all(cursor, POLL_BATCH) as { id: number; data: string }[];
+        .all(...params, POLL_BATCH) as { id: number; data: string }[];
 
       const events: SSEMessage[] = rows.map((row) => ({
         id: String(row.id),
@@ -64,35 +68,40 @@ export interface BackfillResult {
 export function getBackfill(
   db: DatabaseSync,
   lastEventId?: string,
+  agentId?: string,
 ): BackfillResult {
   const parsedId = lastEventId !== undefined ? parseInt(lastEventId, 10) : NaN;
+  const normalizedAgentId = normalizeAgentId(agentId);
 
   if (!isNaN(parsedId) && parsedId > 0) {
     // Check how many events were missed
+    const countQuery = buildWhereSql(["id > ?"], [parsedId], normalizedAgentId);
     const countRow = db
       .prepare(
-        "SELECT COUNT(*) as cnt FROM compliance_events WHERE id > ?",
+        `SELECT COUNT(*) as cnt FROM compliance_events ${countQuery.whereSql}`,
       )
-      .get(parsedId) as { cnt: number };
+      .get(...countQuery.params) as { cnt: number };
 
     const truncated = countRow.cnt > RECONNECT_LIMIT;
 
     let rows: { id: number; data: string }[];
     if (truncated) {
       // Too many missed — fetch the latest 500 (DESC then reverse)
+      const truncatedQuery = buildWhereSql([], [], normalizedAgentId);
       rows = db
         .prepare(
-          "SELECT id, data FROM compliance_events ORDER BY id DESC LIMIT ?",
+          `SELECT id, data FROM compliance_events ${truncatedQuery.whereSql} ORDER BY id DESC LIMIT ?`,
         )
-        .all(RECONNECT_LIMIT) as { id: number; data: string }[];
+        .all(...truncatedQuery.params, RECONNECT_LIMIT) as { id: number; data: string }[];
       rows.reverse();
     } else {
       // Replay all missed events
+      const replayQuery = buildWhereSql(["id > ?"], [parsedId], normalizedAgentId);
       rows = db
         .prepare(
-          "SELECT id, data FROM compliance_events WHERE id > ? ORDER BY id ASC",
+          `SELECT id, data FROM compliance_events ${replayQuery.whereSql} ORDER BY id ASC`,
         )
-        .all(parsedId) as { id: number; data: string }[];
+        .all(...replayQuery.params) as { id: number; data: string }[];
     }
 
     const events: SSEMessage[] = rows.map((row) => ({
@@ -108,11 +117,12 @@ export function getBackfill(
   }
 
   // Initial load: last 50 events in chronological order
+  const initialQuery = buildWhereSql([], [], normalizedAgentId);
   const rows = db
     .prepare(
-      "SELECT id, data FROM compliance_events ORDER BY id DESC LIMIT ?",
+      `SELECT id, data FROM compliance_events ${initialQuery.whereSql} ORDER BY id DESC LIMIT ?`,
     )
-    .all(BACKFILL_LIMIT) as { id: number; data: string }[];
+    .all(...initialQuery.params, BACKFILL_LIMIT) as { id: number; data: string }[];
 
   // Reverse to chronological order (oldest first)
   rows.reverse();
@@ -126,4 +136,20 @@ export function getBackfill(
   const cursor = rows.length > 0 ? rows[rows.length - 1].id : 0;
 
   return { events, cursor, truncated: false };
+}
+
+function buildWhereSql(
+  baseConditions: string[],
+  baseParams: (string | number)[],
+  agentId?: string,
+): { whereSql: string; params: (string | number)[] } {
+  const conditions = [...baseConditions];
+  const params = [...baseParams];
+  const { clause, params: agentParams } = buildAgentSqlFilter(agentId);
+  if (clause) {
+    conditions.push(clause);
+    params.push(...agentParams);
+  }
+  const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  return { whereSql, params };
 }

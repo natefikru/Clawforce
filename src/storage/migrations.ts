@@ -150,6 +150,19 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    description: "Alerts index for agent-scoped lookups",
+    up: (db) => {
+      const table = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'alerts'",
+        )
+        .get() as { name?: string } | undefined;
+      if (!table?.name) return;
+      db.exec("CREATE INDEX IF NOT EXISTS idx_alerts_agent ON alerts(agent_id)");
+    },
+  },
 ];
 
 export function runMigrations(db: DatabaseSync): void {

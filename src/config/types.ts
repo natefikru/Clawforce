@@ -157,7 +157,7 @@ const AgentConfigSchema = z.object({
     .min(1)
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Agent name must be lowercase alphanumeric with hyphens"),
-  role: z.enum(["inbox-analyst", "research-agent", "process-automator"]),
+  role: z.enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"]),
   channels: z.array(ChannelAssignmentSchema).optional(),
   routing: AgentRoutingOverrideSchema.optional(),
   skills: z.array(z.string()).optional(),
@@ -255,7 +255,9 @@ export const ClawforceConfigSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Name must be lowercase alphanumeric with hyphens"),
 
   // Single-agent mode (backward compatible)
-  role: z.enum(["inbox-analyst", "research-agent", "process-automator"]).optional(),
+  role: z
+    .enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"])
+    .optional(),
 
   // Multi-agent mode
   agents: z.array(AgentConfigSchema).min(1).optional(),
@@ -381,6 +383,16 @@ export const ClawforceConfigSchema = z.object({
 
   // 2. Single-agent validation
   if (hasRole) {
+    if (data.role === "supervisor") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "role=supervisor is only supported in multi-agent mode. Use agents[] and supervises.",
+        path: ["role"],
+      });
+      return;
+    }
+
     if (!data.models) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -498,6 +510,13 @@ export const ClawforceConfigSchema = z.object({
     const nameSet = new Set(agentNames);
     for (let i = 0; i < data.agents!.length; i++) {
       const agent = data.agents![i];
+      if (agent.role === "supervisor" && (!agent.supervises || agent.supervises.length === 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Supervisor agent '${agent.name}' must define a non-empty supervises list`,
+          path: ["agents", i, "supervises"],
+        });
+      }
       if (agent.supervises) {
         for (const supervisedName of agent.supervises) {
           if (supervisedName === agent.name) {

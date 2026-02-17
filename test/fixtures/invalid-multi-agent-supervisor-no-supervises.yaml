@@ -1,4 +1,4 @@
-name: "invalid-supervisor"
+name: "invalid-supervisor-no-supervises"
 
 defaults:
   models:
@@ -12,7 +12,11 @@ agents:
     channels:
       - type: channel
         channels: ["#ai-ops"]
-    supervises: [nonexistent-agent]
+  - name: inbox-analyst
+    role: inbox-analyst
+    channels:
+      - type: channel
+        channels: ["#ops"]
 
 openclaw:
   channels:

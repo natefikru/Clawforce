@@ -814,4 +814,32 @@ describe("generateOpenClawConfig — multi-agent", () => {
       expect(typeof binding.match.peer!.id).toBe("string");
     }
   });
+
+  it("should not auto-enable supervisor tools in agent profiles", () => {
+    const result = generateOpenClawConfig(
+      makeMultiAgentConfig({
+        agents: [
+          {
+            name: "ultron",
+            role: "supervisor",
+            channels: [{ type: "channel", channels: ["777777777777777777"] }],
+            supervises: ["inbox-analyst"],
+          },
+          {
+            name: "inbox-analyst",
+            role: "inbox-analyst",
+            channels: [{ type: "channel", channels: ["111111111111111111"] }],
+          },
+        ],
+      }),
+    );
+
+    const ultronProfile = result.agents.list?.find((a) => a.id === "ultron");
+    const analystProfile = result.agents.list?.find((a) => a.id === "inbox-analyst");
+
+    expect(ultronProfile).toBeDefined();
+    expect(analystProfile).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(ultronProfile ?? {}, "tools")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(analystProfile ?? {}, "tools")).toBe(false);
+  });
 });

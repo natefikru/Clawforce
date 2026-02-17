@@ -54,7 +54,7 @@ agents:
           model: anthropic/claude-sonnet-4-5
 
   - name: ops-supervisor
-    role: process-automator
+    role: supervisor
     channels:
       - type: channel
         channels: ["1234567890123456792"]  # Discord channel ID
@@ -88,7 +88,7 @@ openclaw:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | Unique agent identifier (lowercase alphanumeric + hyphens, max 50 chars) |
-| `role` | enum | Yes | `inbox-analyst`, `research-agent`, or `process-automator` |
+| `role` | enum | Yes | `inbox-analyst`, `research-agent`, `process-automator`, or `supervisor` |
 | `channels` | array | No | Channel assignments (see below) |
 | `routing` | object | No | Per-agent routing overrides |
 | `skills` | array | No | Additional skill IDs |
@@ -181,7 +181,7 @@ workspace/
   AGENTS.md                                    # Lists all agents
   inbox-analyst/skills/inbox-analyst/SKILL.md
   research-agent/skills/research-agent/SKILL.md
-  ops-supervisor/skills/process-automator/SKILL.md
+  ops-supervisor/skills/supervisor/SKILL.md
 ```
 
 ### OpenClaw Integration

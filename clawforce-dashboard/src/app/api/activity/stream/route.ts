@@ -27,6 +27,8 @@ import { createActivityPoller, getBackfill } from "@/lib/activity-poller";
 import { createCostPoller } from "@/lib/cost-poller";
 import { createStatusPoller } from "@/lib/status-poller";
 import { createAlertPoller, getAlertBackfill } from "@/lib/alert-poller";
+import { auth } from "@/auth";
+import { matchesAgentFilter, normalizeAgentId } from "@/lib/agent-filter";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
@@ -37,12 +39,21 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const lastEventId =
     req.headers.get("Last-Event-ID") ?? undefined;
+  const agentId = normalizeAgentId(req.nextUrl.searchParams.get("agentId"));
+  const authEnabled = Boolean(process.env.AUTH_SECRET);
+  const session = authEnabled ? await auth() : null;
+  if (authEnabled && agentId && session?.user?.role !== "admin") {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   // Try SQLite path
   const db = getReadDb();
   if (db) {
     try {
-      const backfill = getBackfill(db, lastEventId);
+      const backfill = getBackfill(db, lastEventId, agentId);
       const alertBackfill = getAlertBackfill(db);
 
       const initialMessages = [...backfill.events, ...alertBackfill.events];
@@ -56,7 +67,7 @@ export async function GET(req: NextRequest) {
       }
 
       const sources = [
-        createActivityPoller(db, backfill.cursor),
+        createActivityPoller(db, backfill.cursor, agentId),
         createCostPoller(db),
         createStatusPoller(),
         createAlertPoller(db, alertBackfill.cursor),
@@ -80,10 +91,10 @@ export async function GET(req: NextRequest) {
   }
 
   // JSONL fallback — preserved for when SQLite is unavailable
-  return createJsonlFallbackResponse(req);
+  return createJsonlFallbackResponse(req, agentId);
 }
 
-function createJsonlFallbackResponse(req: NextRequest): Response {
+function createJsonlFallbackResponse(req: NextRequest, agentId?: string): Response {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -92,6 +103,7 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
       controller.enqueue(encoder.encode("retry: 3000\n\n"));
 
       let lastByteOffset = 0;
+      let partialLine = "";
 
       // Send initial batch of recent entries
       try {
@@ -101,6 +113,7 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
           const entries = parseJsonl(content);
           const recent = entries.slice(-INITIAL_ENTRIES);
           for (const entry of recent) {
+            if (!matchesAgentFilter(entry, agentId)) continue;
             const eventName = entry?.event === "alert" ? "alert" : "activity";
             // MF-2 fix: emit named events so client addEventListener("activity", ...) works
             controller.enqueue(
@@ -134,9 +147,10 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
 
             lastByteOffset = stat.size;
             const newContent = buf.toString("utf8");
-
-            const newEntries = parseJsonl(newContent);
+            const { entries: newEntries, carry } = parseJsonlIncremental(newContent, partialLine);
+            partialLine = carry;
             for (const entry of newEntries) {
+              if (!matchesAgentFilter(entry, agentId)) continue;
               const eventName = entry?.event === "alert" ? "alert" : "activity";
               // MF-2 fix: emit named events for JSONL fallback too
               controller.enqueue(
@@ -175,4 +189,17 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
       Connection: "keep-alive",
     },
   });
+}
+
+function parseJsonlIncremental(
+  chunk: string,
+  carry: string,
+): { entries: Record<string, unknown>[]; carry: string } {
+  const combined = `${carry}${chunk}`;
+  const endsWithNewline = combined.endsWith("\n");
+  const lines = combined.split("\n");
+  const completeLines = endsWithNewline ? lines.filter(Boolean) : lines.slice(0, -1).filter(Boolean);
+  const nextCarry = endsWithNewline ? "" : (lines.at(-1) ?? "");
+  const entries = parseJsonl(completeLines.join("\n")) as Record<string, unknown>[];
+  return { entries, carry: nextCarry };
 }

@@ -50,7 +50,7 @@ describe("migrations", () => {
       const db = freshDb();
       runMigrations(db);
       expect(() => runMigrations(db)).not.toThrow();
-      expect(getCurrentVersion(db)).toBe(4);
+      expect(getCurrentVersion(db)).toBe(5);
       db.close();
     });
 
@@ -83,7 +83,7 @@ describe("migrations", () => {
         version: number;
         applied_at: string;
       }[];
-      expect(rows).toHaveLength(4);
+      expect(rows).toHaveLength(5);
       expect(rows[0].version).toBe(1);
       expect(rows[0].applied_at).toBeTruthy();
 
@@ -105,7 +105,7 @@ describe("migrations", () => {
     it("returns correct version after migrations", () => {
       const db = freshDb();
       runMigrations(db);
-      expect(getCurrentVersion(db)).toBe(4);
+      expect(getCurrentVersion(db)).toBe(5);
       db.close();
     });
   });
@@ -202,7 +202,7 @@ describe("migrations", () => {
       const db = freshDb();
       runMigrations(db);
 
-      expect(getCurrentVersion(db)).toBe(4);
+      expect(getCurrentVersion(db)).toBe(5);
 
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type='table'")
@@ -252,6 +252,21 @@ describe("migrations", () => {
         .all() as { name: string }[];
       const indexNames = indexes.map((i) => i.name);
       expect(indexNames).toContain("idx_dashboard_users_username");
+
+      db.close();
+    });
+
+    it("applies version 5 migration for alerts agent index", () => {
+      const db = freshDb();
+      runMigrations(db);
+
+      const indexes = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='alerts'",
+        )
+        .all() as { name: string }[];
+      const indexNames = indexes.map((i) => i.name);
+      expect(indexNames).toContain("idx_alerts_agent");
 
       db.close();
     });
@@ -313,10 +328,10 @@ describe("migrations", () => {
         "INSERT INTO compliance_events (ts, event, data) VALUES (?, ?, ?)",
       ).run("2026-01-01", "test", "{}");
 
-      // Run migrations — should apply v2, v3, and v4
+      // Run migrations — should apply v2+ migrations up to latest
       runMigrations(db);
 
-      expect(getCurrentVersion(db)).toBe(4);
+      expect(getCurrentVersion(db)).toBe(5);
 
       const count = db
         .prepare("SELECT COUNT(*) as c FROM compliance_events")

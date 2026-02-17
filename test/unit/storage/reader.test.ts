@@ -399,6 +399,28 @@ describe("StorageReader", () => {
       const rows = reader.getAlerts({ type: "pii_violation", limit: 10 });
       expect(rows).toEqual([]);
     });
+
+    it("filters by agentId", () => {
+      writer.writeAlert({
+        ts: "2026-02-15T10:00:00Z",
+        severity: "warning",
+        type: "budget_exceeded",
+        agentId: "agent-1",
+        message: "Agent 1 alert",
+      });
+      writer.writeAlert({
+        ts: "2026-02-15T10:01:00Z",
+        severity: "error",
+        type: "agent_error",
+        agentId: "agent-2",
+        message: "Agent 2 alert",
+      });
+
+      const rows = reader.getAlerts({ agentId: "agent-1", limit: 10 });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].message).toBe("Agent 1 alert");
+      expect(rows[0].agent_id).toBe("agent-1");
+    });
   });
 
   describe("getUsageSummary", () => {

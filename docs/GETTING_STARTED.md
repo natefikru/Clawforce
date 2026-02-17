@@ -275,7 +275,7 @@ NOTE: `credential_mode: env` currently maps `models.api_key` to `ANTHROPIC_API_K
 
 ```yaml
 name: my-agent                         # Deployment name (used for directory, container names)
-role: inbox-analyst                    # inbox-analyst | research-agent | process-automator
+role: inbox-analyst                    # inbox-analyst | research-agent | process-automator | supervisor (multi-agent only)
 
 models:
   primary: "anthropic/claude-sonnet-4-5"  # Default cloud model
@@ -631,13 +631,14 @@ Ensure your routing rules still point to local model refs (`ollama/...`, `sglang
 
 ## Agent Role Templates
 
-Clawforce ships three role templates that generate OpenClaw SKILL.md instructions and config fragments:
+Clawforce ships role templates that generate OpenClaw SKILL.md instructions and config fragments:
 
 | Role | Description | Key Behaviors |
 |------|-------------|---------------|
 | `inbox-analyst` | Monitors channels, summarizes threads, flags action items | Channel watching, thread summarization, priority flagging |
 | `research-agent` | Takes research requests, browses web, compiles reports | Web research, report generation, citation management |
 | `process-automator` | Cron-triggered browser workflows, reports results | Scheduled tasks, browser automation, result reporting |
+| `supervisor` | Monitors supervised agents and reports workforce status | Agent oversight, escalation, workforce health summaries |
 
 Each template lives in `templates/roles/<name>/` with:
 - `SKILL.md` — Agent behavior instructions (injected into OpenClaw agent config)

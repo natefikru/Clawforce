@@ -186,13 +186,10 @@ export function generateOpenClawConfig(
 
   // Multi-agent: populate agents.list and bindings
   if (isMultiAgentConfig(config)) {
-    result.agents.list = config.agents.map((agent) => {
-      const profile: OpenClawAgentProfile = {
-        id: agent.name,
-        workspace: `/home/node/.openclaw/workspace/${agent.name}`,
-      };
-      return profile;
-    });
+    result.agents.list = config.agents.map((agent) => ({
+      id: agent.name,
+      workspace: `/home/node/.openclaw/workspace/${agent.name}`,
+    }));
 
     const connectors = getEnabledConnectors(config);
 
