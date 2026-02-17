@@ -374,7 +374,6 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
 }
 
 function normalizePolicyConfig(policy: NonNullable<NonNullable<ClawforceConfig["routing"]>["policy"]>): Record<string, unknown> {
-  if (!policy) return {};
   return {
     defaultTier: policy.default_tier,
     ...(policy.channels

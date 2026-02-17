@@ -852,6 +852,35 @@ describe("generateOpenClawConfig — multi-agent", () => {
     expect(channels.slack).toEqual({ enabled: true });
   });
 
+  it("should split agents across named openclaw instances", () => {
+    const resultMap = generateOpenClawConfig({
+      name: "multi-instance-corp",
+      agents: [
+        { name: "support-bot", role: "inbox-analyst", openclaw: "support-instance" },
+        { name: "research-bot", role: "research-agent", openclaw: "research-instance" },
+      ],
+      models: { cloud: "anthropic/claude-sonnet-4-5" },
+      openclaw: {
+        "support-instance": { channels: { discord: { enabled: true } } },
+        "research-instance": { channels: { slack: { enabled: true } } },
+      },
+    });
+
+    expect(resultMap.size).toBe(2);
+
+    const support = resultMap.get("support-instance")!;
+    expect(support.agents.list).toHaveLength(1);
+    expect(support.agents.list![0].id).toBe("support-bot");
+    const supportChannels = support.channels as Record<string, unknown>;
+    expect(supportChannels.discord).toEqual({ enabled: true });
+
+    const research = resultMap.get("research-instance")!;
+    expect(research.agents.list).toHaveLength(1);
+    expect(research.agents.list![0].id).toBe("research-bot");
+    const researchChannels = research.channels as Record<string, unknown>;
+    expect(researchChannels.slack).toEqual({ enabled: true });
+  });
+
   it("should not auto-enable supervisor tools in agent profiles", () => {
     const resultMap = generateOpenClawConfig(
       makeMultiAgentConfig({

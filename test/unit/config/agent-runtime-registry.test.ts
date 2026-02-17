@@ -30,6 +30,18 @@ describe("agent runtime adapter registry", () => {
     expect(outputs[0].filename).toBe("openclaw.json");
   });
 
+  it("produces multiple files for named openclaw instances", () => {
+    const config = parseConfig(join(fixturesDir, "v2/multi-agent-supervisor.yaml"));
+    const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config));
+    const outputs = adapter.generate(config);
+
+    // Should have one file per openclaw instance
+    const filenames = outputs.map((o) => o.filename).sort();
+    expect(filenames).toContain("openclaw-support-instance.json");
+    expect(filenames).toContain("openclaw-research-instance.json");
+    expect(outputs.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("keeps openclaw adapter output identical to direct generator output", () => {
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
     const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config));
