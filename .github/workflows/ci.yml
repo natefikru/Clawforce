@@ -49,6 +49,85 @@ jobs:
       - name: Run integration tests
         run: pnpm test:integration
 
+  runtime-e2e:
+    name: Runtime E2E (Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check runtime e2e secret availability
+        id: preflight
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "run_runtime_e2e=false" >> "$GITHUB_OUTPUT"
+            echo "ANTHROPIC_API_KEY not configured; skipping runtime e2e."
+          else
+            echo "run_runtime_e2e=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v4
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install root dependencies
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: pnpm install --frozen-lockfile
+      - name: Install dashboard dependencies
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: pnpm --dir clawforce-dashboard install --frozen-lockfile
+      - name: Build OpenClaw gateway image
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: |
+          if docker image inspect openclaw:local >/dev/null 2>&1; then
+            echo "openclaw:local already present"
+            exit 0
+          fi
+          rm -rf /tmp/openclaw
+          git clone --depth 1 https://github.com/openclaw/openclaw.git /tmp/openclaw
+          docker build -t openclaw:local /tmp/openclaw
+          docker image inspect openclaw:local >/dev/null 2>&1
+      - name: Start Ollama runtime for local/hybrid e2e checks
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
+      - name: Wait for Ollama health endpoint
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
+              echo "Ollama is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Ollama failed to become healthy"
+          exit 1
+      - name: Run runtime pipeline e2e suite
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm test:e2e:runtime:ci
+      - name: Print runtime e2e JSON report
+        if: ${{ always() && steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: |
+          REPORT_PATH="$(ls -1t docs/validation-evidence/*/runtime-e2e-report.json 2>/dev/null | head -n1)"
+          if [ -z "${REPORT_PATH}" ]; then
+            echo "No runtime e2e report found."
+            exit 0
+          fi
+          echo "Runtime e2e report: ${REPORT_PATH}"
+          node -e "const fs=require('fs');const p=process.argv[1];const r=JSON.parse(fs.readFileSync(p,'utf8'));const scenarios=r.scenarioSummary?.scenarios ?? [];console.log(JSON.stringify({status:r.status,preflight:r.preflight,failures:r.failures ?? null,testStatusCode:r.testResult?.statusCode ?? null,scenarioCount:r.scenarioSummary?.scenarioCount ?? 0},null,2));if(scenarios.length>0){console.log('Runtime e2e scenarios tested:');for(const s of scenarios){console.log('- '+s.scenario+' ['+s.deploymentName+']');for(const c of (s.commandChecks ?? [])){console.log('  command: '+c);}for(const rc of (s.routeChecks ?? [])){console.log('  route: '+rc.label+' | expected: '+rc.expectedProviderConstraint+' | actual: '+rc.actualProvider+' | model: '+rc.modelRef);}}}" "${REPORT_PATH}"
+      - name: Upload runtime e2e report
+        if: ${{ always() && steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-e2e-report
+          path: docs/validation-evidence/**/runtime-e2e-report.json
+
   smoke-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest

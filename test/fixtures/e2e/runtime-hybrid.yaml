@@ -1,0 +1,57 @@
+name: "runtime-e2e-hybrid"
+role: "inbox-analyst"
+
+openclaw:
+  channels:
+    discord:
+      enabled: true
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
+  credential_mode: "env"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
+
+runtime:
+  engine: "ollama"
+  location: "host"
+  host_url: "http://host.docker.internal:11434"
+  model: "llama3.3:8b"
+
+gateway:
+  bind: "loopback"
+
+router:
+  enabled: true
+  rules:
+    - condition: "pii_detected"
+      model: "ollama/llama3.3:8b"
+    - condition: "low_complexity"
+      model: "ollama/llama3.3:8b"
+    - condition: "high_complexity"
+      model: "anthropic/claude-sonnet-4-5"
+    - condition: "over_budget"
+      model: "ollama/llama3.3:8b"
+  budget:
+    daily_limit: 10
+    fallback_model: "ollama/llama3.3:8b"
+  health_check:
+    enabled: true
+    interval_seconds: 10
+    timeout_seconds: 3
+    stale_after_seconds: 30
+    failover_policy: "failover-safe"
+    failure_threshold: 3
+    recovery_threshold: 2
+    retry_attempts: 1
+    retry_delay_ms: 500
+
+compliance:
+  enabled: true
+
+dashboard:
+  enabled: true
+  port: 4413
+  auth:
+    enabled: false
