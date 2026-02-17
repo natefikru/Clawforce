@@ -74,3 +74,67 @@ describe("generateAgentsMd", () => {
     expect(md).not.toContain("Data Sensitivity");
   });
 });
+
+function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
+  return {
+    name: "test-workforce",
+    agents: [
+      {
+        name: "inbox-analyst",
+        role: "inbox-analyst",
+        channels: [{ type: "channel", channels: ["#inbox-triage"] }],
+      },
+      {
+        name: "research-agent",
+        role: "research-agent",
+        channels: [
+          { type: "channel", channels: ["#research"] },
+          { type: "dm", users: ["alice", "bob"] },
+        ],
+      },
+      {
+        name: "ultron",
+        role: "process-automator",
+        supervises: ["inbox-analyst", "research-agent"],
+        channels: [{ type: "channel", channels: ["#ai-ops"] }],
+      },
+    ],
+    defaults: {
+      models: { cloud: "anthropic/claude-sonnet-4-5" },
+    },
+    openclaw: { channels: { discord: { enabled: true } } },
+    ...overrides,
+  };
+}
+
+describe("generateAgentsMd — multi-agent", () => {
+  it("should include workforce header", () => {
+    const md = generateAgentsMd(makeMultiAgentConfig());
+    expect(md).toContain("Clawforce AI Workforce");
+  });
+
+  it("should list all agents with roles", () => {
+    const md = generateAgentsMd(makeMultiAgentConfig());
+    expect(md).toContain("inbox-analyst (Inbox Analyst)");
+    expect(md).toContain("research-agent (Research Agent)");
+    expect(md).toContain("ultron (Process Automator)");
+  });
+
+  it("should list channel assignments", () => {
+    const md = generateAgentsMd(makeMultiAgentConfig());
+    expect(md).toContain("#inbox-triage");
+    expect(md).toContain("#research");
+    expect(md).toContain("DMs with alice, bob");
+  });
+
+  it("should list supervision relationships", () => {
+    const md = generateAgentsMd(makeMultiAgentConfig());
+    expect(md).toContain("**Supervises**: inbox-analyst, research-agent");
+  });
+
+  it("should include per-agent SKILL.md paths", () => {
+    const md = generateAgentsMd(makeMultiAgentConfig());
+    expect(md).toContain("workspace/inbox-analyst/skills/inbox-analyst/SKILL.md");
+    expect(md).toContain("workspace/ultron/skills/process-automator/SKILL.md");
+  });
+});

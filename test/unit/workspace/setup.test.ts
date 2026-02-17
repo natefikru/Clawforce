@@ -180,3 +180,70 @@ describe("setupWorkspace", () => {
     expect(metadata.profile).toBe("corp-prod");
   });
 });
+
+function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
+  return {
+    name: "test-workforce",
+    agents: [
+      { name: "inbox-analyst", role: "inbox-analyst", channels: [{ type: "channel", channels: ["#inbox"] }] },
+      { name: "research-agent", role: "research-agent", channels: [{ type: "channel", channels: ["#research"] }] },
+    ],
+    defaults: {
+      models: { cloud: "anthropic/claude-sonnet-4-5" },
+    },
+    openclaw: { channels: { discord: { enabled: true } } },
+    ...overrides,
+  };
+}
+
+describe("setupWorkspace — multi-agent", () => {
+  beforeEach(() => {
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true });
+  });
+
+  it("should create per-agent workspace directories", () => {
+    setupWorkspace(makeMultiAgentConfig(), testDir);
+    expect(existsSync(join(testDir, "workspace/inbox-analyst/skills/inbox-analyst"))).toBe(true);
+    expect(existsSync(join(testDir, "workspace/research-agent/skills/research-agent"))).toBe(true);
+  });
+
+  it("should copy SKILL.md into per-agent directories", () => {
+    setupWorkspace(makeMultiAgentConfig(), testDir);
+    const skillPath = join(testDir, "workspace/inbox-analyst/skills/inbox-analyst/SKILL.md");
+    expect(existsSync(skillPath)).toBe(true);
+    const content = readFileSync(skillPath, "utf8");
+    expect(content).toContain("Inbox Analyst");
+  });
+
+  it("should generate AGENTS.md with all agent names", () => {
+    setupWorkspace(makeMultiAgentConfig(), testDir);
+    const agentsMd = readFileSync(join(testDir, "workspace/AGENTS.md"), "utf8");
+    expect(agentsMd).toContain("inbox-analyst");
+    expect(agentsMd).toContain("research-agent");
+    expect(agentsMd).toContain("Clawforce AI Workforce");
+  });
+
+  it("should write auth-profile metadata from defaults.models for multi-agent", () => {
+    setupWorkspace(
+      makeMultiAgentConfig({
+        defaults: {
+          models: {
+            cloud: "anthropic/claude-sonnet-4-5",
+            credential_mode: "auth_profile",
+            auth_profile: "corp-prod",
+          },
+        },
+      }),
+      testDir,
+    );
+    const metadataPath = join(testDir, "config/auth-profile.json");
+    expect(existsSync(metadataPath)).toBe(true);
+    const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+    expect(metadata.mode).toBe("auth_profile");
+    expect(metadata.profile).toBe("corp-prod");
+  });
+});
