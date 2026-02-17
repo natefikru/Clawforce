@@ -277,6 +277,9 @@ NOTE: `credential_mode: env` currently maps `models.api_key` to `ANTHROPIC_API_K
 name: my-agent                         # Deployment name (used for directory, container names)
 role: inbox-analyst                    # inbox-analyst | research-agent | process-automator | supervisor (multi-agent only)
 
+deployment:
+  agent_runtime: openclaw              # Agent orchestration runtime target (defaults to openclaw)
+
 models:
   primary: "anthropic/claude-sonnet-4-5"  # Default cloud model
   local: "sglang/qwen3-32b"              # Default local model (for PII/budget fallback)
@@ -400,6 +403,8 @@ openclaw:
         sandbox: { enabled: true }
         browser: { enabled: true, headless: true }
 ```
+
+NOTE: `deployment.agent_runtime` chooses the orchestration backend for agent execution. `runtime.engine` is independent and controls the local model-serving runtime used by the router and gateway.
 
 ### Valid Routing Conditions
 
