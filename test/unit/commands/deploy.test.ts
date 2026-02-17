@@ -59,6 +59,21 @@ describe("deployCommand", () => {
     expect(config.channels.discord.enabled).toBe(true);
   });
 
+  it("should generate openclaw.json when deployment.agent_runtime=openclaw", async () => {
+    const runtimeDeployDir = join(process.cwd(), "clawforce-minimal-agent-runtime");
+    await deployCommand(join(fixturesDir, "valid-deployment-agent-runtime.yaml"));
+    const configPath = join(runtimeDeployDir, "config", "openclaw.json");
+    expect(existsSync(configPath)).toBe(true);
+
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    expect(config.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.channels.discord.enabled).toBe(true);
+
+    if (existsSync(runtimeDeployDir)) {
+      rmSync(runtimeDeployDir, { recursive: true });
+    }
+  });
+
   it("should generate docker-compose.yml", async () => {
     await deployCommand(join(fixturesDir, "valid-config.yaml"));
     const composePath = join(deployDir, "docker-compose.yml");
