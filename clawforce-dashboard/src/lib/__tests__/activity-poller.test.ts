@@ -192,6 +192,19 @@ describe("getBackfill", () => {
       expect(parsed.agentId).toBe("agent-a");
     }
   });
+
+  it("treats _global as global or null agent_id in backfill", () => {
+    seedEventsForAgent(db, [
+      { id: 1, agentId: "_global" },
+      { id: 2, agentId: "agent-b" },
+      { id: 3 },
+    ]);
+
+    const result = getBackfill(db, undefined, "_global");
+    expect(result.events).toHaveLength(2);
+    const parsed = result.events.map((event) => JSON.parse(event.data) as { agentId?: string });
+    expect(parsed.map((p) => p.agentId ?? null)).toEqual(["_global", null]);
+  });
 });
 
 describe("createActivityPoller", () => {
@@ -279,5 +292,19 @@ describe("createActivityPoller", () => {
       const parsed = JSON.parse(event.data) as { agentId?: string };
       expect(parsed.agentId).toBe("agent-b");
     }
+  });
+
+  it("treats _global as global or null agent_id when polling", () => {
+    seedEventsForAgent(db, [
+      { id: 1, agentId: "_global" },
+      { id: 2, agentId: "agent-b" },
+      { id: 3 },
+    ]);
+
+    const poller = createActivityPoller(db, 0, "_global");
+    const result = poller.poll();
+    expect(result.events).toHaveLength(2);
+    const parsed = result.events.map((event) => JSON.parse(event.data) as { agentId?: string });
+    expect(parsed.map((p) => p.agentId ?? null)).toEqual(["_global", null]);
   });
 });

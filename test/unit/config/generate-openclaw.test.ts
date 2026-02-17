@@ -815,7 +815,7 @@ describe("generateOpenClawConfig — multi-agent", () => {
     }
   });
 
-  it("should enable workforce status tool only for supervisor agents", () => {
+  it("should not auto-enable supervisor tools in agent profiles", () => {
     const result = generateOpenClawConfig(
       makeMultiAgentConfig({
         agents: [
@@ -837,7 +837,9 @@ describe("generateOpenClawConfig — multi-agent", () => {
     const ultronProfile = result.agents.list?.find((a) => a.id === "ultron");
     const analystProfile = result.agents.list?.find((a) => a.id === "inbox-analyst");
 
-    expect(ultronProfile?.tools?.clawforce_workforce_status?.enabled).toBe(true);
-    expect(analystProfile?.tools).toBeUndefined();
+    expect(ultronProfile).toBeDefined();
+    expect(analystProfile).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(ultronProfile ?? {}, "tools")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(analystProfile ?? {}, "tools")).toBe(false);
   });
 });

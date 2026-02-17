@@ -27,6 +27,8 @@ import { createActivityPoller, getBackfill } from "@/lib/activity-poller";
 import { createCostPoller } from "@/lib/cost-poller";
 import { createStatusPoller } from "@/lib/status-poller";
 import { createAlertPoller, getAlertBackfill } from "@/lib/alert-poller";
+import { auth } from "@/auth";
+import { matchesAgentFilter, normalizeAgentId } from "@/lib/agent-filter";
 
 const DATA_DIR = process.env.DATA_DIR ?? "/data";
 const COMPLIANCE_LOG = `${DATA_DIR}/compliance.jsonl`;
@@ -37,7 +39,15 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const lastEventId =
     req.headers.get("Last-Event-ID") ?? undefined;
-  const agentId = req.nextUrl.searchParams.get("agentId") ?? undefined;
+  const agentId = normalizeAgentId(req.nextUrl.searchParams.get("agentId"));
+  const authEnabled = Boolean(process.env.AUTH_SECRET);
+  const session = authEnabled ? await auth() : null;
+  if (authEnabled && agentId && session?.user?.role !== "admin") {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   // Try SQLite path
   const db = getReadDb();
@@ -93,6 +103,7 @@ function createJsonlFallbackResponse(req: NextRequest, agentId?: string): Respon
       controller.enqueue(encoder.encode("retry: 3000\n\n"));
 
       let lastByteOffset = 0;
+      let partialLine = "";
 
       // Send initial batch of recent entries
       try {
@@ -136,8 +147,8 @@ function createJsonlFallbackResponse(req: NextRequest, agentId?: string): Respon
 
             lastByteOffset = stat.size;
             const newContent = buf.toString("utf8");
-
-            const newEntries = parseJsonl(newContent);
+            const { entries: newEntries, carry } = parseJsonlIncremental(newContent, partialLine);
+            partialLine = carry;
             for (const entry of newEntries) {
               if (!matchesAgentFilter(entry, agentId)) continue;
               const eventName = entry?.event === "alert" ? "alert" : "activity";
@@ -180,13 +191,15 @@ function createJsonlFallbackResponse(req: NextRequest, agentId?: string): Respon
   });
 }
 
-function matchesAgentFilter(entry: Record<string, unknown>, agentId?: string): boolean {
-  if (!agentId) return true;
-  const normalized = agentId.trim();
-  if (normalized.length === 0) return true;
-  const entryAgentId = typeof entry.agentId === "string" ? entry.agentId : undefined;
-  if (normalized === "_global") {
-    return !entryAgentId || entryAgentId === "_global";
-  }
-  return entryAgentId === normalized;
+function parseJsonlIncremental(
+  chunk: string,
+  carry: string,
+): { entries: Record<string, unknown>[]; carry: string } {
+  const combined = `${carry}${chunk}`;
+  const endsWithNewline = combined.endsWith("\n");
+  const lines = combined.split("\n");
+  const completeLines = endsWithNewline ? lines.filter(Boolean) : lines.slice(0, -1).filter(Boolean);
+  const nextCarry = endsWithNewline ? "" : (lines.at(-1) ?? "");
+  const entries = parseJsonl(completeLines.join("\n")) as Record<string, unknown>[];
+  return { entries, carry: nextCarry };
 }

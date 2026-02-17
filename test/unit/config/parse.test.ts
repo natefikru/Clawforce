@@ -270,6 +270,12 @@ describe("parseConfig — multi-agent", () => {
     ).toThrow("supervises 'nonexistent-agent', but no agent with that name exists");
   });
 
+  it("should reject supervisor agents without supervises", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-multi-agent-supervisor-no-supervises.yaml")),
+    ).toThrow("must define a non-empty supervises list");
+  });
+
   it("should reject multi-agent config without defaults.models.cloud", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-multi-agent-no-defaults.yaml")),

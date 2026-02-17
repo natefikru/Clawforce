@@ -8,6 +8,7 @@
 
 import type { DatabaseSync } from "node:sqlite";
 import type { SSEMessage, SyncPollSource, PollResult } from "./sse";
+import { buildAgentSqlFilter, normalizeAgentId } from "./agent-filter";
 
 const BACKFILL_LIMIT = 50;
 const RECONNECT_LIMIT = 500;
@@ -23,17 +24,18 @@ export function createActivityPoller(
   agentId?: string,
 ): SyncPollSource {
   let cursor = initialCursor;
+  const normalizedAgentId = normalizeAgentId(agentId);
 
   return {
     name: "activity",
     intervalMs: 1500,
     poll(): PollResult {
-      const { clause, params } = buildAgentFilter(agentId);
+      const { whereSql, params } = buildWhereSql(["id > ?"], [cursor], normalizedAgentId);
       const rows = db
         .prepare(
-          `SELECT id, data FROM compliance_events WHERE id > ?${clause} ORDER BY id ASC LIMIT ?`,
+          `SELECT id, data FROM compliance_events ${whereSql} ORDER BY id ASC LIMIT ?`,
         )
-        .all(cursor, ...params, POLL_BATCH) as { id: number; data: string }[];
+        .all(...params, POLL_BATCH) as { id: number; data: string }[];
 
       const events: SSEMessage[] = rows.map((row) => ({
         id: String(row.id),
@@ -69,34 +71,37 @@ export function getBackfill(
   agentId?: string,
 ): BackfillResult {
   const parsedId = lastEventId !== undefined ? parseInt(lastEventId, 10) : NaN;
-  const { clause, params } = buildAgentFilter(agentId);
+  const normalizedAgentId = normalizeAgentId(agentId);
 
   if (!isNaN(parsedId) && parsedId > 0) {
     // Check how many events were missed
+    const countQuery = buildWhereSql(["id > ?"], [parsedId], normalizedAgentId);
     const countRow = db
       .prepare(
-        `SELECT COUNT(*) as cnt FROM compliance_events WHERE id > ?${clause}`,
+        `SELECT COUNT(*) as cnt FROM compliance_events ${countQuery.whereSql}`,
       )
-      .get(parsedId, ...params) as { cnt: number };
+      .get(...countQuery.params) as { cnt: number };
 
     const truncated = countRow.cnt > RECONNECT_LIMIT;
 
     let rows: { id: number; data: string }[];
     if (truncated) {
       // Too many missed — fetch the latest 500 (DESC then reverse)
+      const truncatedQuery = buildWhereSql([], [], normalizedAgentId);
       rows = db
         .prepare(
-          `SELECT id, data FROM compliance_events${clause ? ` WHERE ${clause.slice(5)}` : ""} ORDER BY id DESC LIMIT ?`,
+          `SELECT id, data FROM compliance_events ${truncatedQuery.whereSql} ORDER BY id DESC LIMIT ?`,
         )
-        .all(...params, RECONNECT_LIMIT) as { id: number; data: string }[];
+        .all(...truncatedQuery.params, RECONNECT_LIMIT) as { id: number; data: string }[];
       rows.reverse();
     } else {
       // Replay all missed events
+      const replayQuery = buildWhereSql(["id > ?"], [parsedId], normalizedAgentId);
       rows = db
         .prepare(
-          `SELECT id, data FROM compliance_events WHERE id > ?${clause} ORDER BY id ASC`,
+          `SELECT id, data FROM compliance_events ${replayQuery.whereSql} ORDER BY id ASC`,
         )
-        .all(parsedId, ...params) as { id: number; data: string }[];
+        .all(...replayQuery.params) as { id: number; data: string }[];
     }
 
     const events: SSEMessage[] = rows.map((row) => ({
@@ -112,11 +117,12 @@ export function getBackfill(
   }
 
   // Initial load: last 50 events in chronological order
+  const initialQuery = buildWhereSql([], [], normalizedAgentId);
   const rows = db
     .prepare(
-      `SELECT id, data FROM compliance_events${clause ? ` WHERE ${clause.slice(5)}` : ""} ORDER BY id DESC LIMIT ?`,
+      `SELECT id, data FROM compliance_events ${initialQuery.whereSql} ORDER BY id DESC LIMIT ?`,
     )
-    .all(...params, BACKFILL_LIMIT) as { id: number; data: string }[];
+    .all(...initialQuery.params, BACKFILL_LIMIT) as { id: number; data: string }[];
 
   // Reverse to chronological order (oldest first)
   rows.reverse();
@@ -132,16 +138,18 @@ export function getBackfill(
   return { events, cursor, truncated: false };
 }
 
-function buildAgentFilter(agentId?: string): { clause: string; params: (string | number)[] } {
-  if (!agentId) {
-    return { clause: "", params: [] };
+function buildWhereSql(
+  baseConditions: string[],
+  baseParams: (string | number)[],
+  agentId?: string,
+): { whereSql: string; params: (string | number)[] } {
+  const conditions = [...baseConditions];
+  const params = [...baseParams];
+  const { clause, params: agentParams } = buildAgentSqlFilter(agentId);
+  if (clause) {
+    conditions.push(clause);
+    params.push(...agentParams);
   }
-  const normalized = agentId.trim();
-  if (normalized.length === 0) {
-    return { clause: "", params: [] };
-  }
-  if (normalized === "_global") {
-    return { clause: " AND (agent_id = ? OR agent_id IS NULL)", params: [normalized] };
-  }
-  return { clause: " AND agent_id = ?", params: [normalized] };
+  const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  return { whereSql, params };
 }

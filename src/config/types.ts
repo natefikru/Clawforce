@@ -510,6 +510,13 @@ export const ClawforceConfigSchema = z.object({
     const nameSet = new Set(agentNames);
     for (let i = 0; i < data.agents!.length; i++) {
       const agent = data.agents![i];
+      if (agent.role === "supervisor" && (!agent.supervises || agent.supervises.length === 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Supervisor agent '${agent.name}' must define a non-empty supervises list`,
+          path: ["agents", i, "supervises"],
+        });
+      }
       if (agent.supervises) {
         for (const supervisedName of agent.supervises) {
           if (supervisedName === agent.name) {

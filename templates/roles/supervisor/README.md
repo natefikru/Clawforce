@@ -22,3 +22,4 @@
 
 - `role: supervisor` is not valid in single-agent mode.
 - Supervisor access should remain scoped to listed supervised agents.
+- `clawforce_workforce_status` is not auto-wired into OpenClaw yet; wire custom tools via `openclaw` overrides once the runtime plugin is installed.
