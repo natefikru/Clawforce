@@ -100,6 +100,16 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm test:e2e:runtime:ci
+      - name: Print runtime e2e JSON report
+        if: ${{ always() && steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: |
+          REPORT_PATH="$(ls -1t docs/validation-evidence/*/runtime-e2e-report.json 2>/dev/null | head -n1)"
+          if [ -z "${REPORT_PATH}" ]; then
+            echo "No runtime e2e report found."
+            exit 0
+          fi
+          echo "Runtime e2e report: ${REPORT_PATH}"
+          node -e "const fs=require('fs');const p=process.argv[1];const r=JSON.parse(fs.readFileSync(p,'utf8'));console.log(JSON.stringify({status:r.status,preflight:r.preflight,failures:r.failures ?? null,testStatusCode:r.testResult?.statusCode ?? null},null,2));" "${REPORT_PATH}"
       - name: Upload runtime e2e report
         if: ${{ always() && steps.preflight.outputs.run_runtime_e2e == 'true' }}
         uses: actions/upload-artifact@v4

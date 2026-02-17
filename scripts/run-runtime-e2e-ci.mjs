@@ -27,6 +27,10 @@ function run(command, args, env = {}, timeoutMs = 15_000) {
   });
 }
 
+function asText(value) {
+  return typeof value === "string" ? value : value?.toString("utf8") ?? "";
+}
+
 async function isPortFree(port) {
   return await new Promise((resolvePort) => {
     const server = createServer();
@@ -83,6 +87,9 @@ async function main() {
     portsFree: portResults,
   };
 
+  console.log("Runtime e2e preflight:");
+  console.log(JSON.stringify(preflight, null, 2));
+
   const failures = [];
   if (!preflight.anthropicApiKeyPresent) {
     failures.push("Missing required env var: ANTHROPIC_API_KEY");
@@ -129,10 +136,12 @@ async function main() {
     20 * 60_000,
   );
 
+  const stdout = asText(testRun.stdout);
+  const stderr = asText(testRun.stderr);
   const testResult = {
     statusCode: testRun.status,
-    stdout: testRun.stdout,
-    stderr: testRun.stderr,
+    stdout,
+    stderr,
   };
 
   const report = {
@@ -147,6 +156,14 @@ async function main() {
   if (testRun.status !== 0) {
     console.error("Runtime e2e execution failed.");
     console.error(`Report: ${path}`);
+    console.error("--- Runtime e2e stdout (begin) ---");
+    console.error(stdout);
+    console.error("--- Runtime e2e stdout (end) ---");
+    if (stderr.trim().length > 0) {
+      console.error("--- Runtime e2e stderr (begin) ---");
+      console.error(stderr);
+      console.error("--- Runtime e2e stderr (end) ---");
+    }
     process.exit(testRun.status ?? 1);
   }
 
