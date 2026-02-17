@@ -42,6 +42,23 @@ function seedEvents(db: DatabaseSync, count: number, startId?: number): void {
   }
 }
 
+function seedEventsForAgent(db: DatabaseSync, events: Array<{ id: number; agentId?: string }>): void {
+  const stmt = db.prepare(
+    "INSERT INTO compliance_events (ts, event, agent_id, data) VALUES (?, ?, ?, ?)",
+  );
+  for (const event of events) {
+    const ts = new Date(Date.now() - event.id * 1000).toISOString();
+    const data = JSON.stringify({
+      ts,
+      event: "tool_call",
+      agentId: event.agentId,
+      tool: `tool_${event.id}`,
+      success: true,
+    });
+    stmt.run(ts, "tool_call", event.agentId ?? null, data);
+  }
+}
+
 describe("getBackfill", () => {
   let db: DatabaseSync;
 
@@ -160,6 +177,21 @@ describe("getBackfill", () => {
       expect(() => JSON.parse(event.data)).not.toThrow();
     }
   });
+
+  it("filters initial backfill by agentId", () => {
+    seedEventsForAgent(db, [
+      { id: 1, agentId: "agent-a" },
+      { id: 2, agentId: "agent-b" },
+      { id: 3, agentId: "agent-a" },
+    ]);
+
+    const result = getBackfill(db, undefined, "agent-a");
+    expect(result.events).toHaveLength(2);
+    for (const event of result.events) {
+      const parsed = JSON.parse(event.data) as { agentId?: string };
+      expect(parsed.agentId).toBe("agent-a");
+    }
+  });
 });
 
 describe("createActivityPoller", () => {
@@ -230,5 +262,22 @@ describe("createActivityPoller", () => {
     const result = poller.poll();
 
     expect(result.events).toHaveLength(100);
+  });
+
+  it("polls only matching agent events when agent filter is set", () => {
+    seedEventsForAgent(db, [
+      { id: 1, agentId: "agent-a" },
+      { id: 2, agentId: "agent-b" },
+      { id: 3, agentId: "agent-a" },
+      { id: 4, agentId: "agent-b" },
+    ]);
+
+    const poller = createActivityPoller(db, 0, "agent-b");
+    const result = poller.poll();
+    expect(result.events).toHaveLength(2);
+    for (const event of result.events) {
+      const parsed = JSON.parse(event.data) as { agentId?: string };
+      expect(parsed.agentId).toBe("agent-b");
+    }
   });
 });

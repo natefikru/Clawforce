@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Math.max(parseInt(searchParams.get("limit") ?? "50", 10) || 50, 1), 1000);
   const eventFilter = searchParams.get("event");
+  const agentFilter = searchParams.get("agentId");
 
   // Try SQLite first
   const db = getReadDb();
@@ -22,6 +23,17 @@ export async function GET(request: Request) {
       if (eventFilter) {
         conditions.push("event = ?");
         params.push(eventFilter);
+      }
+      if (agentFilter) {
+        const normalized = agentFilter.trim();
+        if (normalized.length > 0) {
+          if (normalized === "_global") {
+            conditions.push("(agent_id = ? OR agent_id IS NULL)");
+          } else {
+            conditions.push("agent_id = ?");
+          }
+          params.push(normalized);
+        }
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -55,6 +67,18 @@ export async function GET(request: Request) {
 
     if (eventFilter) {
       entries = entries.filter((e) => e.event === eventFilter);
+    }
+    if (agentFilter) {
+      const normalized = agentFilter.trim();
+      if (normalized.length > 0) {
+        entries = entries.filter((e) => {
+          const id = e.agentId;
+          if (normalized === "_global") {
+            return !id || id === "_global";
+          }
+          return id === normalized;
+        });
+      }
     }
 
     const total = entries.length;

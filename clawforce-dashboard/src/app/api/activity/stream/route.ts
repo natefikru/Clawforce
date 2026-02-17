@@ -37,12 +37,13 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const lastEventId =
     req.headers.get("Last-Event-ID") ?? undefined;
+  const agentId = req.nextUrl.searchParams.get("agentId") ?? undefined;
 
   // Try SQLite path
   const db = getReadDb();
   if (db) {
     try {
-      const backfill = getBackfill(db, lastEventId);
+      const backfill = getBackfill(db, lastEventId, agentId);
       const alertBackfill = getAlertBackfill(db);
 
       const initialMessages = [...backfill.events, ...alertBackfill.events];
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
       }
 
       const sources = [
-        createActivityPoller(db, backfill.cursor),
+        createActivityPoller(db, backfill.cursor, agentId),
         createCostPoller(db),
         createStatusPoller(),
         createAlertPoller(db, alertBackfill.cursor),
@@ -80,10 +81,10 @@ export async function GET(req: NextRequest) {
   }
 
   // JSONL fallback — preserved for when SQLite is unavailable
-  return createJsonlFallbackResponse(req);
+  return createJsonlFallbackResponse(req, agentId);
 }
 
-function createJsonlFallbackResponse(req: NextRequest): Response {
+function createJsonlFallbackResponse(req: NextRequest, agentId?: string): Response {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -101,6 +102,7 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
           const entries = parseJsonl(content);
           const recent = entries.slice(-INITIAL_ENTRIES);
           for (const entry of recent) {
+            if (!matchesAgentFilter(entry, agentId)) continue;
             const eventName = entry?.event === "alert" ? "alert" : "activity";
             // MF-2 fix: emit named events so client addEventListener("activity", ...) works
             controller.enqueue(
@@ -137,6 +139,7 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
 
             const newEntries = parseJsonl(newContent);
             for (const entry of newEntries) {
+              if (!matchesAgentFilter(entry, agentId)) continue;
               const eventName = entry?.event === "alert" ? "alert" : "activity";
               // MF-2 fix: emit named events for JSONL fallback too
               controller.enqueue(
@@ -175,4 +178,15 @@ function createJsonlFallbackResponse(req: NextRequest): Response {
       Connection: "keep-alive",
     },
   });
+}
+
+function matchesAgentFilter(entry: Record<string, unknown>, agentId?: string): boolean {
+  if (!agentId) return true;
+  const normalized = agentId.trim();
+  if (normalized.length === 0) return true;
+  const entryAgentId = typeof entry.agentId === "string" ? entry.agentId : undefined;
+  if (normalized === "_global") {
+    return !entryAgentId || entryAgentId === "_global";
+  }
+  return entryAgentId === normalized;
 }

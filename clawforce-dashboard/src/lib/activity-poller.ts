@@ -20,6 +20,7 @@ const POLL_BATCH = 100;
 export function createActivityPoller(
   db: DatabaseSync,
   initialCursor: number,
+  agentId?: string,
 ): SyncPollSource {
   let cursor = initialCursor;
 
@@ -27,11 +28,12 @@ export function createActivityPoller(
     name: "activity",
     intervalMs: 1500,
     poll(): PollResult {
+      const { clause, params } = buildAgentFilter(agentId);
       const rows = db
         .prepare(
-          "SELECT id, data FROM compliance_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+          `SELECT id, data FROM compliance_events WHERE id > ?${clause} ORDER BY id ASC LIMIT ?`,
         )
-        .all(cursor, POLL_BATCH) as { id: number; data: string }[];
+        .all(cursor, ...params, POLL_BATCH) as { id: number; data: string }[];
 
       const events: SSEMessage[] = rows.map((row) => ({
         id: String(row.id),
@@ -64,16 +66,18 @@ export interface BackfillResult {
 export function getBackfill(
   db: DatabaseSync,
   lastEventId?: string,
+  agentId?: string,
 ): BackfillResult {
   const parsedId = lastEventId !== undefined ? parseInt(lastEventId, 10) : NaN;
+  const { clause, params } = buildAgentFilter(agentId);
 
   if (!isNaN(parsedId) && parsedId > 0) {
     // Check how many events were missed
     const countRow = db
       .prepare(
-        "SELECT COUNT(*) as cnt FROM compliance_events WHERE id > ?",
+        `SELECT COUNT(*) as cnt FROM compliance_events WHERE id > ?${clause}`,
       )
-      .get(parsedId) as { cnt: number };
+      .get(parsedId, ...params) as { cnt: number };
 
     const truncated = countRow.cnt > RECONNECT_LIMIT;
 
@@ -82,17 +86,17 @@ export function getBackfill(
       // Too many missed — fetch the latest 500 (DESC then reverse)
       rows = db
         .prepare(
-          "SELECT id, data FROM compliance_events ORDER BY id DESC LIMIT ?",
+          `SELECT id, data FROM compliance_events${clause ? ` WHERE ${clause.slice(5)}` : ""} ORDER BY id DESC LIMIT ?`,
         )
-        .all(RECONNECT_LIMIT) as { id: number; data: string }[];
+        .all(...params, RECONNECT_LIMIT) as { id: number; data: string }[];
       rows.reverse();
     } else {
       // Replay all missed events
       rows = db
         .prepare(
-          "SELECT id, data FROM compliance_events WHERE id > ? ORDER BY id ASC",
+          `SELECT id, data FROM compliance_events WHERE id > ?${clause} ORDER BY id ASC`,
         )
-        .all(parsedId) as { id: number; data: string }[];
+        .all(parsedId, ...params) as { id: number; data: string }[];
     }
 
     const events: SSEMessage[] = rows.map((row) => ({
@@ -110,9 +114,9 @@ export function getBackfill(
   // Initial load: last 50 events in chronological order
   const rows = db
     .prepare(
-      "SELECT id, data FROM compliance_events ORDER BY id DESC LIMIT ?",
+      `SELECT id, data FROM compliance_events${clause ? ` WHERE ${clause.slice(5)}` : ""} ORDER BY id DESC LIMIT ?`,
     )
-    .all(BACKFILL_LIMIT) as { id: number; data: string }[];
+    .all(...params, BACKFILL_LIMIT) as { id: number; data: string }[];
 
   // Reverse to chronological order (oldest first)
   rows.reverse();
@@ -126,4 +130,18 @@ export function getBackfill(
   const cursor = rows.length > 0 ? rows[rows.length - 1].id : 0;
 
   return { events, cursor, truncated: false };
+}
+
+function buildAgentFilter(agentId?: string): { clause: string; params: (string | number)[] } {
+  if (!agentId) {
+    return { clause: "", params: [] };
+  }
+  const normalized = agentId.trim();
+  if (normalized.length === 0) {
+    return { clause: "", params: [] };
+  }
+  if (normalized === "_global") {
+    return { clause: " AND (agent_id = ? OR agent_id IS NULL)", params: [normalized] };
+  }
+  return { clause: " AND agent_id = ?", params: [normalized] };
 }
