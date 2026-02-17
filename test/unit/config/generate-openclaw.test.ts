@@ -814,4 +814,30 @@ describe("generateOpenClawConfig — multi-agent", () => {
       expect(typeof binding.match.peer!.id).toBe("string");
     }
   });
+
+  it("should enable workforce status tool only for supervisor agents", () => {
+    const result = generateOpenClawConfig(
+      makeMultiAgentConfig({
+        agents: [
+          {
+            name: "ultron",
+            role: "supervisor",
+            channels: [{ type: "channel", channels: ["777777777777777777"] }],
+            supervises: ["inbox-analyst"],
+          },
+          {
+            name: "inbox-analyst",
+            role: "inbox-analyst",
+            channels: [{ type: "channel", channels: ["111111111111111111"] }],
+          },
+        ],
+      }),
+    );
+
+    const ultronProfile = result.agents.list?.find((a) => a.id === "ultron");
+    const analystProfile = result.agents.list?.find((a) => a.id === "inbox-analyst");
+
+    expect(ultronProfile?.tools?.clawforce_workforce_status?.enabled).toBe(true);
+    expect(analystProfile?.tools).toBeUndefined();
+  });
 });

@@ -186,6 +186,7 @@ export class StorageReader {
     since?: string;
     severity?: string;
     type?: string;
+    agentId?: string;
     unacknowledgedOnly?: boolean;
     limit?: number;
   }): AlertRow[] {
@@ -203,6 +204,15 @@ export class StorageReader {
     if (opts.type) {
       conditions.push("type = ?");
       params.push(opts.type);
+    }
+    if (opts.agentId) {
+      const normalizedAgentId = normalizeAgentId(opts.agentId);
+      if (normalizedAgentId === DEFAULT_AGENT_ID) {
+        conditions.push("(agent_id = ? OR agent_id IS NULL)");
+      } else {
+        conditions.push("agent_id = ?");
+      }
+      params.push(normalizedAgentId);
     }
     if (opts.unacknowledgedOnly) {
       conditions.push("acknowledged = 0");

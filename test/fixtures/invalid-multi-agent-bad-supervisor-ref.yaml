@@ -8,7 +8,7 @@ defaults:
 
 agents:
   - name: ultron
-    role: process-automator
+    role: supervisor
     channels:
       - type: channel
         channels: ["#ai-ops"]

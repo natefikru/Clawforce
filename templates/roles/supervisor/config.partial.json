@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "enabled": true
+  },
+  "agents": {
+    "defaults": {
+      "tools": {
+        "clawforce_workforce_status": {
+          "enabled": true
+        }
+      }
+    }
+  }
+}

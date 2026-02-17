@@ -5,7 +5,7 @@ import { parse as parseYaml } from "yaml";
 
 const templatesDir = join(import.meta.dirname, "../../../templates/roles");
 
-const ROLES = ["inbox-analyst", "research-agent", "process-automator"] as const;
+const ROLES = ["inbox-analyst", "research-agent", "process-automator", "supervisor"] as const;
 
 describe("Role Templates", () => {
   for (const role of ROLES) {

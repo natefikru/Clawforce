@@ -119,6 +119,12 @@ describe("setupWorkspace", () => {
     expect(existsSync(skillPath)).toBe(true);
   });
 
+  it("should copy supervisor role template into workspace", () => {
+    setupWorkspace(makeConfig({ role: "supervisor" }), testDir);
+    const skillPath = join(testDir, "workspace/skills/supervisor/SKILL.md");
+    expect(existsSync(skillPath)).toBe(true);
+  });
+
   it("should copy router plugin when router is enabled", () => {
     setupWorkspace(
       makeConfig({ router: { enabled: true } }),

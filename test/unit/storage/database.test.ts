@@ -81,7 +81,7 @@ describe("database", () => {
     it("sets schema version to latest migration", () => {
       const db = createTestDatabase();
       const version = getCurrentVersion(db);
-      expect(version).toBe(4);
+      expect(version).toBe(5);
       db.close();
     });
 
@@ -182,7 +182,7 @@ describe("database", () => {
       // Get first DB reference and verify it's working
       const db1 = getDatabase(dbPath);
       const v1 = getCurrentVersion(db1);
-      expect(v1).toBe(4);
+      expect(v1).toBe(5);
 
       // Close and get a new reference
       closeDatabase();
@@ -191,7 +191,7 @@ describe("database", () => {
       // db2 should be a new object (not the same reference as db1)
       // We can verify it works by querying it
       const v2 = getCurrentVersion(db2);
-      expect(v2).toBe(4);
+      expect(v2).toBe(5);
 
       closeDatabase();
       rmSync(tmpDir, { recursive: true, force: true });

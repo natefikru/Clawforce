@@ -1,0 +1,12 @@
+name: "invalid-single-supervisor"
+role: "supervisor"
+
+openclaw:
+  channels:
+    discord:
+      enabled: true
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"

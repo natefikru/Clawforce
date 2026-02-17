@@ -66,6 +66,12 @@ describe("parseConfig", () => {
     ).toThrow("Config validation failed");
   });
 
+  it("should reject supervisor role in single-agent mode", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-single-agent-supervisor.yaml")),
+    ).toThrow("role=supervisor is only supported in multi-agent mode");
+  });
+
   it("should reject invalid channel ID", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-channel.yaml")),
@@ -242,7 +248,7 @@ describe("parseConfig — multi-agent", () => {
 
     expect(config.agents).toHaveLength(3);
     const ultron = config.agents!.find((a) => a.name === "ultron");
-    expect(ultron?.role).toBe("process-automator");
+    expect(ultron?.role).toBe("supervisor");
     expect(ultron?.supervises).toEqual(["inbox-analyst", "research-agent"]);
   });
 
