@@ -125,6 +125,21 @@ const ChannelAssignmentSchema = z.object({
   type: z.enum(["channel", "dm"]),
   channels: z.array(z.string().min(1)).optional(),
   users: z.array(z.string().min(1)).optional(),
+}).superRefine((data, ctx) => {
+  if (data.type === "channel" && (!data.channels || data.channels.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "channels is required when type is 'channel'",
+      path: ["channels"],
+    });
+  }
+  if (data.type === "dm" && (!data.users || data.users.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "users is required when type is 'dm'",
+      path: ["users"],
+    });
+  }
 });
 
 const AgentRoutingOverrideSchema = z.object({
@@ -479,12 +494,20 @@ export const ClawforceConfigSchema = z.object({
       seen.add(name);
     }
 
-    // Supervisor references must point to existing agents
+    // Supervisor references must point to existing agents (not self)
     const nameSet = new Set(agentNames);
     for (let i = 0; i < data.agents!.length; i++) {
       const agent = data.agents![i];
       if (agent.supervises) {
         for (const supervisedName of agent.supervises) {
+          if (supervisedName === agent.name) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Agent '${agent.name}' cannot supervise itself`,
+              path: ["agents", i, "supervises"],
+            });
+            continue;
+          }
           if (!nameSet.has(supervisedName)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
@@ -539,5 +562,5 @@ export function isMultiAgentConfig(config: ClawforceConfig): config is Clawforce
   agents: NonNullable<ClawforceConfig["agents"]>;
   defaults: NonNullable<ClawforceConfig["defaults"]>;
 } {
-  return !!config.agents && config.agents.length > 0;
+  return !!config.agents && config.agents.length > 0 && !!config.defaults;
 }

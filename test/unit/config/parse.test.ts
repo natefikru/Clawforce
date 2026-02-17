@@ -266,13 +266,8 @@ describe("parseConfig — multi-agent", () => {
 
   it("should reject multi-agent config without defaults.models.cloud", () => {
     expect(() =>
-      parseConfig(join(fixturesDir, "invalid-multi-agent-bad-supervisor-ref.yaml").replace(
-        "invalid-multi-agent-bad-supervisor-ref",
-        "multi-agent-basic",
-      )),
-    ).not.toThrow();
-    // Config with agents but no defaults should fail
-    // This is validated via the fixture tests above
+      parseConfig(join(fixturesDir, "invalid-multi-agent-no-defaults.yaml")),
+    ).toThrow("defaults.models.cloud is required");
   });
 
   it("should preserve backward compatibility with single-agent configs", () => {
