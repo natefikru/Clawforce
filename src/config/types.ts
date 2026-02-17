@@ -389,16 +389,6 @@ export const ClawforceConfigSchema = z.object({
 
   // 2. Single-agent validation
   if (hasRole) {
-    if (data.role === "supervisor") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "role=supervisor is only supported in multi-agent mode. Use agents[] and supervises.",
-        path: ["role"],
-      });
-      return;
-    }
-
     if (!data.models) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

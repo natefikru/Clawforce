@@ -16,6 +16,9 @@ Multi-agent mode replaces the single `role` field with an `agents[]` array and a
 ```yaml
 name: my-workforce
 
+deployment:
+  agent_runtime: openclaw
+
 defaults:
   models:
     cloud: "anthropic/claude-sonnet-4-5"
@@ -67,6 +70,12 @@ openclaw:
     discord:
       enabled: true
       token: "${DISCORD_BOT_TOKEN}"
+
+runtime:
+  engine: "ollama"
+  location: "container"
+  model: "llama3.3:8b"
+  gpu: "nvidia"
 ```
 
 ## Schema Reference
@@ -118,9 +127,9 @@ routing:
   rules:                                # Agent-specific routing rules
     - condition: high_complexity
       model: anthropic/claude-sonnet-4-5
-  sensitivity_keywords: ["internal"]    # Additional PII keywords
-  priority: [sensitivity, cost]         # Dimension evaluation order
 ```
+
+NOTE: Per-agent `rules` and budget fields are currently enforced at runtime. Per-agent `sensitivity_keywords` and `priority` are parsed but not yet runtime-enforced.
 
 ## Migrating from Single-Agent
 
@@ -141,6 +150,8 @@ Becomes a multi-agent config:
 
 ```yaml
 name: my-workforce
+deployment:
+  agent_runtime: openclaw
 defaults:
   models:
     cloud: "anthropic/claude-sonnet-4-5"     # was models.primary
