@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { parseConfig } from "../../../src/config/parse.js";
 import { generateOpenClawConfig } from "../../../src/config/generate-openclaw.js";
+import { resolveAgentRuntime } from "../../../src/config/types.js";
 import { join } from "node:path";
 
 const fixturesDir = join(import.meta.dirname, "../../fixtures");
@@ -45,6 +46,30 @@ describe("parseConfig", () => {
     });
     expect(config.approval).toBeUndefined();
     expect(config.runtime).toBeUndefined();
+  });
+
+  it("should parse deployment.agent_runtime when explicitly configured", () => {
+    const config = parseConfig(join(fixturesDir, "valid-deployment-agent-runtime.yaml"));
+    expect(config.deployment?.agent_runtime).toBe("openclaw");
+    expect(resolveAgentRuntime(config)).toBe("openclaw");
+  });
+
+  it("should default deployment.agent_runtime to openclaw when omitted", () => {
+    const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
+    expect(config.deployment).toBeUndefined();
+    expect(resolveAgentRuntime(config)).toBe("openclaw");
+  });
+
+  it("should default deployment.agent_runtime to openclaw when deployment is empty", () => {
+    const config = parseConfig(join(fixturesDir, "valid-deployment-empty.yaml"));
+    expect(config.deployment?.agent_runtime).toBe("openclaw");
+    expect(resolveAgentRuntime(config)).toBe("openclaw");
+  });
+
+  it("should reject unsupported deployment.agent_runtime values", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-deployment-agent-runtime.yaml")),
+    ).toThrow("Config validation failed");
   });
 
   it("should expand environment variables", () => {

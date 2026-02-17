@@ -246,6 +246,10 @@ const DefaultsSchema = z.object({
   dashboard: dashboardSchema.optional(),
 });
 
+const deploymentSchema = z.object({
+  agent_runtime: z.enum(["openclaw"]).default("openclaw"),
+});
+
 // -- Top-level config schema --
 
 export const ClawforceConfigSchema = z.object({
@@ -263,6 +267,7 @@ export const ClawforceConfigSchema = z.object({
   // Multi-agent mode
   agents: z.array(AgentConfigSchema).min(1).optional(),
   defaults: DefaultsSchema.optional(),
+  deployment: deploymentSchema.optional(),
 
   // Single-agent models (required for single-agent, absent for multi-agent)
   models: z.object({
@@ -568,6 +573,11 @@ export const ClawforceConfigSchema = z.object({
 export type ClawforceConfig = z.infer<typeof ClawforceConfigSchema>;
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 export type DefaultsConfig = z.infer<typeof DefaultsSchema>;
+export type AgentRuntime = z.infer<typeof deploymentSchema>["agent_runtime"];
+
+export function resolveAgentRuntime(config: ClawforceConfig): AgentRuntime {
+  return config.deployment?.agent_runtime ?? "openclaw";
+}
 
 /** Returns true if the config is in single-agent mode (has `role`). */
 export function isSingleAgentConfig(config: ClawforceConfig): config is ClawforceConfig & {
