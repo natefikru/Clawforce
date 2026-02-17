@@ -372,12 +372,55 @@ Version plugins independently from the platform. Support hot-reload without gate
 | Response caching | 4 | Cost optimization |
 | Load balancing | 4 | Scaling (Kubernetes phase) |
 | Data residency | 4+ | Multi-region enterprise |
+| `audit.ts` coverage (49.57%) | Before/during 2B | Supervisor queries audit data |
+| `writer.ts` coverage (78.94%) | Before/during 2B | Multi-agent concurrent writes |
+| `engines/registry.ts` no test file | Before/during 2B | Multi-agent compose changes |
 | Request queuing | 2B or 3 | Multi-agent competition for resources |
 | Audit log signing | 3.3 (SOC 2) | Tamper-proof audit trail |
 | SSO/OAuth | 3+ | Enterprise sales requirement |
 | ML-based PII | 4+ | Multi-language, higher accuracy |
 | Anomaly detection | 4+ | Advanced security monitoring |
 | Secrets management | 4+ | Enterprise key management |
+
+---
+
+## Tier 1.5: Test Coverage Gaps (Address Before or During 2B)
+
+These modules have lower-than-target test coverage identified during the pre-2B audit (2026-02-16, 929 tests passing). They aren't blocking 2B start but should be addressed as those files are touched for multi-agent work.
+
+### 1.5.1 `src/commands/audit.ts` — 49.57% Line Coverage
+
+**Gap**: Database audit filtering paths (lines 85, 191-253, 269) are uncovered. The `--source database` flow with `--since`, `--event`, `--agent`, and `--pii-only` flags lacks unit tests.
+
+**Why it matters for 2B**: The supervisor agent will query audit data heavily. Untested filter paths risk regressions when adding per-agent scoping.
+
+**Fix**: Add tests for database source filtering in `test/unit/commands/audit.test.ts`.
+
+**Effort**: Small (~0.5-1 day)
+
+---
+
+### 1.5.2 `src/storage/writer.ts` — 78.94% Line Coverage
+
+**Gap**: Lines 77-82 and 153 are uncovered — likely error handling paths during write operations.
+
+**Why it matters for 2B**: Multi-agent deployments will have concurrent writes from multiple agents. Write failure paths need to be validated.
+
+**Fix**: Add error condition tests in `test/unit/storage/writer.test.ts`.
+
+**Effort**: Small (~0.5 day)
+
+---
+
+### 1.5.3 `src/config/engines/registry.ts` — No Dedicated Test File
+
+**Gap**: The runtime engine registry (Ollama, vLLM, SGLang container service generation and health check logic) has 95% coverage from indirect tests but no dedicated test file. Complex logic for probe URL generation, container port mapping, and GPU flags is only tested as a side effect of compose generation tests.
+
+**Why it matters for 2B**: Multi-agent compose generation may change how engine services are configured. Without isolated tests, regressions in engine behavior could be masked by higher-level test changes.
+
+**Fix**: Create `test/unit/config/engines/registry.test.ts` with direct tests for each engine's service generation and health probe logic.
+
+**Effort**: Small (~0.5 day)
 
 ---
 
