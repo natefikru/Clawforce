@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import { parseConfig } from "../config/parse.js";
-import { generateOpenClawConfig } from "../config/generate-openclaw.js";
 import { generateCompose } from "../config/generate-compose.js";
 import { generateEnv } from "../config/generate-env.js";
+import { resolveAgentRuntime } from "../config/types.js";
+import { getAgentRuntimeAdapter } from "../config/agent-runtime/registry.js";
 import { setupWorkspace } from "../workspace/setup.js";
 import { exec } from "../docker/exec.js";
 import { waitForHealthy } from "../docker/health.js";
@@ -38,15 +39,19 @@ export async function deployCommand(configPath: string): Promise<void> {
   setupWorkspace(config, deployDir);
   logger.success("Workspace ready");
 
-  // 4. Generate openclaw.json
-  logger.step("Generating openclaw.json...");
-  const openclawConfig = generateOpenClawConfig(config);
-  writeFileSync(
-    join(deployDir, "config", "openclaw.json"),
-    JSON.stringify(openclawConfig, null, 2),
-    "utf8",
-  );
-  logger.success("openclaw.json generated");
+  // 4. Generate agent runtime config artifacts
+  const agentRuntime = resolveAgentRuntime(config);
+  const runtimeAdapter = getAgentRuntimeAdapter(agentRuntime);
+  logger.step(`Generating ${agentRuntime} runtime config...`);
+  const runtimeOutputs = runtimeAdapter.generate(config);
+  for (const output of runtimeOutputs) {
+    writeFileSync(
+      join(deployDir, "config", output.filename),
+      JSON.stringify(output.content, null, 2),
+      "utf8",
+    );
+  }
+  logger.success(`${agentRuntime} runtime config generated`);
 
   // 5. Generate docker-compose.yml
   logger.step("Generating docker-compose.yml...");

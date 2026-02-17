@@ -284,6 +284,9 @@ Full `clawforce.yaml` reference:
 name: my-agent
 role: inbox-analyst              # inbox-analyst | research-agent | process-automator
 
+deployment:
+  agent_runtime: openclaw        # Agent orchestration runtime target (defaults to openclaw)
+
 models:
   primary: "anthropic/claude-sonnet-4-5"
   local: "sglang/qwen3-32b"
@@ -395,6 +398,8 @@ openclaw:
         sandbox: { enabled: true }
         browser: { enabled: true, headless: true }
 ```
+
+NOTE: `deployment.agent_runtime` selects the agent orchestration target (currently `openclaw`). `runtime.engine` is separate and selects the model-serving engine (`ollama`, `sglang`, `vllm`) for local inference.
 
 ---
 
