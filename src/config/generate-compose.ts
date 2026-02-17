@@ -37,7 +37,15 @@ interface ComposeConfig {
 export function generateCompose(config: ClawforceConfig): string {
   const containerPrefix = `clawforce-${config.name}`;
   const gatewayBind = config.gateway?.bind ?? "loopback";
-  const credentialMode = config.models.credential_mode ?? "env";
+  // Resolve models config: single-agent uses config.models, multi-agent uses config.defaults.models
+  const models = config.models ?? (config.defaults?.models
+    ? {
+      credential_mode: config.defaults.models.credential_mode,
+      provider_keys: config.defaults.models.provider_keys,
+      auth_profile: config.defaults.models.auth_profile,
+    }
+    : undefined);
+  const credentialMode = models?.credential_mode ?? "env";
   const gatewayEnv = [
     "HOME=/home/node",
     "TERM=xterm-256color",
@@ -49,7 +57,7 @@ export function generateCompose(config: ClawforceConfig): string {
   if (credentialMode === "auth_profile") {
     gatewayEnv.push("OPENCLAW_AUTH_PROFILE=${OPENCLAW_AUTH_PROFILE}");
   } else {
-    const providerKeys = Object.keys(config.models.provider_keys ?? {}).sort((a, b) =>
+    const providerKeys = Object.keys(models?.provider_keys ?? {}).sort((a, b) =>
       a.localeCompare(b)
     );
     for (const provider of providerKeys) {

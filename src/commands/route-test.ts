@@ -37,7 +37,7 @@ export function routeTest(
 ): RouteTestResult {
   const config = parseConfig(configPath);
 
-  const defaultModel = config.models.primary;
+  const defaultModel = config.models?.primary ?? config.defaults?.models.cloud ?? "anthropic/claude-sonnet-4-5";
   const routerConfig = config.router;
 
   const rules: RoutingRule[] = routerConfig?.rules ?? getDefaultRules();

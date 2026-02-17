@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ClawforceConfig } from "./types.js";
+import { type ClawforceConfig, isSingleAgentConfig } from "./types.js";
 import { resolveProfile } from "./capability-profiles.js";
 import { discoverPlugins } from "../plugins/registry.js";
 
@@ -109,6 +109,20 @@ export interface OpenClawConfig {
 export function generateOpenClawConfig(
   config: ClawforceConfig,
 ): OpenClawConfig {
+  // Resolve models: single-agent uses config.models, multi-agent uses config.defaults.models
+  const primaryModel = isSingleAgentConfig(config)
+    ? config.models.primary
+    : config.defaults!.models.cloud;
+  const localModel = isSingleAgentConfig(config)
+    ? config.models.local
+    : config.defaults?.models.local;
+  const credentialMode = isSingleAgentConfig(config)
+    ? config.models.credential_mode
+    : config.defaults?.models.credential_mode;
+  const authProfile = isSingleAgentConfig(config)
+    ? config.models.auth_profile
+    : config.defaults?.models.auth_profile;
+
   const result: OpenClawConfig = {
     gateway: {
       mode: "local",
@@ -117,14 +131,13 @@ export function generateOpenClawConfig(
     agents: {
       defaults: {
         workspace: "/home/node/.openclaw/workspace",
-        ...(config.models.credential_mode === "auth_profile" &&
-        config.models.auth_profile
-          ? { authProfile: config.models.auth_profile }
+        ...(credentialMode === "auth_profile" && authProfile
+          ? { authProfile }
           : {}),
         model: {
-          primary: config.models.primary,
-          ...(config.models.local
-            ? { fallbacks: [config.models.local] }
+          primary: primaryModel,
+          ...(localModel
+            ? { fallbacks: [localModel] }
             : {}),
         },
       },
@@ -135,14 +148,14 @@ export function generateOpenClawConfig(
     },
   };
 
+  // Determine role(s) for template merging
+  const role = isSingleAgentConfig(config) ? config.role : undefined;
+
   // Load and merge role-specific config partial
-  const rolePartialPath = join(
-    templatesDir,
-    "roles",
-    config.role,
-    "config.partial.json",
-  );
-  if (existsSync(rolePartialPath)) {
+  const rolePartialPath = role
+    ? join(templatesDir, "roles", role, "config.partial.json")
+    : null;
+  if (rolePartialPath && existsSync(rolePartialPath)) {
     const roleConfig = JSON.parse(
       readFileSync(rolePartialPath, "utf8"),
     ) as Partial<OpenClawConfig>;
@@ -150,6 +163,26 @@ export function generateOpenClawConfig(
       result as unknown as Record<string, unknown>,
       roleConfig as unknown as Record<string, unknown>,
     );
+  }
+
+  // Multi-agent: merge role partials for all unique roles
+  if (!role && config.agents) {
+    const roles = [...new Set(config.agents.map((a) => a.role))];
+    for (const agentRole of roles) {
+      const partialPath = join(templatesDir, "roles", agentRole, "config.partial.json");
+      if (existsSync(partialPath)) {
+        const roleConfig = JSON.parse(
+          readFileSync(partialPath, "utf8"),
+        ) as Partial<OpenClawConfig>;
+        // Only merge cron/hooks from role partials (avoid per-agent conflicts)
+        if (roleConfig.cron && !result.cron) result.cron = roleConfig.cron;
+        if (roleConfig.hooks) {
+          if (!result.hooks) {
+            result.hooks = roleConfig.hooks;
+          }
+        }
+      }
+    }
   }
 
   // Apply capability profile (after role partial, before passthrough)
@@ -243,9 +276,16 @@ function buildPluginEntries(
 }
 
 function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknown> {
+  const primaryModel = isSingleAgentConfig(config)
+    ? config.models.primary
+    : config.defaults!.models.cloud;
+  const localModel = isSingleAgentConfig(config)
+    ? config.models.local
+    : config.defaults?.models.local;
+
   const routerConfig: Record<string, unknown> = {
-    defaultModel: config.models.primary,
-    ...(config.models.local ? { defaultLocalModel: config.models.local } : {}),
+    defaultModel: primaryModel,
+    ...(localModel ? { defaultLocalModel: localModel } : {}),
     alerts: mapRouterAlertsConfig(config),
     ...(config.policy ? { policy: config.policy } : {}),
     ...(config.compliance_frameworks

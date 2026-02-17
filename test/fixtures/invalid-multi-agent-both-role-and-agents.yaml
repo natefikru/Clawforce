@@ -1,0 +1,22 @@
+name: "invalid-both"
+role: inbox-analyst
+
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
+
+defaults:
+  models:
+    cloud: "anthropic/claude-sonnet-4-5"
+    provider_keys:
+      anthropic: "${ANTHROPIC_API_KEY}"
+
+models:
+  primary: "anthropic/claude-sonnet-4-5"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
+
+openclaw:
+  channels:
+    discord:
+      enabled: true
