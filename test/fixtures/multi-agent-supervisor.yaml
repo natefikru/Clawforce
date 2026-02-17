@@ -12,7 +12,7 @@ agents:
     role: inbox-analyst
     channels:
       - type: channel
-        channels: ["#inbox"]
+        channels: ["111111111111111111"]
     routing:
       budget_daily: 5.00
 
@@ -20,7 +20,7 @@ agents:
     role: research-agent
     channels:
       - type: channel
-        channels: ["#research"]
+        channels: ["222222222222222222"]
     routing:
       budget_daily: 8.00
 
@@ -28,7 +28,7 @@ agents:
     role: process-automator
     channels:
       - type: channel
-        channels: ["#ai-ops"]
+        channels: ["333333333333333333"]
     supervises: [inbox-analyst, research-agent]
     routing:
       budget_daily: 3.00

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ClawforceConfig, isSingleAgentConfig, isMultiAgentConfig } from "./types.js";
+import { validateBindings } from "./validate-openclaw-bindings.js";
 import { resolveProfile } from "./capability-profiles.js";
 import { discoverPlugins } from "../plugins/registry.js";
 
@@ -77,8 +78,15 @@ export interface OpenClawAgentProfile {
 export interface OpenClawBinding {
   agentId: string;
   match: {
-    channel?: string[];
-    peer?: string[];
+    channel: string;
+    accountId?: string;
+    peer?: {
+      kind: "direct" | "group" | "channel" | "dm";
+      id: string;
+    };
+    guildId?: string;
+    teamId?: string;
+    roles?: string[];
   };
 }
 
@@ -123,6 +131,15 @@ export interface OpenClawConfig {
   session: {
     dmScope: string;
   };
+}
+
+function getEnabledConnectors(config: ClawforceConfig): string[] {
+  const channels = config.openclaw?.channels;
+  if (!channels || typeof channels !== "object") return [];
+  return Object.keys(channels as Record<string, unknown>).filter((key) => {
+    const ch = (channels as Record<string, unknown>)[key];
+    return ch && typeof ch === "object" && (ch as Record<string, unknown>).enabled !== false;
+  });
 }
 
 export function generateOpenClawConfig(
@@ -177,21 +194,33 @@ export function generateOpenClawConfig(
       return profile;
     });
 
+    const connectors = getEnabledConnectors(config);
+
     const bindings: OpenClawBinding[] = [];
     for (const agent of config.agents) {
-      if (agent.channels) {
-        for (const ch of agent.channels) {
-          const binding: OpenClawBinding = {
-            agentId: agent.name,
-            match: {},
-          };
-          if (ch.type === "channel" && ch.channels) {
-            binding.match.channel = ch.channels;
+      if (!agent.channels) continue;
+      for (const ch of agent.channels) {
+        const connector = connectors[0];
+        if (!connector) {
+          throw new Error(
+            `Agent '${agent.name}' has channel assignments but no connector is configured in openclaw.channels`,
+          );
+        }
+        if (ch.type === "channel" && ch.channels) {
+          for (const channelId of ch.channels) {
+            bindings.push({
+              agentId: agent.name,
+              match: { channel: connector, peer: { kind: "channel", id: channelId } },
+            });
           }
-          if (ch.type === "dm" && ch.users) {
-            binding.match.peer = ch.users;
+        }
+        if (ch.type === "dm" && ch.users) {
+          for (const userId of ch.users) {
+            bindings.push({
+              agentId: agent.name,
+              match: { channel: connector, peer: { kind: "direct", id: userId } },
+            });
           }
-          bindings.push(binding);
         }
       }
     }
@@ -275,6 +304,10 @@ export function generateOpenClawConfig(
       result as unknown as Record<string, unknown>,
       config.openclaw as Record<string, unknown>,
     );
+  }
+
+  if (result.bindings) {
+    validateBindings(result.bindings);
   }
 
   return result;

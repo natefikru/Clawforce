@@ -82,21 +82,21 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
       {
         name: "inbox-analyst",
         role: "inbox-analyst",
-        channels: [{ type: "channel", channels: ["#inbox-triage"] }],
+        channels: [{ type: "channel", channels: ["111111111111111111"] }],
       },
       {
         name: "research-agent",
         role: "research-agent",
         channels: [
-          { type: "channel", channels: ["#research"] },
-          { type: "dm", users: ["alice", "bob"] },
+          { type: "channel", channels: ["222222222222222222"] },
+          { type: "dm", users: ["333333333333333333", "444444444444444444"] },
         ],
       },
       {
         name: "ultron",
         role: "process-automator",
         supervises: ["inbox-analyst", "research-agent"],
-        channels: [{ type: "channel", channels: ["#ai-ops"] }],
+        channels: [{ type: "channel", channels: ["555555555555555555"] }],
       },
     ],
     defaults: {
@@ -122,9 +122,9 @@ describe("generateAgentsMd — multi-agent", () => {
 
   it("should list channel assignments", () => {
     const md = generateAgentsMd(makeMultiAgentConfig());
-    expect(md).toContain("#inbox-triage");
-    expect(md).toContain("#research");
-    expect(md).toContain("DMs with alice, bob");
+    expect(md).toContain("111111111111111111");
+    expect(md).toContain("222222222222222222");
+    expect(md).toContain("DMs with 333333333333333333, 444444444444444444");
   });
 
   it("should list supervision relationships", () => {

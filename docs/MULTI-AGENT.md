@@ -36,7 +36,7 @@ agents:
     role: inbox-analyst
     channels:
       - type: channel
-        channels: ["#inbox-triage", "#support"]
+        channels: ["1234567890123456789", "1234567890123456790"]  # Discord channel IDs
     routing:
       budget_daily: 5.00
 
@@ -44,9 +44,9 @@ agents:
     role: research-agent
     channels:
       - type: channel
-        channels: ["#research"]
+        channels: ["1234567890123456791"]  # Discord channel ID
       - type: dm
-        users: ["alice", "bob"]
+        users: ["9876543210987654321", "9876543210987654322"]  # Discord user IDs
     routing:
       budget_daily: 10.00
       rules:
@@ -57,7 +57,7 @@ agents:
     role: process-automator
     channels:
       - type: channel
-        channels: ["#ai-ops"]
+        channels: ["1234567890123456792"]  # Discord channel ID
     supervises: [inbox-analyst, research-agent]
     routing:
       budget_daily: 3.00
@@ -96,12 +96,16 @@ openclaw:
 
 ### Channel Assignments
 
+Channel assignments use **platform-specific IDs**, not human-readable names. For Discord, use channel IDs and user IDs (numeric snowflakes).
+
+> **Getting Discord IDs:** Enable Developer Mode in Discord (User Settings → Advanced → Developer Mode), then right-click any channel or user and select "Copy Channel ID" or "Copy User ID".
+
 ```yaml
 channels:
   - type: channel            # Route messages from specific channels
-    channels: ["#inbox"]
+    channels: ["1234567890123456789"]  # Discord channel ID
   - type: dm                 # Route direct messages from specific users
-    users: ["alice", "bob"]
+    users: ["9876543210987654321", "9876543210987654322"]  # Discord user IDs
 ```
 
 ### Per-Agent Routing
@@ -150,7 +154,7 @@ agents:
     role: inbox-analyst
     channels:
       - type: channel
-        channels: ["#inbox"]
+        channels: ["1234567890123456789"]  # Discord channel ID
 ```
 
 Key differences:

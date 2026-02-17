@@ -625,15 +625,15 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
       {
         name: "inbox-analyst",
         role: "inbox-analyst",
-        channels: [{ type: "channel", channels: ["#inbox-triage"] }],
+        channels: [{ type: "channel", channels: ["111111111111111111"] }],
         routing: { budget_daily: 5.0 },
       },
       {
         name: "research-agent",
         role: "research-agent",
         channels: [
-          { type: "channel", channels: ["#research"] },
-          { type: "dm", users: ["alice", "bob"] },
+          { type: "channel", channels: ["222222222222222222"] },
+          { type: "dm", users: ["333333333333333333", "444444444444444444"] },
         ],
         routing: {
           budget_daily: 8.0,
@@ -672,18 +672,22 @@ describe("generateOpenClawConfig — multi-agent", () => {
 
   it("should generate bindings from channel assignments", () => {
     const result = generateOpenClawConfig(makeMultiAgentConfig());
-    expect(result.bindings).toHaveLength(3);
+    expect(result.bindings).toHaveLength(4);
     expect(result.bindings![0]).toEqual({
       agentId: "inbox-analyst",
-      match: { channel: ["#inbox-triage"] },
+      match: { channel: "discord", peer: { kind: "channel", id: "111111111111111111" } },
     });
     expect(result.bindings![1]).toEqual({
       agentId: "research-agent",
-      match: { channel: ["#research"] },
+      match: { channel: "discord", peer: { kind: "channel", id: "222222222222222222" } },
     });
     expect(result.bindings![2]).toEqual({
       agentId: "research-agent",
-      match: { peer: ["alice", "bob"] },
+      match: { channel: "discord", peer: { kind: "direct", id: "333333333333333333" } },
+    });
+    expect(result.bindings![3]).toEqual({
+      agentId: "research-agent",
+      match: { channel: "discord", peer: { kind: "direct", id: "444444444444444444" } },
     });
   });
 
@@ -756,8 +760,8 @@ describe("generateOpenClawConfig — multi-agent", () => {
     const result = generateOpenClawConfig(
       makeMultiAgentConfig({
         agents: [
-          { name: "agent-a", role: "inbox-analyst", channels: [{ type: "channel", channels: ["#a"] }] },
-          { name: "agent-b", role: "research-agent", channels: [{ type: "channel", channels: ["#b"] }] },
+          { name: "agent-a", role: "inbox-analyst", channels: [{ type: "channel", channels: ["555555555555555555"] }] },
+          { name: "agent-b", role: "research-agent", channels: [{ type: "channel", channels: ["666666666666666666"] }] },
         ],
         router: { enabled: true },
       }),
@@ -776,5 +780,38 @@ describe("generateOpenClawConfig — multi-agent", () => {
     const result = generateOpenClawConfig(makeMultiAgentConfig());
     const channels = result.channels as Record<string, unknown>;
     expect(channels.discord).toEqual({ enabled: true });
+  });
+
+  it("should derive connector name from openclaw.channels", () => {
+    const config = makeMultiAgentConfig({
+      openclaw: {
+        channels: {
+          slack: { enabled: true },
+        },
+      },
+    });
+    const result = generateOpenClawConfig(config);
+    expect(result.bindings![0].match.channel).toBe("slack");
+  });
+
+  it("should error when agents have channels but no connector configured", () => {
+    const config = makeMultiAgentConfig({
+      openclaw: {},
+    });
+    expect(() => generateOpenClawConfig(config)).toThrow(
+      /no connector is configured in openclaw\.channels/,
+    );
+  });
+
+  it("should validate generated bindings against OpenClaw schema", () => {
+    const result = generateOpenClawConfig(makeMultiAgentConfig());
+    // If validation failed, generateOpenClawConfig would have thrown
+    expect(result.bindings).toBeDefined();
+    expect(result.bindings!.length).toBeGreaterThan(0);
+    for (const binding of result.bindings!) {
+      expect(typeof binding.match.channel).toBe("string");
+      expect(binding.match.peer).toBeDefined();
+      expect(typeof binding.match.peer!.id).toBe("string");
+    }
   });
 });

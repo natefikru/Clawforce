@@ -215,11 +215,11 @@ defaults:
 agents:
   - name: inbox-analyst
     role: inbox-analyst
-    channels: [{ type: channel, channels: ["#inbox"] }]
+    channels: [{ type: channel, channels: ["1234567890123456789"] }]  # Discord channel ID
     routing: { budget_daily: 5.00 }
   - name: research-agent
     role: research-agent
-    channels: [{ type: channel, channels: ["#research"] }]
+    channels: [{ type: channel, channels: ["1234567890123456791"] }]  # Discord channel ID
     routing: { budget_daily: 10.00 }
 ```
 
@@ -373,7 +373,7 @@ alerts:
 #     role: inbox-analyst
 #     channels:
 #       - type: channel
-#         channels: ["#inbox"]
+#         channels: ["1234567890123456789"]  # Discord channel ID
 #     routing:
 #       budget_daily: 5.00
 # See docs/MULTI-AGENT.md for full multi-agent reference.

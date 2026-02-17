@@ -185,8 +185,8 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
   return {
     name: "test-workforce",
     agents: [
-      { name: "inbox-analyst", role: "inbox-analyst", channels: [{ type: "channel", channels: ["#inbox"] }] },
-      { name: "research-agent", role: "research-agent", channels: [{ type: "channel", channels: ["#research"] }] },
+      { name: "inbox-analyst", role: "inbox-analyst", channels: [{ type: "channel", channels: ["111111111111111111"] }] },
+      { name: "research-agent", role: "research-agent", channels: [{ type: "channel", channels: ["222222222222222222"] }] },
     ],
     defaults: {
       models: { cloud: "anthropic/claude-sonnet-4-5" },
