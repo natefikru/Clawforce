@@ -91,10 +91,15 @@ describe("parseConfig", () => {
     ).toThrow("Config validation failed");
   });
 
-  it("should reject supervisor role in single-agent mode", () => {
-    expect(() =>
-      parseConfig(join(fixturesDir, "invalid-single-agent-supervisor.yaml")),
-    ).toThrow("role=supervisor is only supported in multi-agent mode");
+  it("should allow supervisor role in single-agent mode", () => {
+    const config = parseConfig(join(fixturesDir, "invalid-single-agent-supervisor.yaml"));
+    expect(config.role).toBe("supervisor");
+  });
+
+  it("should default role to supervisor when role and agents are omitted", () => {
+    const config = parseConfig(join(fixturesDir, "valid-default-role-supervisor.yaml"));
+    expect(config.role).toBe("supervisor");
+    expect(config.agents).toBeUndefined();
   });
 
   it("should reject invalid channel ID", () => {

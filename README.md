@@ -63,9 +63,12 @@ npm install -g clawforce
 # Create a config file
 cat > clawforce.yaml << 'EOF'
 name: my-agent
-role: inbox-analyst
+role: supervisor
+deployment:
+  agent_runtime: openclaw
 models:
   primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
   credential_mode: env
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
@@ -78,6 +81,11 @@ dashboard:
     enabled: false
 router:
   enabled: true
+  rules:
+    - condition: "pii_detected"
+      model: "ollama/llama3.3:8b"
+    - condition: "low_complexity"
+      model: "ollama/llama3.3:8b"
 compliance:
   enabled: true
 openclaw:
@@ -88,7 +96,7 @@ openclaw:
 runtime:
   engine: "ollama"
   location: "container"
-  model: "qwen3.3:8b"
+  model: "llama3.3:8b"
   gpu: "nvidia"
 EOF
 
@@ -96,7 +104,7 @@ EOF
 clawforce deploy -c clawforce.yaml
 ```
 
-This starts an OpenClaw gateway, a local model via SGLang/Ollama, the compliance logger, and the monitoring dashboard — all via Docker Compose.
+This starts an OpenClaw gateway, a local model via the configured runtime engine, the compliance logger, and the monitoring dashboard — all via Docker Compose.
 
 Secure-by-default deployment behavior:
 - Gateway binds to `loopback` unless explicitly set to `gateway.bind: lan`.
@@ -212,19 +220,26 @@ Deploy multiple specialized agents from a single config, each with its own role,
 
 ```yaml
 name: my-workforce
+deployment:
+  agent_runtime: openclaw
 defaults:
   models:
     cloud: "anthropic/claude-sonnet-4-5"
     local: "ollama/llama3.3:8b"
 agents:
-  - name: inbox-analyst
-    role: inbox-analyst
+  - name: ops-supervisor
+    role: supervisor
     channels: [{ type: channel, channels: ["1234567890123456789"] }]  # Discord channel ID
     routing: { budget_daily: 5.00 }
   - name: research-agent
     role: research-agent
     channels: [{ type: channel, channels: ["1234567890123456791"] }]  # Discord channel ID
     routing: { budget_daily: 10.00 }
+runtime:
+  engine: "ollama"
+  location: "container"
+  model: "llama3.3:8b"
+  gpu: "nvidia"
 ```
 
 Per-agent budget isolation, channel routing, and supervisor hierarchies. See [docs/MULTI-AGENT.md](docs/MULTI-AGENT.md) for the full reference.
@@ -232,7 +247,7 @@ Per-agent budget isolation, channel routing, and supervisor hierarchies. See [do
 ### Agent Role Templates
 
 Three starter templates included:
-- **Inbox Analyst** — Monitors channel activity, summarizes threads, flags action items
+- **Supervisor** — Coordinates specialist agents and manages escalations
 - **Research Agent** — Takes requests via configured channels, browses web, compiles reports
 - **Process Automator** — Cron-triggered browser workflows, reports results
 
@@ -282,7 +297,7 @@ Full `clawforce.yaml` reference:
 
 ```yaml
 name: my-agent
-role: inbox-analyst              # inbox-analyst | research-agent | process-automator
+role: supervisor                 # Valid roles: research-agent | process-automator | supervisor (defaults to supervisor when omitted)
 
 deployment:
   agent_runtime: openclaw        # Agent orchestration runtime target (defaults to openclaw)
@@ -335,11 +350,11 @@ dashboard:
     password: "your-secure-password"  # Min 8 characters
 
 runtime:
-  engine: "ollama"               # Runtime engine id (e.g. ollama | sglang | vllm)
+  engine: "sglang"               # Runtime engine id (e.g. ollama | sglang | vllm)
   location: "container"          # container | host
-  model: "qwen3.3:8b"
+  model: "qwen3-32b"
   gpu: nvidia                    # nvidia | amd | none
-  port: 11434                    # engine port (ollama default: 11434)
+  port: 30000                    # engine port (sglang default: 30000)
 
 capabilities: full               # minimal | standard | full
 
@@ -377,8 +392,8 @@ alerts:
 #     provider_keys:
 #       anthropic: "${ANTHROPIC_API_KEY}"
 # agents:
-#   - name: inbox-analyst
-#     role: inbox-analyst
+#   - name: ops-supervisor
+#     role: supervisor
 #     channels:
 #       - type: channel
 #         channels: ["1234567890123456789"]  # Discord channel ID

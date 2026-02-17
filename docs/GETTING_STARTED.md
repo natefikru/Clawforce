@@ -229,8 +229,12 @@ Create `clawforce.yaml`:
 name: my-agent
 role: inbox-analyst
 
+deployment:
+  agent_runtime: openclaw
+
 models:
   primary: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
   credential_mode: env
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
@@ -246,6 +250,11 @@ dashboard:
 
 router:
   enabled: true
+  rules:
+    - condition: "pii_detected"
+      model: "ollama/llama3.3:8b"
+    - condition: "low_complexity"
+      model: "ollama/llama3.3:8b"
 
 compliance:
   enabled: true
@@ -255,6 +264,12 @@ openclaw:
     discord:
       enabled: true
       token: "${DISCORD_BOT_TOKEN}"
+
+runtime:
+  engine: "ollama"
+  location: "container"
+  model: "llama3.3:8b"
+  gpu: "nvidia"
 ```
 
 ### Deploy
@@ -267,7 +282,7 @@ clawforce deploy -c clawforce.yaml
 
 This generates a Docker Compose stack (OpenClaw gateway + optional Ollama sidecar + dashboard) and starts it.
 
-NOTE: `credential_mode: env` currently maps `models.api_key` to `ANTHROPIC_API_KEY` in generated `.env`/Compose wiring. If your primary model is not Anthropic, prefer `credential_mode: auth_profile` or configure provider credentials via OpenClaw passthrough and your own secret delivery path.
+NOTE: `credential_mode: env` currently maps `models.provider_keys.anthropic` to `ANTHROPIC_API_KEY` in generated `.env`/Compose wiring. If your primary model is not Anthropic, prefer `credential_mode: auth_profile` or configure provider credentials via OpenClaw passthrough and your own secret delivery path.
 
 ---
 
@@ -275,7 +290,7 @@ NOTE: `credential_mode: env` currently maps `models.api_key` to `ANTHROPIC_API_K
 
 ```yaml
 name: my-agent                         # Deployment name (used for directory, container names)
-role: inbox-analyst                    # inbox-analyst | research-agent | process-automator | supervisor (multi-agent only)
+role: inbox-analyst                    # inbox-analyst | research-agent | process-automator | supervisor (defaults to supervisor when omitted)
 
 deployment:
   agent_runtime: openclaw              # Agent orchestration runtime target (defaults to openclaw)

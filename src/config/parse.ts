@@ -19,7 +19,14 @@ export function parseConfig(configPath: string): ClawforceConfig {
 
   const expanded = expandEnvVars(parsed);
 
-  const result = ClawforceConfigSchema.safeParse(expanded);
+  // Backward-compatible default: if neither single-agent nor multi-agent mode is
+  // explicitly selected, default to single-agent supervisor role.
+  const normalized = { ...(expanded as Record<string, unknown>) };
+  if (!Object.hasOwn(normalized, "role") && !Object.hasOwn(normalized, "agents")) {
+    normalized.role = "supervisor";
+  }
+
+  const result = ClawforceConfigSchema.safeParse(normalized);
 
   if (!result.success) {
     const errors = result.error.errors
