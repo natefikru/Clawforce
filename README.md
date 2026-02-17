@@ -202,6 +202,29 @@ Next.js dashboard with 5 panels:
 
 **Authentication** — Auth.js v5 with username/password credentials stored in SQLite. Dashboard-enabled configs must explicitly declare an auth policy (`dashboard.auth.enabled: true|false`).
 
+### Multi-Agent Deployments
+
+Deploy multiple specialized agents from a single config, each with its own role, channels, and budget:
+
+```yaml
+name: my-workforce
+defaults:
+  models:
+    cloud: "anthropic/claude-sonnet-4-5"
+    local: "ollama/llama3.3:8b"
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
+    channels: [{ type: channel, channels: ["#inbox"] }]
+    routing: { budget_daily: 5.00 }
+  - name: research-agent
+    role: research-agent
+    channels: [{ type: channel, channels: ["#research"] }]
+    routing: { budget_daily: 10.00 }
+```
+
+Per-agent budget isolation, channel routing, and supervisor hierarchies. See [docs/MULTI-AGENT.md](docs/MULTI-AGENT.md) for the full reference.
+
 ### Agent Role Templates
 
 Three starter templates included:
@@ -336,6 +359,24 @@ alerts:
       smtp_port: 587
       username: ""
       password: ""
+
+# --- Multi-Agent Mode (alternative to role/models above) ---
+# defaults:
+#   models:
+#     cloud: "anthropic/claude-sonnet-4-5"
+#     local: "ollama/llama3.3:8b"
+#     credential_mode: env
+#     provider_keys:
+#       anthropic: "${ANTHROPIC_API_KEY}"
+# agents:
+#   - name: inbox-analyst
+#     role: inbox-analyst
+#     channels:
+#       - type: channel
+#         channels: ["#inbox"]
+#     routing:
+#       budget_daily: 5.00
+# See docs/MULTI-AGENT.md for full multi-agent reference.
 
 # Direct OpenClaw config passthrough
 openclaw:
