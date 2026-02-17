@@ -31,6 +31,11 @@ function asText(value) {
   return typeof value === "string" ? value : value?.toString("utf8") ?? "";
 }
 
+function hasDockerImage(imageName) {
+  const inspect = run("docker", ["image", "inspect", imageName]);
+  return inspect.status === 0;
+}
+
 async function isPortFree(port) {
   return await new Promise((resolvePort) => {
     const server = createServer();
@@ -76,6 +81,7 @@ async function main() {
 
   const dockerVersion = run("docker", ["--version"]);
   const dockerInfo = run("docker", ["info"], {}, 20_000);
+  const openclawImagePresent = hasDockerImage("openclaw:local");
   const ollamaHealthy = await checkOllamaHealth();
   const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 
@@ -83,6 +89,7 @@ async function main() {
     anthropicApiKeyPresent: hasAnthropicKey,
     dockerAvailable: dockerVersion.status === 0,
     dockerDaemonHealthy: dockerInfo.status === 0,
+    openclawImagePresent,
     ollamaHealthy,
     portsFree: portResults,
   };
@@ -99,6 +106,11 @@ async function main() {
   }
   if (!preflight.dockerDaemonHealthy) {
     failures.push("Docker daemon is not healthy (docker info failed)");
+  }
+  if (!preflight.openclawImagePresent) {
+    failures.push(
+      "Required Docker image missing: openclaw:local (build/tag it before running runtime e2e)",
+    );
   }
   if (!preflight.ollamaHealthy) {
     failures.push("Local runtime check failed: Ollama not reachable at http://127.0.0.1:11434/api/tags");

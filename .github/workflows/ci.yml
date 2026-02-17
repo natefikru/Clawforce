@@ -80,6 +80,17 @@ jobs:
       - name: Install dashboard dependencies
         if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
         run: pnpm --dir clawforce-dashboard install --frozen-lockfile
+      - name: Build OpenClaw gateway image
+        if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
+        run: |
+          if docker image inspect openclaw:local >/dev/null 2>&1; then
+            echo "openclaw:local already present"
+            exit 0
+          fi
+          rm -rf /tmp/openclaw
+          git clone --depth 1 https://github.com/natefikru/openclaw.git /tmp/openclaw
+          docker build -t openclaw:local /tmp/openclaw
+          docker image inspect openclaw:local >/dev/null 2>&1
       - name: Start Ollama runtime for local/hybrid e2e checks
         if: ${{ steps.preflight.outputs.run_runtime_e2e == 'true' }}
         run: docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
