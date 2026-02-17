@@ -88,7 +88,7 @@ jobs:
             exit 0
           fi
           rm -rf /tmp/openclaw
-          git clone --depth 1 https://github.com/natefikru/openclaw.git /tmp/openclaw
+          git clone --depth 1 https://github.com/openclaw/openclaw.git /tmp/openclaw
           docker build -t openclaw:local /tmp/openclaw
           docker image inspect openclaw:local >/dev/null 2>&1
       - name: Start Ollama runtime for local/hybrid e2e checks
@@ -120,7 +120,7 @@ jobs:
             exit 0
           fi
           echo "Runtime e2e report: ${REPORT_PATH}"
-          node -e "const fs=require('fs');const p=process.argv[1];const r=JSON.parse(fs.readFileSync(p,'utf8'));console.log(JSON.stringify({status:r.status,preflight:r.preflight,failures:r.failures ?? null,testStatusCode:r.testResult?.statusCode ?? null},null,2));" "${REPORT_PATH}"
+          node -e "const fs=require('fs');const p=process.argv[1];const r=JSON.parse(fs.readFileSync(p,'utf8'));const scenarios=r.scenarioSummary?.scenarios ?? [];console.log(JSON.stringify({status:r.status,preflight:r.preflight,failures:r.failures ?? null,testStatusCode:r.testResult?.statusCode ?? null,scenarioCount:r.scenarioSummary?.scenarioCount ?? 0},null,2));if(scenarios.length>0){console.log('Runtime e2e scenarios tested:');for(const s of scenarios){console.log('- '+s.scenario+' ['+s.deploymentName+']');for(const c of (s.commandChecks ?? [])){console.log('  command: '+c);}for(const rc of (s.routeChecks ?? [])){console.log('  route: '+rc.label+' | expected: '+rc.expectedProviderConstraint+' | actual: '+rc.actualProvider+' | model: '+rc.modelRef);}}}" "${REPORT_PATH}"
       - name: Upload runtime e2e report
         if: ${{ always() && steps.preflight.outputs.run_runtime_e2e == 'true' }}
         uses: actions/upload-artifact@v4

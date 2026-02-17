@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
@@ -70,8 +70,25 @@ function writeReport(report) {
   return outPath;
 }
 
+function readJsonIfExists(path) {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   const startedAt = new Date().toISOString();
+  const dateStamp = todayDateStamp();
+  const scenarioSummaryPath = join(
+    ROOT,
+    "docs",
+    "validation-evidence",
+    dateStamp,
+    "runtime-e2e-scenarios.json",
+  );
   const requiredPorts = [4411, 4412, 4413];
   const portResults = {};
 
@@ -141,6 +158,7 @@ async function main() {
     ["test:e2e:runtime"],
     {
       CLAWFORCE_RUN_E2E: "1",
+      CLAWFORCE_E2E_SUMMARY_PATH: scenarioSummaryPath,
       // local validation safety gate control
       CI: "",
       CLAWFORCE_SKIP_SECURITY_AUDIT: "1",
@@ -150,6 +168,7 @@ async function main() {
 
   const stdout = asText(testRun.stdout);
   const stderr = asText(testRun.stderr);
+  const scenarioSummary = readJsonIfExists(scenarioSummaryPath);
   const testResult = {
     statusCode: testRun.status,
     stdout,
@@ -162,6 +181,7 @@ async function main() {
     status: testRun.status === 0 ? "passed" : "failed",
     preflight,
     testResult,
+    scenarioSummary,
   };
   const path = writeReport(report);
 
@@ -179,6 +199,20 @@ async function main() {
     process.exit(testRun.status ?? 1);
   }
 
+  console.log("--- Runtime e2e stdout (begin) ---");
+  console.log(stdout);
+  console.log("--- Runtime e2e stdout (end) ---");
+  if (stderr.trim().length > 0) {
+    console.log("--- Runtime e2e stderr (begin) ---");
+    console.log(stderr);
+    console.log("--- Runtime e2e stderr (end) ---");
+  }
+  if (scenarioSummary) {
+    console.log("--- Runtime e2e scenario summary ---");
+    console.log(JSON.stringify(scenarioSummary, null, 2));
+  } else {
+    console.log("Runtime e2e scenario summary not found.");
+  }
   console.log("Runtime e2e execution passed.");
   console.log(`Report: ${path}`);
 }

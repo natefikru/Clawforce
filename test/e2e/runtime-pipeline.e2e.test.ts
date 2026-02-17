@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const FIXTURES = join(ROOT, "test", "fixtures", "e2e");
@@ -13,6 +13,23 @@ const COMPLEX_PROMPT =
   "Compare Kubernetes orchestration vs serverless approaches for deployment, discussing cold start latencies, resource utilization, and cost optimization.";
 
 type CmdResult = ReturnType<typeof spawnSync>;
+type RouteCheck = {
+  label: string;
+  prompt: string;
+  expectedProviderConstraint: string;
+  actualProvider: string;
+  modelRef: string;
+};
+
+type ScenarioSummary = {
+  scenario: string;
+  config: string;
+  deploymentName: string;
+  commandChecks: string[];
+  routeChecks: RouteCheck[];
+};
+
+const scenarioSummaries: ScenarioSummary[] = [];
 
 function runCmd(
   command: string,
@@ -77,6 +94,52 @@ function routeTest(prompt: string, configPath: string) {
   };
 }
 
+function startScenario(
+  scenario: string,
+  configPath: string,
+  deploymentName: string,
+): ScenarioSummary {
+  const entry: ScenarioSummary = {
+    scenario,
+    config: configPath,
+    deploymentName,
+    commandChecks: [],
+    routeChecks: [],
+  };
+  scenarioSummaries.push(entry);
+  return entry;
+}
+
+function runAndRecord(
+  summary: ScenarioSummary,
+  label: string,
+  command: string,
+  args: string[],
+  timeoutMs = 240_000,
+) {
+  const result = runCmd(command, args, {}, timeoutMs);
+  assertOk(result, label);
+  summary.commandChecks.push(`${label}: ok`);
+}
+
+function recordRouteCheck(
+  summary: ScenarioSummary,
+  label: string,
+  prompt: string,
+  configPath: string,
+  expectedProviderConstraint: string,
+) {
+  const result = routeTest(prompt, configPath);
+  summary.routeChecks.push({
+    label,
+    prompt,
+    expectedProviderConstraint,
+    actualProvider: result.provider,
+    modelRef: result.modelRef,
+  });
+  return result;
+}
+
 const dockerAvailable = runCmd("docker", ["--version"], {}, 10_000).status === 0;
 
 const gatedDescribe = RUN_E2E && dockerAvailable ? describe : describe.skip;
@@ -87,20 +150,39 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
     () => {
       const configPath = join(FIXTURES, "runtime-cloud.yaml");
       const deploymentName = "runtime-e2e-cloud";
+      const summary = startScenario(
+        "cloud profile boots runtime pipeline and enforces pii non-cloud routing",
+        configPath,
+        deploymentName,
+      );
       tearDownDeployment(deploymentName);
 
       try {
-        assertOk(runCmd("pnpm", ["dev", "deploy", "-c", configPath]), "deploy cloud");
-        assertOk(runCmd("pnpm", ["dev", "status"]), "status cloud");
-        assertOk(
-          runCmd("pnpm", ["dev", "audit", "--source", "database", "--event", "routing_decision", "-n", "5"]),
+        runAndRecord(summary, "deploy cloud", "pnpm", ["dev", "deploy", "-c", configPath]);
+        runAndRecord(summary, "status cloud", "pnpm", ["dev", "status"]);
+        runAndRecord(
+          summary,
           "audit cloud",
+          "pnpm",
+          ["dev", "audit", "--source", "database", "--event", "routing_decision", "-n", "5"],
         );
 
-        const complex = routeTest(COMPLEX_PROMPT, configPath);
+        const complex = recordRouteCheck(
+          summary,
+          "cloud complex prompt",
+          COMPLEX_PROMPT,
+          configPath,
+          "provider must be anthropic",
+        );
         expect(complex.provider).toBe("anthropic");
 
-        const pii = routeTest("my SSN is 123-45-6789", configPath);
+        const pii = recordRouteCheck(
+          summary,
+          "cloud pii prompt",
+          "my SSN is 123-45-6789",
+          configPath,
+          "provider must not be cloud (anthropic/openai/google)",
+        );
         expect(["anthropic", "openai", "google"]).not.toContain(pii.provider);
       } finally {
         runCmd("pnpm", ["dev", "stop"], {}, 120_000);
@@ -115,19 +197,44 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
     () => {
       const configPath = join(FIXTURES, "runtime-local.yaml");
       const deploymentName = "runtime-e2e-local";
+      const summary = startScenario(
+        "local-only profile boots runtime pipeline and keeps routes local",
+        configPath,
+        deploymentName,
+      );
       tearDownDeployment(deploymentName);
 
       try {
-        assertOk(runCmd("pnpm", ["dev", "deploy", "-c", configPath]), "deploy local");
-        assertOk(runCmd("pnpm", ["dev", "status"]), "status local");
-        assertOk(
-          runCmd("pnpm", ["dev", "audit", "--source", "database", "--event", "routing_decision", "-n", "5"]),
+        runAndRecord(summary, "deploy local", "pnpm", ["dev", "deploy", "-c", configPath]);
+        runAndRecord(summary, "status local", "pnpm", ["dev", "status"]);
+        runAndRecord(
+          summary,
           "audit local",
+          "pnpm",
+          ["dev", "audit", "--source", "database", "--event", "routing_decision", "-n", "5"],
         );
 
-        const clean = routeTest("safe validation prompt", configPath);
-        const pii = routeTest("my SSN is 123-45-6789", configPath);
-        const complex = routeTest(COMPLEX_PROMPT, configPath);
+        const clean = recordRouteCheck(
+          summary,
+          "local clean prompt",
+          "safe validation prompt",
+          configPath,
+          "provider must be ollama",
+        );
+        const pii = recordRouteCheck(
+          summary,
+          "local pii prompt",
+          "my SSN is 123-45-6789",
+          configPath,
+          "provider must be ollama",
+        );
+        const complex = recordRouteCheck(
+          summary,
+          "local complex prompt",
+          COMPLEX_PROMPT,
+          configPath,
+          "provider must be ollama",
+        );
 
         expect(clean.provider).toBe("ollama");
         expect(pii.provider).toBe("ollama");
@@ -145,19 +252,44 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
     () => {
       const configPath = join(FIXTURES, "runtime-hybrid.yaml");
       const deploymentName = "runtime-e2e-hybrid";
+      const summary = startScenario(
+        "hybrid profile boots runtime pipeline and switches between cloud/local",
+        configPath,
+        deploymentName,
+      );
       tearDownDeployment(deploymentName);
 
       try {
-        assertOk(runCmd("pnpm", ["dev", "deploy", "-c", configPath]), "deploy hybrid");
-        assertOk(runCmd("pnpm", ["dev", "status"]), "status hybrid");
-        assertOk(
-          runCmd("pnpm", ["dev", "audit", "--source", "database", "--event", "routing_decision", "-n", "5"]),
+        runAndRecord(summary, "deploy hybrid", "pnpm", ["dev", "deploy", "-c", configPath]);
+        runAndRecord(summary, "status hybrid", "pnpm", ["dev", "status"]);
+        runAndRecord(
+          summary,
           "audit hybrid",
+          "pnpm",
+          ["dev", "audit", "--source", "database", "--event", "routing_decision", "-n", "5"],
         );
 
-        const low = routeTest("safe low complexity prompt", configPath);
-        const pii = routeTest("my SSN is 123-45-6789", configPath);
-        const complex = routeTest(COMPLEX_PROMPT, configPath);
+        const low = recordRouteCheck(
+          summary,
+          "hybrid low complexity prompt",
+          "safe low complexity prompt",
+          configPath,
+          "provider must be ollama",
+        );
+        const pii = recordRouteCheck(
+          summary,
+          "hybrid pii prompt",
+          "my SSN is 123-45-6789",
+          configPath,
+          "provider must be ollama",
+        );
+        const complex = recordRouteCheck(
+          summary,
+          "hybrid complex prompt",
+          COMPLEX_PROMPT,
+          configPath,
+          "provider must be anthropic",
+        );
 
         expect(low.provider).toBe("ollama");
         expect(pii.provider).toBe("ollama");
@@ -168,6 +300,26 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
       }
     },
     300_000,
+  );
+});
+
+afterAll(() => {
+  const summaryPath = process.env.CLAWFORCE_E2E_SUMMARY_PATH;
+  if (!summaryPath) return;
+
+  mkdirSync(dirname(summaryPath), { recursive: true });
+  writeFileSync(
+    summaryPath,
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        scenarioCount: scenarioSummaries.length,
+        scenarios: scenarioSummaries,
+      },
+      null,
+      2,
+    ),
+    "utf8",
   );
 });
 
