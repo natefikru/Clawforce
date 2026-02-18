@@ -83,7 +83,7 @@ compliance:
 
 **Proposed Solution**:
 ```yaml
-router:
+routing:
   fallback_chain:
     - anthropic/claude-sonnet-4-5    # Try first
     - openai/gpt-4o                  # If Anthropic unavailable

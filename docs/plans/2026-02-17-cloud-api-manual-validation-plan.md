@@ -97,7 +97,7 @@ For each test, capture:
 
 ### Required Config Checks
 
-- [ ] `models.primary` is a cloud provider model.
+- [ ] `models.cloud` is a cloud provider model.
 - [ ] `models.credential_mode` is set appropriately (for example `env`).
 - [ ] `router.enabled: true`.
 - [ ] `compliance.enabled: true`.
@@ -259,7 +259,7 @@ Validate that OpenClaw agents run correctly when Clawforce routes all traffic to
 ### Configuration Profile
 
 - [ ] Create or use local-only profile config (`test/fixtures/e2e/runtime-local.yaml`).
-- [ ] Set `models.primary` to a local model reference (for example `ollama/llama3.3:8b`).
+- [ ] Set `models.cloud` to a local model reference (for example `ollama/llama3.3:8b`).
 - [ ] Set runtime engine/location for local runtime (`container` or `host`).
 - [ ] Disable cloud provider dependency for this profile.
 - [ ] Keep `router.enabled` and `compliance.enabled` enabled.
@@ -302,7 +302,7 @@ Validate policy-driven routing behavior where OpenClaw/Clawforce choose cloud or
 ### Configuration Profile
 
 - [ ] Create or use hybrid profile config (`test/fixtures/e2e/runtime-hybrid.yaml`).
-- [ ] Configure `models.primary` as cloud and `models.local` as local.
+- [ ] Configure `models.cloud` as cloud and `models.local` as local.
 - [ ] Add explicit routing rules for at least:
   - `pii_detected` -> local
   - `low_complexity` -> local (optional but recommended)

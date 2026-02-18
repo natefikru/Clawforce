@@ -63,37 +63,52 @@ npm install -g clawforce
 # Create a config file
 cat > clawforce.yaml << 'EOF'
 name: my-agent
-role: supervisor
+
+agents:
+  - name: my-agent
+    role: supervisor
+    supervises: []
+
 deployment:
   agent_runtime: openclaw
+
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   credential_mode: env
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
+
 gateway:
   bind: loopback
+
 dashboard:
   enabled: true
   port: 3000
   auth:
     enabled: false
-router:
-  enabled: true
+
+routing:
   rules:
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"
     - condition: "low_complexity"
       model: "ollama/llama3.3:8b"
+  sensitivity:
+    pii_detection: true
+    keywords: ["password", "secret"]
+
 compliance:
   enabled: true
+
 openclaw:
-  channels:
-    discord:
-      enabled: true
-      token: "${DISCORD_BOT_TOKEN}"
-runtime:
+  default:
+    channels:
+      discord:
+        enabled: true
+        token: "${DISCORD_BOT_TOKEN}"
+
+local_model:
   engine: "ollama"
   location: "container"
   model: "llama3.3:8b"
@@ -128,8 +143,7 @@ Routes every request across 5 dimensions to pick the right model:
 PII never routes to cloud models. This is enforced as a post-routing safety invariant regardless of configuration.
 
 ```yaml
-router:
-  enabled: true
+routing:
   rules:
     - condition: "pii_detected"
       model: "sglang/qwen3-32b"
@@ -141,7 +155,9 @@ router:
       model: "openai/gpt-4o"
     - condition: "over_budget"
       model: "sglang/qwen3-32b"
-  sensitivity_keywords: ["password", "secret", "confidential"] # merged with sensitivity.blocklist
+  sensitivity:
+    keywords: ["password", "secret", "confidential"]
+    pii_detection: true
   priority: ["sensitivity", "cost", "domain", "complexity"]
   budget:
     daily_limit: 10.00
@@ -156,7 +172,7 @@ Local model runtimes are actively health-checked (Ollama, SGLang, vLLM) with cir
 - `failover-safe` allows only non-sensitive requests to fall back to cloud.
 
 ```yaml
-router:
+routing:
   health_check:
     enabled: true
     failover_policy: block      # block | failover-safe
@@ -164,15 +180,16 @@ router:
     retry_delay_ms: 500         # delay between probe retries
 ```
 
-PII confidence filtering is configurable globally and per pattern:
+PII confidence filtering is configurable within the routing section:
 
 ```yaml
-sensitivity:
-  pii_detection: true      # default true; set false only for controlled experiments
-  blocklist: ["secret"]    # additional keywords merged into router.sensitivity_keywords
-  pii_confidence_threshold: 0.80
-  pii_pattern_thresholds:
-    ip_address: 0.50
+routing:
+  sensitivity:
+    pii_detection: true              # default true; set false only for controlled experiments
+    keywords: ["secret"]             # additional keywords for sensitivity detection
+    pii_confidence_threshold: 0.80
+    pii_pattern_thresholds:
+      ip_address: 0.50
 ```
 
 ### Output Filtering
@@ -220,22 +237,37 @@ Deploy multiple specialized agents from a single config, each with its own role,
 
 ```yaml
 name: my-workforce
-deployment:
-  agent_runtime: openclaw
-defaults:
-  models:
-    cloud: "anthropic/claude-sonnet-4-5"
-    local: "ollama/llama3.3:8b"
+
+models:
+  cloud: "anthropic/claude-sonnet-4-5"
+  local: "ollama/llama3.3:8b"
+  credential_mode: env
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
+
 agents:
   - name: ops-supervisor
     role: supervisor
-    channels: [{ type: channel, channels: ["1234567890123456789"] }]  # Discord channel ID
-    routing: { budget_daily: 5.00 }
+    supervises: [research-agent]
+    routing:
+      budget:
+        daily_limit: 5.00
+        fallback_model: "ollama/llama3.3:8b"
   - name: research-agent
     role: research-agent
-    channels: [{ type: channel, channels: ["1234567890123456791"] }]  # Discord channel ID
-    routing: { budget_daily: 10.00 }
-runtime:
+    routing:
+      budget:
+        daily_limit: 10.00
+        fallback_model: "ollama/llama3.3:8b"
+
+openclaw:
+  default:
+    channels:
+      discord:
+        enabled: true
+        token: "${DISCORD_BOT_TOKEN}"
+
+local_model:
   engine: "ollama"
   location: "container"
   model: "llama3.3:8b"
@@ -297,13 +329,28 @@ Full `clawforce.yaml` reference:
 
 ```yaml
 name: my-agent
-role: supervisor                 # Valid roles: research-agent | process-automator | supervisor (defaults to supervisor when omitted)
+
+# Agents array — at least one agent required. No separate "single-agent" mode.
+agents:
+  - name: my-agent
+    role: supervisor             # inbox-analyst | research-agent | process-automator | supervisor
+    supervises: [helper-agent]   # Required for supervisor role; list of agent names this agent manages
+    openclaw: default            # Optional; required when multiple openclaw instances are defined
+    routing:                     # Optional per-agent routing overrides
+      budget:
+        daily_limit: 5.00
+        fallback_model: "sglang/qwen3-32b"
+      rules:
+        - condition: high_complexity
+          model: "anthropic/claude-sonnet-4-5"
+  - name: helper-agent
+    role: research-agent
 
 deployment:
   agent_runtime: openclaw        # Agent orchestration runtime target (defaults to openclaw)
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "sglang/qwen3-32b"
   credential_mode: env           # env | auth_profile
   provider_keys:
@@ -312,16 +359,22 @@ models:
 gateway:
   bind: loopback                 # loopback | lan
 
-router:
-  enabled: true
+routing:
   rules: []                      # Custom routing rules (pii_detected | low_complexity | medium_complexity | high_complexity | domain_* | over_budget)
-  sensitivity_keywords: []       # Router-level sensitivity keywords (merged with sensitivity.blocklist)
   priority:                      # Dimension evaluation order
     - policy
     - sensitivity
     - cost
     - domain
     - complexity
+  sensitivity:
+    keywords: []                 # Sensitivity keywords for PII-adjacent content
+    pii_detection: true          # Enabled by default
+    pii_confidence_threshold: 0.80  # 0.0..1.0 global minimum confidence
+    pii_pattern_thresholds:      # Optional per-pattern overrides
+      ip_address: 0.50
+  policy:
+    default_tier: internal       # restricted | confidential | internal | public
   budget:
     daily_limit: 10.00
     fallback_model: "sglang/qwen3-32b"
@@ -331,15 +384,11 @@ router:
     retry_attempts: 2            # 0..5, default 2
     retry_delay_ms: 500          # 0..5000, default 500
 
-sensitivity:
-  pii_detection: true            # Enabled by default
-  blocklist: []                  # Additional keywords merged into router.sensitivity_keywords
-  pii_confidence_threshold: 0.80 # 0.0..1.0 global minimum confidence
-  pii_pattern_thresholds:        # Optional per-pattern overrides
-    ip_address: 0.50
-
 compliance:
   enabled: true
+  frameworks:                    # Optional compliance framework profiles
+    - hipaa
+    - gdpr
 
 dashboard:
   enabled: true
@@ -349,7 +398,7 @@ dashboard:
     username: admin
     password: "your-secure-password"  # Min 8 characters
 
-runtime:
+local_model:
   engine: "sglang"               # Runtime engine id (e.g. ollama | sglang | vllm)
   location: "container"          # container | host
   model: "qwen3-32b"
@@ -383,38 +432,28 @@ alerts:
       username: ""
       password: ""
 
-# --- Multi-Agent Mode (alternative to role/models above) ---
-# defaults:
-#   models:
-#     cloud: "anthropic/claude-sonnet-4-5"
-#     local: "ollama/llama3.3:8b"
-#     credential_mode: env
-#     provider_keys:
-#       anthropic: "${ANTHROPIC_API_KEY}"
-# agents:
-#   - name: ops-supervisor
-#     role: supervisor
-#     channels:
-#       - type: channel
-#         channels: ["1234567890123456789"]  # Discord channel ID
-#     routing:
-#       budget_daily: 5.00
-# See docs/MULTI-AGENT.md for full multi-agent reference.
-
-# Direct OpenClaw config passthrough
+# Named map of OpenClaw configs — each key is an instance name, value is raw passthrough.
+# Use multiple named instances to run agents against different OpenClaw configurations.
 openclaw:
-  channels:
-    discord:
-      enabled: true
-      token: "${DISCORD_BOT_TOKEN}"
-  agents:
-    defaults:
-      tools:
-        sandbox: { enabled: true }
-        browser: { enabled: true, headless: true }
+  default:
+    channels:
+      discord:
+        enabled: true
+        token: "${DISCORD_BOT_TOKEN}"
+    agents:
+      defaults:
+        tools:
+          sandbox: { enabled: true }
+          browser: { enabled: true, headless: true }
+  # Example: a second instance for a different channel setup
+  # research:
+  #   channels:
+  #     slack:
+  #       enabled: true
+  #       token: "${SLACK_BOT_TOKEN}"
 ```
 
-NOTE: `deployment.agent_runtime` selects the agent orchestration target (currently `openclaw`). `runtime.engine` is separate and selects the model-serving engine (`ollama`, `sglang`, `vllm`) for local inference.
+NOTE: `deployment.agent_runtime` selects the agent orchestration target (currently `openclaw`). `local_model.engine` is separate and selects the model-serving engine (`ollama`, `sglang`, `vllm`) for local inference.
 
 ---
 

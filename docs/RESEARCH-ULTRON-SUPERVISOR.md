@@ -70,7 +70,6 @@ Relevant files:
 
 Relevant files:
 - `src/config/generate-openclaw.ts`
-- `src/config/validate-openclaw-bindings.ts`
 - `src/plugins/manifest-schema.ts`
 
 ## Desired End State
@@ -222,7 +221,6 @@ Implement Ultron in six phases, each with explicit verification gates and no beh
 ### Changes Required
 
 **Files**:
-- `src/config/validate-openclaw-bindings.ts`
 - `src/plugins/manifest-schema.ts`
 - Integration test suite additions
 

@@ -115,7 +115,8 @@ agents:
       - type: channel
         channels: ["#inbox-triage", "#action-items"]
     routing:
-      budget_daily: 5.00
+      budget:
+        daily_limit: 5.00
     skills:
       - inbox-triage
       - thread-summarizer
@@ -126,7 +127,8 @@ agents:
       - type: channel
         channels: ["#research-requests"]
     routing:
-      budget_daily: 8.00
+      budget:
+        daily_limit: 8.00
       rules:
         - condition: domain_research
           model: anthropic/claude-sonnet-4-5
@@ -141,7 +143,8 @@ agents:
         channels: ["#ai-ops"]
     supervises: [inbox-analyst, research-agent]
     routing:
-      budget_daily: 3.00
+      budget:
+        daily_limit: 3.00
 
 # OpenClaw passthrough (still works — merged last)
 openclaw:
@@ -157,8 +160,8 @@ openclaw:
    const AgentConfigSchema = z.object({
      name: z.string().min(1),
      role: z.enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"]),
-     channels: z.array(ChannelAssignmentSchema).optional(),
-     routing: AgentRoutingOverrideSchema.optional(),
+     channels: z.array(ChannelSchema).optional(),
+     routing: RoutingConfigSchema.optional(),
      skills: z.array(z.string()).optional(),
      supervises: z.array(z.string()).optional(),
      sandbox: z.object({ mode: z.enum(["off", "non-main", "all"]) }).optional(),

@@ -222,7 +222,6 @@ Plan review completed before implementation. The following blockers are now expl
 ### Changes Required
 
 **Files**:
-- `src/config/validate-openclaw-bindings.ts`
 - `src/plugins/manifest-schema.ts`
 - integration tests for generated config and plugin loading
 
