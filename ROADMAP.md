@@ -92,74 +92,67 @@ The alternative (one gateway container per agent) adds complexity for port alloc
 # clawforce.yaml — multi-agent config
 name: acme-ai-workforce
 
-# Shared defaults (inherited by all agents unless overridden)
-defaults:
-  models:
-    - name: qwen
-      id: sglang/qwen3-32b
-      type: local
-      engine:
-        runtime: sglang
-        location: container
-        model: qwen3-32b
-        gpu: nvidia
-    - name: claude
-      id: anthropic/claude-sonnet-4-5
-      type: cloud
-      api_key: "${ANTHROPIC_API_KEY}"
-  router:
-    priority: [policy, sensitivity, cost, domain, complexity]
-    sensitivity_keywords: [confidential, restricted]
-  dashboard:
-    enabled: true
-    auth:
-      username: admin
-      password: ${DASHBOARD_PASSWORD}
+models:
+  - name: qwen
+    id: "sglang/qwen3-32b"
+    type: local
+    engine:
+      runtime: sglang
+      location: container
+      model: qwen3-32b
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 
-# Agent definitions
 agents:
   - name: inbox-analyst
     role: inbox-analyst
-    channels:
-      - type: channel
-        channels: ["#inbox-triage", "#action-items"]
     routing:
       budget:
         daily_limit: 5.00
-    skills:
-      - inbox-triage
-      - thread-summarizer
 
   - name: research-agent
     role: research-agent
-    channels:
-      - type: channel
-        channels: ["#research-requests"]
     routing:
       budget:
         daily_limit: 8.00
       rules:
         - condition: domain_research
           model: "claude"
-    skills:
-      - web-research
-      - report-generation
 
   - name: ultron
     role: supervisor
-    channels:
-      - type: channel
-        channels: ["#ai-ops"]
     supervises: [inbox-analyst, research-agent]
     routing:
       budget:
         daily_limit: 3.00
 
-# OpenClaw passthrough (still works — merged last)
+routing:
+  priority: [policy, sensitivity, cost, domain, complexity]
+  sensitivity:
+    keywords: [confidential, restricted]
+
+dashboard:
+  enabled: true
+  auth:
+    enabled: true
+    username: admin
+    password: "${DASHBOARD_PASSWORD}"
+
+# Named OpenClaw instances — passthrough config merged last
 openclaw:
-  tools:
-    sandbox:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
+        token: "${DISCORD_BOT_TOKEN}"
+    agents:
+      defaults:
+        tools:
+          sandbox:
+            enabled: true
 ```
 
 **Schema Changes** (`src/config/types.ts`):

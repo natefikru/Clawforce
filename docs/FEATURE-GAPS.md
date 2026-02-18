@@ -115,12 +115,22 @@ routing:
 **Proposed Solution**:
 ```yaml
 models:
-  overrides:
-    anthropic/claude-sonnet-4-5:
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+    overrides:                         # Proposed new field
       temperature: 0.7
       max_tokens: 4096
       timeout_seconds: 120
-    sglang/qwen3-32b:
+  - name: qwen
+    id: "sglang/qwen3-32b"
+    type: local
+    engine:
+      runtime: sglang
+      location: container
+      model: qwen3-32b
+    overrides:
       temperature: 0.3
       max_tokens: 2048
       timeout_seconds: 60
@@ -215,10 +225,26 @@ models:
 
 ```yaml
 models:
-  local:
-    endpoints:
-      - http://gpu-server-1:11434
-      - http://gpu-server-2:11434
+  - name: llama-1
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: host
+      host_url: "http://gpu-server-1:11434"
+      model: "llama3.3:8b"
+  - name: llama-2
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: host
+      host_url: "http://gpu-server-2:11434"
+      model: "llama3.3:8b"
+
+# Proposed: add load_balancing config
+routing:
+  load_balancing:
     strategy: round-robin  # or least-connections
 ```
 
