@@ -301,10 +301,13 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
     routerConfig.priority = config.routing.priority;
   }
   if (config.routing?.budget) {
+    const fallbackName = config.routing.budget.fallback_model;
     routerConfig.budget = {
       dailyLimit: config.routing.budget.daily_limit,
       perRequestCap: config.routing.budget.per_request_cap,
-      fallbackModel: config.routing.budget.fallback_model,
+      fallbackModel: fallbackName
+        ? (findModelByName(config, fallbackName)?.id ?? fallbackName)
+        : undefined,
     };
   }
   if (config.routing?.health_check) {
@@ -342,7 +345,7 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
           ? { perRequestCap: agent.routing.budget.per_request_cap }
           : {}),
         ...(agent.routing.budget.fallback_model
-          ? { fallbackModel: agent.routing.budget.fallback_model }
+          ? { fallbackModel: findModelByName(config, agent.routing.budget.fallback_model)?.id ?? agent.routing.budget.fallback_model }
           : {}),
       };
       hasAgentBudgets = true;

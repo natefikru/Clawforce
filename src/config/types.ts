@@ -548,5 +548,5 @@ export function getFirstLocalModel(config: ClawforceConfig): ModelEntry | undefi
 }
 
 export function getLocalModelEngine(config: ClawforceConfig): ModelEngine | undefined {
-  return config.models?.find((m) => m.engine)?.engine;
+  return config.models?.find((m) => m.type === "local" && m.engine)?.engine;
 }
