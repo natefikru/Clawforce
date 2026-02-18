@@ -1,13 +1,17 @@
 name: "runtime-e2e-cloud"
-role: "inbox-analyst"
+
+agents:
+  - name: "inbox-analyst"
+    role: "inbox-analyst"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   credential_mode: "env"
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
@@ -15,8 +19,7 @@ models:
 gateway:
   bind: "loopback"
 
-router:
-  enabled: true
+routing: {}
 
 compliance:
   enabled: true

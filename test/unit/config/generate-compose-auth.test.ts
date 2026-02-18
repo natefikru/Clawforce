@@ -6,13 +6,15 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    role: "inbox-analyst",
+    agents: [{ name: "test-agent", role: "inbox-analyst" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
+      default: {
+        channels: {
+          discord: { enabled: true },
+        },
       },
     },
-    models: { primary: "anthropic/claude-sonnet-4-5" },
+    models: { cloud: "anthropic/claude-sonnet-4-5" },
     ...overrides,
   };
 }

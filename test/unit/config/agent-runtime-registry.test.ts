@@ -30,6 +30,18 @@ describe("agent runtime adapter registry", () => {
     expect(outputs[0].filename).toBe("openclaw.json");
   });
 
+  it("produces multiple files for named openclaw instances", () => {
+    const config = parseConfig(join(fixturesDir, "v2/multi-agent-supervisor.yaml"));
+    const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config));
+    const outputs = adapter.generate(config);
+
+    // Should have one file per openclaw instance
+    const filenames = outputs.map((o) => o.filename).sort();
+    expect(filenames).toContain("openclaw-support-instance.json");
+    expect(filenames).toContain("openclaw-research-instance.json");
+    expect(outputs.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("keeps openclaw adapter output identical to direct generator output", () => {
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
     const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config));
@@ -38,7 +50,11 @@ describe("agent runtime adapter registry", () => {
 
     expect(openclawOutput).toBeDefined();
     const actual = openclawOutput?.content as unknown as Record<string, unknown>;
-    const expected = generateOpenClawConfig(config) as unknown as Record<string, unknown>;
+
+    // generateOpenClawConfig returns Map<string, OpenClawConfig>
+    const expectedMap = generateOpenClawConfig(config);
+    const expected = expectedMap.get("default") as unknown as Record<string, unknown>;
+    expect(expected).toBeDefined();
 
     const actualHooks = actual.hooks as Record<string, unknown> | undefined;
     const expectedHooks = expected.hooks as Record<string, unknown> | undefined;

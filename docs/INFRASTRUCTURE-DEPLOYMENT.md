@@ -137,7 +137,7 @@ Gateway and local model inference on the same machine. Best cost-performance for
 Run OpenClaw + Clawforce in Docker, but run local inference natively on macOS (for example, Ollama with Apple Silicon acceleration).
 
 ```yaml
-runtime:
+local_model:
   engine: "ollama"
   location: "host"
   host_url: "http://host.docker.internal:11434"
@@ -145,8 +145,8 @@ runtime:
 ```
 
 **How this works:**
-1. `runtime.location: host` tells Clawforce not to launch an inference sidecar container.
-2. The gateway routes local-model traffic to `runtime.host_url`.
+1. `local_model.location: host` tells Clawforce not to launch an inference sidecar container.
+2. The gateway routes local-model traffic to `local_model.host_url`.
 3. Router/compliance/PII invariants remain unchanged.
 
 **Best for:** Home-lab and small-team deployments that want local privacy and lower recurring cloud spend without managing Linux GPU servers.
@@ -197,7 +197,7 @@ Gateway on a cheap VPS, local models on a dedicated GPU server. Most flexible an
 
 **Connection:** Configure remote inference directly in `clawforce.yaml`:
 ```yaml
-runtime:
+local_model:
   engine: "ollama" # or sglang / vllm
   location: "host"
   host_url: "http://gpu-lb.internal:11434"

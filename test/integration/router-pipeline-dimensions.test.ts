@@ -217,21 +217,24 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
     });
 
     it("applies policy tiers from generated plugin config (snake_case config input)", () => {
-      const generated = generateOpenClawConfig({
+      const results = generateOpenClawConfig({
         name: "policy-mapping-check",
-        role: "inbox-analyst",
+        agents: [{ name: "test-agent", role: "inbox-analyst" }],
         models: {
-          primary: "anthropic/claude-sonnet-4-5",
+          cloud: "anthropic/claude-sonnet-4-5",
           credential_mode: "env",
           provider_keys: { anthropic: "${ANTHROPIC_API_KEY}" },
         },
-        router: { enabled: true },
-        policy: {
-          default_tier: "public",
-          channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+        routing: {
+          policy: {
+            default_tier: "public",
+            channels: [{ channel_id: "C_SECURE", tier: "restricted" }],
+          },
         },
+        openclaw: { default: {} },
       });
 
+      const generated = results.get("default")!;
       const pluginConfig = generated.plugins?.entries?.["clawforce-router"]
         ?.config as Record<string, unknown>;
       const pipeline = createPluginPipeline(pluginConfig);

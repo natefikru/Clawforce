@@ -1,4 +1,4 @@
-name: "invalid-dupes"
+name: "minimal"
 
 models:
   cloud: "anthropic/claude-sonnet-4-5"
@@ -6,8 +6,6 @@ models:
     anthropic: "${ANTHROPIC_API_KEY}"
 
 agents:
-  - name: my-agent
-    role: inbox-analyst
   - name: my-agent
     role: research-agent
 

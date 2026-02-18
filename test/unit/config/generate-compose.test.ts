@@ -6,14 +6,16 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    role: "inbox-analyst",
+    agents: [{ name: "test-agent", role: "inbox-analyst" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
+      default: {
+        channels: {
+          discord: { enabled: true },
+        },
       },
     },
     models: {
-      primary: "anthropic/claude-sonnet-4-5",
+      cloud: "anthropic/claude-sonnet-4-5",
       provider_keys: {
         anthropic: "sk-ant-test123",
       },
@@ -27,7 +29,7 @@ describe("generateCompose", () => {
     expect(() =>
       generateCompose(
         makeConfig({
-          runtime: {
+          local_model: {
             engine: "custom-engine",
             location: "container",
             model: "custom/model",
@@ -126,7 +128,7 @@ describe("generateCompose", () => {
       generateCompose(
         makeConfig({
           models: {
-            primary: "anthropic/claude-sonnet-4-5",
+            cloud: "anthropic/claude-sonnet-4-5",
             credential_mode: "auth_profile",
             auth_profile: "corp-prod",
           },
@@ -167,7 +169,7 @@ describe("generateCompose", () => {
     const parsed = parseYaml(
       generateCompose(
         makeConfig({
-          runtime: {
+          local_model: {
             engine: "ollama",
             location: "container",
             model: "llama3.3:8b",
@@ -185,7 +187,7 @@ describe("generateCompose", () => {
     const parsed = parseYaml(
       generateCompose(
         makeConfig({
-          runtime: {
+          local_model: {
             engine: "ollama",
             location: "container",
             model: "llama3.3:8b",
@@ -203,7 +205,7 @@ describe("generateCompose", () => {
     const parsed = parseYaml(
       generateCompose(
         makeConfig({
-          runtime: {
+          local_model: {
             engine: "ollama",
             location: "container",
             model: "llama3.3:8b",
@@ -221,7 +223,7 @@ describe("generateCompose", () => {
     const parsed = parseYaml(
       generateCompose(
         makeConfig({
-          runtime: {
+          local_model: {
             engine: "ollama",
             location: "container",
             model: "llama3.3:8b",
@@ -238,7 +240,7 @@ describe("generateCompose", () => {
       generateCompose(
         makeConfig({
           name: "acme",
-          runtime: {
+          local_model: {
             engine: "ollama",
             location: "container",
             model: "llama3.3:8b",
@@ -315,7 +317,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "container",
               model: "llama3.3:8b",
@@ -337,7 +339,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "container",
               model: "llama3.3:8b",
@@ -355,7 +357,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "container",
               model: "llama3.3:8b",
@@ -373,7 +375,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "container",
               model: "llama3.3:8b",
@@ -390,7 +392,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "container",
               model: "llama3.3:8b",
@@ -413,7 +415,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "container",
               model: "llama3.3:8b",
@@ -432,7 +434,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "container",
               model: "llama3.3:8b",
@@ -447,10 +449,10 @@ describe("generateCompose", () => {
     });
   });
 
-  describe("runtime: SGLang", () => {
+  describe("local_model: SGLang", () => {
     it("should generate sglang service with correct image", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "sglang", location: "container", model: "qwen3-32b", port: 30000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "sglang", location: "container", model: "qwen3-32b", port: 30000 } })),
       );
       expect(parsed.services.sglang).toBeDefined();
       expect(parsed.services.sglang.image).toBe("lmsysorg/sglang:latest");
@@ -458,7 +460,7 @@ describe("generateCompose", () => {
 
     it("should set correct sglang command", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "sglang", location: "container", model: "qwen3-32b", port: 30000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "sglang", location: "container", model: "qwen3-32b", port: 30000 } })),
       );
       const cmd = parsed.services.sglang.command;
       expect(cmd).toContain("--model-path");
@@ -469,7 +471,7 @@ describe("generateCompose", () => {
 
     it("should include quantization flag when specified", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "sglang", location: "container", model: "qwen3-32b", quantization: "fp16", port: 30000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "sglang", location: "container", model: "qwen3-32b", quantization: "fp16", port: 30000 } })),
       );
       const cmd = parsed.services.sglang.command;
       expect(cmd).toContain("--quantization");
@@ -478,21 +480,21 @@ describe("generateCompose", () => {
 
     it("should map port correctly", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "sglang", location: "container", model: "qwen3-32b", port: 31000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "sglang", location: "container", model: "qwen3-32b", port: 31000 } })),
       );
       expect(parsed.services.sglang.ports).toContain("31000:31000");
     });
 
     it("should add nvidia GPU config", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "sglang", location: "container", model: "qwen3-32b", gpu: "nvidia", port: 30000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "sglang", location: "container", model: "qwen3-32b", gpu: "nvidia", port: 30000 } })),
       );
       expect(parsed.services.sglang.deploy.resources.reservations.devices[0].driver).toBe("nvidia");
     });
 
     it("should set SGLANG_HOST env var on gateway", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "sglang", location: "container", model: "qwen3-32b", port: 30000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "sglang", location: "container", model: "qwen3-32b", port: 30000 } })),
       );
       expect(parsed.services["openclaw-gateway"].environment).toContain("SGLANG_HOST=http://sglang:30000");
     });
@@ -501,7 +503,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "sglang",
               location: "host",
               host_url: "http://host.docker.internal:30000",
@@ -519,10 +521,10 @@ describe("generateCompose", () => {
     });
   });
 
-  describe("runtime: vLLM", () => {
+  describe("local_model: vLLM", () => {
     it("should generate vllm service with correct image", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "vllm", location: "container", model: "qwen3-32b", port: 8000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "vllm", location: "container", model: "qwen3-32b", port: 8000 } })),
       );
       expect(parsed.services.vllm).toBeDefined();
       expect(parsed.services.vllm.image).toBe("vllm/vllm-openai:latest");
@@ -530,7 +532,7 @@ describe("generateCompose", () => {
 
     it("should set correct vllm command", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "vllm", location: "container", model: "qwen3-32b", port: 8000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "vllm", location: "container", model: "qwen3-32b", port: 8000 } })),
       );
       const cmd = parsed.services.vllm.command;
       expect(cmd).toContain("--model");
@@ -541,7 +543,7 @@ describe("generateCompose", () => {
 
     it("should set VLLM_HOST env var on gateway", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "vllm", location: "container", model: "qwen3-32b", port: 8000 } })),
+        generateCompose(makeConfig({ local_model: { engine: "vllm", location: "container", model: "qwen3-32b", port: 8000 } })),
       );
       expect(parsed.services["openclaw-gateway"].environment).toContain("VLLM_HOST=http://vllm:8000");
     });
@@ -550,7 +552,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "vllm",
               location: "host",
               host_url: "http://host.docker.internal:8000",
@@ -568,10 +570,10 @@ describe("generateCompose", () => {
     });
   });
 
-  describe("runtime: ollama (via runtime section)", () => {
+  describe("local_model: ollama (via local_model section)", () => {
     it("should fall back to ollama service when engine is ollama", () => {
       const parsed = parseYaml(
-        generateCompose(makeConfig({ runtime: { engine: "ollama", location: "container", model: "llama3.3:8b", port: 11434 } })),
+        generateCompose(makeConfig({ local_model: { engine: "ollama", location: "container", model: "llama3.3:8b", port: 11434 } })),
       );
       expect(parsed.services.ollama).toBeDefined();
       expect(parsed.services.ollama.image).toBe("ollama/ollama:latest");
@@ -581,7 +583,7 @@ describe("generateCompose", () => {
       const parsed = parseYaml(
         generateCompose(
           makeConfig({
-            runtime: {
+            local_model: {
               engine: "ollama",
               location: "host",
               host_url: "http://host.docker.internal:11434",

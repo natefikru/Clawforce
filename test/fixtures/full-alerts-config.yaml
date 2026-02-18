@@ -1,19 +1,23 @@
 name: "alerts-config"
-role: "inbox-analyst"
+
+agents:
+  - name: "test-agent"
+    role: "inbox-analyst"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
 
-router:
-  enabled: true
+routing:
+  rules: []
 
 alerts:
   enabled: true

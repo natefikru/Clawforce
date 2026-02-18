@@ -36,18 +36,19 @@ describe("Deploy Lifecycle Integration", () => {
     // 1. Parse config
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
     expect(config.name).toBe("test-corp");
-    expect(config.role).toBe("inbox-analyst");
+    expect(config.agents[0].role).toBe("inbox-analyst");
 
     // 2. Setup workspace
     setupWorkspace(config, testDeployDir);
 
-    // 3. Generate openclaw.json
-    const openclawConfig = generateOpenClawConfig(config);
+    // 3. Generate openclaw.json (returns Map<string, OpenClawConfig>)
+    const openclawConfigMap = generateOpenClawConfig(config);
     const { writeFileSync, mkdirSync } = require("node:fs");
     mkdirSync(join(testDeployDir, "config"), { recursive: true });
+    const defaultConfig = openclawConfigMap.get("default");
     writeFileSync(
       join(testDeployDir, "config", "openclaw.json"),
-      JSON.stringify(openclawConfig, null, 2),
+      JSON.stringify(defaultConfig, null, 2),
       "utf8",
     );
 
@@ -68,7 +69,7 @@ describe("Deploy Lifecycle Integration", () => {
     expect(existsSync(join(testDeployDir, "workspace/AGENTS.md"))).toBe(true);
     expect(
       existsSync(
-        join(testDeployDir, "workspace/skills/inbox-analyst/SKILL.md"),
+        join(testDeployDir, "workspace/test-agent/skills/inbox-analyst/SKILL.md"),
       ),
     ).toBe(true);
     expect(existsSync(join(testDeployDir, "config/openclaw.json"))).toBe(true);
@@ -129,12 +130,13 @@ describe("Deploy Lifecycle Integration", () => {
       const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
       setupWorkspace(config, minDir);
 
-      const openclawConfig = generateOpenClawConfig(config);
+      const openclawConfigMap = generateOpenClawConfig(config);
       const { writeFileSync, mkdirSync } = require("node:fs");
       mkdirSync(join(minDir, "config"), { recursive: true });
+      const defaultConfig = openclawConfigMap.get("default");
       writeFileSync(
         join(minDir, "config", "openclaw.json"),
-        JSON.stringify(openclawConfig, null, 2),
+        JSON.stringify(defaultConfig, null, 2),
         "utf8",
       );
 
@@ -150,7 +152,7 @@ describe("Deploy Lifecycle Integration", () => {
       // Verify research-agent skill
       expect(
         existsSync(
-          join(minDir, "workspace/skills/research-agent/SKILL.md"),
+          join(minDir, "workspace/research-agent/skills/research-agent/SKILL.md"),
         ),
       ).toBe(true);
 
@@ -171,9 +173,10 @@ describe("Deploy Lifecycle Integration", () => {
 
       const { writeFileSync, mkdirSync } = require("node:fs");
       mkdirSync(join(hostDir, "config"), { recursive: true });
+      const hostConfigMap = generateOpenClawConfig(config);
       writeFileSync(
         join(hostDir, "config", "openclaw.json"),
-        JSON.stringify(generateOpenClawConfig(config), null, 2),
+        JSON.stringify(hostConfigMap.get("default"), null, 2),
         "utf8",
       );
       writeFileSync(join(hostDir, "docker-compose.yml"), generateCompose(config), "utf8");

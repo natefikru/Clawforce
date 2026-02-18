@@ -3,11 +3,9 @@ name: "test-no-defaults"
 agents:
   - name: inbox-analyst
     role: inbox-analyst
-    channels:
-      - type: channel
-        channels: ["#inbox"]
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true

@@ -6,13 +6,15 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    role: "inbox-analyst",
+    agents: [{ name: "test-agent", role: "inbox-analyst" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
+      default: {
+        channels: {
+          discord: { enabled: true },
+        },
       },
     },
-    models: { primary: "anthropic/claude-sonnet-4-5" },
+    models: { cloud: "anthropic/claude-sonnet-4-5" },
     ...overrides,
   };
 }
@@ -60,9 +62,10 @@ describe("resolveProfile", () => {
 
 describe("capability profiles in config generation", () => {
   it("should apply minimal profile to generated config", () => {
-    const result = generateOpenClawConfig(
+    const results = generateOpenClawConfig(
       makeConfig({ capabilities: "minimal" }),
     );
+    const result = results.get("default")!;
     const defaults = result.agents.defaults as Record<string, unknown>;
     const tools = defaults.tools as Record<string, unknown>;
     expect(tools.web_search).toEqual({ enabled: true });
@@ -70,9 +73,10 @@ describe("capability profiles in config generation", () => {
   });
 
   it("should apply full profile to generated config", () => {
-    const result = generateOpenClawConfig(
+    const results = generateOpenClawConfig(
       makeConfig({ capabilities: "full" }),
     );
+    const result = results.get("default")!;
     const defaults = result.agents.defaults as Record<string, unknown>;
     const tools = defaults.tools as Record<string, unknown>;
     expect(tools.sandbox).toEqual({ enabled: true });
@@ -80,26 +84,30 @@ describe("capability profiles in config generation", () => {
   });
 
   it("should not add tools when no profile specified", () => {
-    const result = generateOpenClawConfig(makeConfig());
+    const results = generateOpenClawConfig(makeConfig());
+    const result = results.get("default")!;
     const defaults = result.agents.defaults as Record<string, unknown>;
     expect(defaults.tools).toBeUndefined();
   });
 
   it("should allow passthrough to override profile", () => {
-    const result = generateOpenClawConfig(
+    const results = generateOpenClawConfig(
       makeConfig({
         capabilities: "minimal",
         openclaw: {
-          agents: {
-            defaults: {
-              tools: {
-                browser: { enabled: true, headless: true },
+          default: {
+            agents: {
+              defaults: {
+                tools: {
+                  browser: { enabled: true, headless: true },
+                },
               },
             },
           },
         },
       }),
     );
+    const result = results.get("default")!;
     const defaults = result.agents.defaults as Record<string, unknown>;
     const tools = defaults.tools as Record<string, unknown>;
     // Passthrough overrides minimal profile's browser: false
@@ -109,26 +117,29 @@ describe("capability profiles in config generation", () => {
   });
 
   it("should preserve model config when profile is applied", () => {
-    const result = generateOpenClawConfig(
+    const results = generateOpenClawConfig(
       makeConfig({ capabilities: "standard" }),
     );
+    const result = results.get("default")!;
     expect(result.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
   });
 
   it("should preserve channel config when profile is applied", () => {
-    const result = generateOpenClawConfig(
+    const results = generateOpenClawConfig(
       makeConfig({ capabilities: "full" }),
     );
+    const result = results.get("default")!;
     expect((result.channels as Record<string, unknown>).discord).toBeDefined();
   });
 
-  it("should work with both profile and router config", () => {
-    const result = generateOpenClawConfig(
+  it("should work with both profile and routing config", () => {
+    const results = generateOpenClawConfig(
       makeConfig({
         capabilities: "standard",
-        router: { enabled: true },
+        routing: {},
       }),
     );
+    const result = results.get("default")!;
     expect(result.plugins?.entries?.["clawforce-router"]).toBeDefined();
     const defaults = result.agents.defaults as Record<string, unknown>;
     const tools = defaults.tools as Record<string, unknown>;

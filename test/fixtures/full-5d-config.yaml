@@ -1,25 +1,22 @@
 name: "five-dim-test"
-role: "inbox-analyst"
+
+agents:
+  - name: "test-agent"
+    role: "inbox-analyst"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
 
-sensitivity:
-  pii_detection: true
-  pii_confidence_threshold: 0.80
-  pii_pattern_thresholds:
-    ip_address: 0.50
-
-router:
-  enabled: true
+routing:
   rules:
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"
@@ -33,9 +30,14 @@ router:
       model: "anthropic/claude-sonnet-4-5"
     - condition: "over_budget"
       model: "ollama/llama3.3:8b"
-  sensitivity_keywords:
-    - "password"
-    - "secret"
+  sensitivity:
+    keywords:
+      - "password"
+      - "secret"
+    pii_detection: true
+    pii_confidence_threshold: 0.80
+    pii_pattern_thresholds:
+      ip_address: 0.50
   health_check:
     enabled: true
     interval_seconds: 10
@@ -50,7 +52,7 @@ router:
     daily_limit: 10.00
     fallback_model: "ollama/llama3.3:8b"
 
-runtime:
+local_model:
   engine: "sglang"
   model: "qwen3-32b"
   gpu: "nvidia"
@@ -59,10 +61,9 @@ runtime:
 
 compliance:
   enabled: true
-
-compliance_frameworks:
-  - "hipaa"
-  - "pci-dss"
+  frameworks:
+    - "hipaa"
+    - "pci-dss"
 
 dashboard:
   enabled: true

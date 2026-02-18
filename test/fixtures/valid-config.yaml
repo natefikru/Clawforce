@@ -1,13 +1,17 @@
 name: "test-corp"
-role: "inbox-analyst"
+
+agents:
+  - name: "test-agent"
+    role: "inbox-analyst"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
@@ -18,13 +22,14 @@ approval:
     - "browser"
     - "message.send"
 
-sensitivity:
-  blocklist:
-    - "ssn"
-    - "credit card"
-  pii_detection: true
+routing:
+  sensitivity:
+    keywords:
+      - "ssn"
+      - "credit card"
+    pii_detection: true
 
-runtime:
+local_model:
   engine: "ollama"
   location: "container"
   model: "llama3.3:8b"

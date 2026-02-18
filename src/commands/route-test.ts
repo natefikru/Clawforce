@@ -37,11 +37,11 @@ export function routeTest(
 ): RouteTestResult {
   const config = parseConfig(configPath);
 
-  const defaultModel = config.models?.primary ?? config.defaults?.models.cloud ?? "anthropic/claude-sonnet-4-5";
-  const routerConfig = config.router;
+  const defaultModel = config.models.cloud;
+  const routerConfig = config.routing;
 
   const rules: RoutingRule[] = routerConfig?.rules ?? getDefaultRules();
-  const sensitivityKeywords = routerConfig?.sensitivity_keywords ?? [];
+  const sensitivityKeywords = routerConfig?.sensitivity?.keywords ?? [];
   const priority = routerConfig?.priority as RoutingDimension[] | undefined;
 
   // Dimension 1: PII
@@ -58,11 +58,11 @@ export function routeTest(
 
   // Dimension 4: Budget
   let budgetTracker: BudgetTracker | null = null;
-  if (routerConfig?.budget) {
+  if (config.routing?.budget) {
     const budgetConfig: BudgetConfig = {
-      dailyLimit: routerConfig.budget.daily_limit,
-      perRequestCap: routerConfig.budget.per_request_cap,
-      fallbackModel: routerConfig.budget.fallback_model,
+      dailyLimit: config.routing.budget.daily_limit,
+      perRequestCap: config.routing.budget.per_request_cap,
+      fallbackModel: config.routing.budget.fallback_model,
     };
     budgetTracker = new BudgetTracker(budgetConfig);
   }

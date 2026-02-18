@@ -1,30 +1,14 @@
-name: "runtime-e2e-hybrid"
-
-agents:
-  - name: "inbox-analyst"
-    role: "inbox-analyst"
-
-openclaw:
-  default:
-    channels:
-      discord:
-        enabled: true
+name: "full-routing"
 
 models:
   cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
-  credential_mode: "env"
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
 
-local_model:
-  engine: "ollama"
-  location: "host"
-  host_url: "http://host.docker.internal:11434"
-  model: "llama3.3:8b"
-
-gateway:
-  bind: "loopback"
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
 
 routing:
   rules:
@@ -34,11 +18,22 @@ routing:
       model: "ollama/llama3.3:8b"
     - condition: "high_complexity"
       model: "anthropic/claude-sonnet-4-5"
+    - condition: "domain_code"
+      model: "openai/gpt-4o"
     - condition: "over_budget"
       model: "ollama/llama3.3:8b"
+  priority: [policy, sensitivity, cost, domain, complexity]
   budget:
-    daily_limit: 10
+    daily_limit: 10.00
     fallback_model: "ollama/llama3.3:8b"
+  sensitivity:
+    keywords: ["password", "secret"]
+    pii_detection: true
+    pii_confidence_threshold: 0.80
+    pii_pattern_thresholds:
+      ip_address: 0.50
+  policy:
+    default_tier: internal
   health_check:
     enabled: true
     interval_seconds: 10
@@ -47,14 +42,29 @@ routing:
     failover_policy: "failover-safe"
     failure_threshold: 3
     recovery_threshold: 2
-    retry_attempts: 1
+    retry_attempts: 2
     retry_delay_ms: 500
+
+local_model:
+  engine: "sglang"
+  model: "qwen3-32b"
+  gpu: "nvidia"
+  quantization: "fp16"
+  port: 30000
 
 compliance:
   enabled: true
+  frameworks:
+    - "hipaa"
+    - "pci-dss"
 
 dashboard:
   enabled: true
-  port: 4413
   auth:
     enabled: false
+
+openclaw:
+  default:
+    channels:
+      discord:
+        enabled: true

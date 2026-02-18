@@ -9,13 +9,15 @@ const testDir = join(import.meta.dirname, "../../tmp/workspace-test");
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    role: "inbox-analyst",
+    agents: [{ name: "test-agent", role: "inbox-analyst" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
+      default: {
+        channels: {
+          discord: { enabled: true },
+        },
       },
     },
-    models: { primary: "anthropic/claude-sonnet-4-5" },
+    models: { cloud: "anthropic/claude-sonnet-4-5" },
     approval: {
       mode: "hybrid",
       require_approval_for: ["browser", "message.send"],
@@ -48,7 +50,7 @@ describe("setupWorkspace", () => {
 
   it("should copy role SKILL.md to workspace", () => {
     setupWorkspace(makeConfig(), testDir);
-    const skillPath = join(testDir, "workspace/skills/inbox-analyst/SKILL.md");
+    const skillPath = join(testDir, "workspace/test-agent/skills/inbox-analyst/SKILL.md");
     expect(existsSync(skillPath)).toBe(true);
     const content = readFileSync(skillPath, "utf8");
     expect(content).toContain("Inbox Analyst");
@@ -63,7 +65,7 @@ describe("setupWorkspace", () => {
   });
 
   it("should not copy cron jobs for research-agent (no cron file)", () => {
-    setupWorkspace(makeConfig({ role: "research-agent" }), testDir);
+    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "research-agent" }] }), testDir);
     const cronPath = join(testDir, "data/cron/jobs.json");
     expect(existsSync(cronPath)).toBe(false);
   });
@@ -103,31 +105,34 @@ describe("setupWorkspace", () => {
   });
 
   it("should work for research-agent role", () => {
-    setupWorkspace(makeConfig({ role: "research-agent" }), testDir);
-    const skillPath = join(testDir, "workspace/skills/research-agent/SKILL.md");
+    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "research-agent" }] }), testDir);
+    const skillPath = join(testDir, "workspace/test-agent/skills/research-agent/SKILL.md");
     expect(existsSync(skillPath)).toBe(true);
     const content = readFileSync(skillPath, "utf8");
     expect(content).toContain("Research Agent");
   });
 
   it("should work for process-automator role", () => {
-    setupWorkspace(makeConfig({ role: "process-automator" }), testDir);
+    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "process-automator" }] }), testDir);
     const skillPath = join(
       testDir,
-      "workspace/skills/process-automator/SKILL.md",
+      "workspace/test-agent/skills/process-automator/SKILL.md",
     );
     expect(existsSync(skillPath)).toBe(true);
   });
 
   it("should copy supervisor role template into workspace", () => {
-    setupWorkspace(makeConfig({ role: "supervisor" }), testDir);
-    const skillPath = join(testDir, "workspace/skills/supervisor/SKILL.md");
+    setupWorkspace(makeConfig({
+      agents: [{ name: "test-agent", role: "supervisor", supervises: ["other-agent"] },
+               { name: "other-agent", role: "inbox-analyst" }],
+    }), testDir);
+    const skillPath = join(testDir, "workspace/test-agent/skills/supervisor/SKILL.md");
     expect(existsSync(skillPath)).toBe(true);
   });
 
-  it("should copy router plugin when router is enabled", () => {
+  it("should copy router plugin when routing is configured", () => {
     setupWorkspace(
-      makeConfig({ router: { enabled: true } }),
+      makeConfig({ routing: { rules: [] } }),
       testDir,
     );
     const pluginDir = join(testDir, "config/extensions/clawforce-router");
@@ -151,9 +156,9 @@ describe("setupWorkspace", () => {
     expect(existsSync(join(pluginDir, "index.ts"))).toBe(false);
   });
 
-  it("should not copy router plugin when explicitly disabled", () => {
+  it("should not copy router plugin when routing is absent", () => {
     setupWorkspace(
-      makeConfig({ router: { enabled: false } }),
+      makeConfig(),
       testDir,
     );
     const pluginDir = join(testDir, "config/extensions/clawforce-router");
@@ -161,7 +166,7 @@ describe("setupWorkspace", () => {
   });
 
   it("should copy discovered plugins when plugin config is not present", () => {
-    setupWorkspace(makeConfig(), testDir);
+    setupWorkspace(makeConfig({ routing: {} }), testDir);
     const extensionsDir = join(testDir, "config/extensions");
     expect(existsSync(extensionsDir)).toBe(true);
     expect(existsSync(join(extensionsDir, "clawforce-router"))).toBe(true);
@@ -172,7 +177,7 @@ describe("setupWorkspace", () => {
     setupWorkspace(
       makeConfig({
         models: {
-          primary: "anthropic/claude-sonnet-4-5",
+          cloud: "anthropic/claude-sonnet-4-5",
           credential_mode: "auth_profile",
           auth_profile: "corp-prod",
         },
@@ -191,13 +196,11 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
   return {
     name: "test-workforce",
     agents: [
-      { name: "inbox-analyst", role: "inbox-analyst", channels: [{ type: "channel", channels: ["111111111111111111"] }] },
-      { name: "research-agent", role: "research-agent", channels: [{ type: "channel", channels: ["222222222222222222"] }] },
+      { name: "inbox-analyst", role: "inbox-analyst" },
+      { name: "research-agent", role: "research-agent" },
     ],
-    defaults: {
-      models: { cloud: "anthropic/claude-sonnet-4-5" },
-    },
-    openclaw: { channels: { discord: { enabled: true } } },
+    models: { cloud: "anthropic/claude-sonnet-4-5" },
+    openclaw: { default: { channels: { discord: { enabled: true } } } },
     ...overrides,
   };
 }
@@ -233,15 +236,13 @@ describe("setupWorkspace — multi-agent", () => {
     expect(agentsMd).toContain("Clawforce AI Workforce");
   });
 
-  it("should write auth-profile metadata from defaults.models for multi-agent", () => {
+  it("should write auth-profile metadata from models for multi-agent", () => {
     setupWorkspace(
       makeMultiAgentConfig({
-        defaults: {
-          models: {
-            cloud: "anthropic/claude-sonnet-4-5",
-            credential_mode: "auth_profile",
-            auth_profile: "corp-prod",
-          },
+        models: {
+          cloud: "anthropic/claude-sonnet-4-5",
+          credential_mode: "auth_profile",
+          auth_profile: "corp-prod",
         },
       }),
       testDir,

@@ -23,11 +23,7 @@ export async function deployCommand(configPath: string): Promise<void> {
   // 1. Parse and validate config
   logger.step("Parsing config...");
   const config = parseConfig(configPath);
-  if (config.role) {
-    logger.success(`Config valid: ${config.name} (${config.role})`);
-  } else {
-    logger.success(`Config valid: ${config.name} (${config.agents!.length} agents)`);
-  }
+  logger.success(`Config valid: ${config.name} (${config.agents.length} agents)`);
 
   // 2. Create deployment directory
   const deployDir = resolve(`./clawforce-${config.name}`);
@@ -102,14 +98,14 @@ export async function deployCommand(configPath: string): Promise<void> {
   }
 
   // 8. Run runtime pre-start hooks for managed container runtimes
-  if (config.runtime?.location !== "host") {
-    const runtimeEngine = config.runtime?.engine ?? "sglang";
+  if (config.local_model?.location !== "host") {
+    const runtimeEngine = config.local_model?.engine ?? "sglang";
     const adapter = getRuntimeEngineAdapter(runtimeEngine);
     if (adapter.preGatewayStart) {
       await adapter.preGatewayStart({
         configName: config.name,
         deployDir,
-        runtime: config.runtime ?? {
+        runtime: config.local_model ?? {
           engine: runtimeEngine,
           location: "container",
           model: "qwen3-32b",
@@ -173,11 +169,7 @@ export async function deployCommand(configPath: string): Promise<void> {
 
   logger.header("Deployment successful!");
   logger.info(`Gateway:          ws://127.0.0.1:18789`);
-  if (config.role) {
-    logger.info(`Role:             ${config.role}`);
-  } else {
-    logger.info(`Agents:           ${config.agents!.map((a) => `${a.name} (${a.role})`).join(", ")}`);
-  }
+  logger.info(`Agents:           ${config.agents.map((a) => `${a.name} (${a.role})`).join(", ")}`);
   logger.info(`Deploy dir:       ${deployDir}`);
   if (config.dashboard && config.dashboard.enabled !== false) {
     const port = config.dashboard.port ?? 3000;

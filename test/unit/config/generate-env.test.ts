@@ -5,14 +5,16 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    role: "inbox-analyst",
+    agents: [{ name: "test-agent", role: "inbox-analyst" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
+      default: {
+        channels: {
+          discord: { enabled: true },
+        },
       },
     },
     models: {
-      primary: "anthropic/claude-sonnet-4-5",
+      cloud: "anthropic/claude-sonnet-4-5",
       provider_keys: {
         anthropic: "sk-ant-test123",
       },
@@ -26,7 +28,7 @@ describe("generateEnv", () => {
     expect(() =>
       generateEnv(
         makeConfig({
-          runtime: {
+          local_model: {
             engine: "custom-engine",
             location: "host",
             model: "custom/model",
@@ -58,7 +60,7 @@ describe("generateEnv", () => {
     const env = generateEnv(
       makeConfig({
         models: {
-          primary: "anthropic/claude-sonnet-4-5",
+          cloud: "anthropic/claude-sonnet-4-5",
           credential_mode: "auth_profile",
           auth_profile: "corp-prod",
           provider_keys: {
@@ -75,7 +77,7 @@ describe("generateEnv", () => {
     const env = generateEnv(
       makeConfig({
         models: {
-          primary: "anthropic/claude-sonnet-4-5",
+          cloud: "anthropic/claude-sonnet-4-5",
           credential_mode: "env",
           auth_profile: "corp-prod",
           provider_keys: {
@@ -90,7 +92,7 @@ describe("generateEnv", () => {
 
   it("should handle missing provider keys", () => {
     const env = generateEnv(
-      makeConfig({ models: { primary: "anthropic/claude-sonnet-4-5" } }),
+      makeConfig({ models: { cloud: "anthropic/claude-sonnet-4-5" } }),
     );
     expect(env).not.toContain("ANTHROPIC_API_KEY=");
   });
@@ -155,7 +157,7 @@ describe("generateEnv", () => {
   it("should export OLLAMA_HOST for host runtime mode", () => {
     const env = generateEnv(
       makeConfig({
-        runtime: {
+        local_model: {
           engine: "ollama",
           location: "host",
           host_url: "http://host.docker.internal:11434",
@@ -171,7 +173,7 @@ describe("generateEnv", () => {
   it("should default host runtime endpoint when host_url is omitted", () => {
     const env = generateEnv(
       makeConfig({
-        runtime: {
+        local_model: {
           engine: "sglang",
           location: "host",
           model: "qwen3-32b",

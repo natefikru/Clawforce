@@ -4,14 +4,12 @@ import { ClawforceConfigSchema } from "../../../src/config/types.js";
 function baseConfig(alertsOverride?: Record<string, unknown>) {
   return {
     name: "alerts-test",
-    role: "research-agent",
+    agents: [{ name: "test-agent", role: "research-agent" }],
     openclaw: {
-      channels: {
-        discord: { enabled: true },
-      },
+      default: { channels: { discord: { enabled: true } } },
     },
     models: {
-      primary: "anthropic/claude-sonnet-4-5",
+      cloud: "anthropic/claude-sonnet-4-5",
       provider_keys: {
         anthropic: "sk-ant-test123",
       },

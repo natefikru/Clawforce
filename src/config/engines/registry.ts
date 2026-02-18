@@ -34,13 +34,13 @@ export interface RuntimeContainerService {
 interface RuntimeAdapterBuildInput {
   containerPrefix: string;
   configName: string;
-  runtime: NonNullable<ClawforceConfig["runtime"]>;
+  runtime: NonNullable<ClawforceConfig["local_model"]>;
 }
 
 export interface RuntimePreGatewayStartInput {
   configName: string;
   deployDir: string;
-  runtime: NonNullable<ClawforceConfig["runtime"]>;
+  runtime: NonNullable<ClawforceConfig["local_model"]>;
   exec: (command: string, args: string[], options?: { cwd?: string }) => Promise<string>;
   logger: {
     step: (message: string) => void;
@@ -54,7 +54,7 @@ export interface RuntimeEngineAdapter {
   hostEnvVarName: string;
   defaultPort: number;
   healthProbePaths: string[];
-  resolveHostRuntimeUrl: (runtime: NonNullable<ClawforceConfig["runtime"]>) => string;
+  resolveHostRuntimeUrl: (runtime: NonNullable<ClawforceConfig["local_model"]>) => string;
   buildContainerService: (input: RuntimeAdapterBuildInput) => RuntimeContainerService;
   preGatewayStart?: (input: RuntimePreGatewayStartInput) => Promise<void>;
 }

@@ -227,17 +227,20 @@ Create `clawforce.yaml`:
 
 ```yaml
 name: my-agent
-role: inbox-analyst
 
 deployment:
   agent_runtime: openclaw
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   credential_mode: env
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"
+
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
 
 gateway:
   bind: loopback
@@ -248,8 +251,7 @@ dashboard:
   auth:
     enabled: false
 
-router:
-  enabled: true
+routing:
   rules:
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"
@@ -260,12 +262,13 @@ compliance:
   enabled: true
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
-      token: "${DISCORD_BOT_TOKEN}"
+  default:
+    channels:
+      discord:
+        enabled: true
+        token: "${DISCORD_BOT_TOKEN}"
 
-runtime:
+local_model:
   engine: "ollama"
   location: "container"
   model: "llama3.3:8b"
@@ -282,7 +285,7 @@ clawforce deploy -c clawforce.yaml
 
 This generates a Docker Compose stack (OpenClaw gateway + optional Ollama sidecar + dashboard) and starts it.
 
-NOTE: `credential_mode: env` currently maps `models.provider_keys.anthropic` to `ANTHROPIC_API_KEY` in generated `.env`/Compose wiring. If your primary model is not Anthropic, prefer `credential_mode: auth_profile` or configure provider credentials via OpenClaw passthrough and your own secret delivery path.
+NOTE: `credential_mode: env` currently maps `models.provider_keys.anthropic` to `ANTHROPIC_API_KEY` in generated `.env`/Compose wiring. If your cloud model is not Anthropic, prefer `credential_mode: auth_profile` or configure provider credentials via OpenClaw passthrough and your own secret delivery path.
 
 ---
 
@@ -290,23 +293,25 @@ NOTE: `credential_mode: env` currently maps `models.provider_keys.anthropic` to 
 
 ```yaml
 name: my-agent                         # Deployment name (used for directory, container names)
-role: inbox-analyst                    # inbox-analyst | research-agent | process-automator | supervisor (defaults to supervisor when omitted)
 
 deployment:
   agent_runtime: openclaw              # Agent orchestration runtime target (defaults to openclaw)
 
 models:
-  primary: "anthropic/claude-sonnet-4-5"  # Default cloud model
-  local: "sglang/qwen3-32b"              # Default local model (for PII/budget fallback)
+  cloud: "anthropic/claude-sonnet-4-5"    # Cloud model (required)
+  local: "sglang/qwen3-32b"              # Local model (for PII/budget fallback)
   credential_mode: env                    # env | auth_profile
   provider_keys:
     anthropic: "${ANTHROPIC_API_KEY}"     # Used when credential_mode=env
 
+agents:                                # At least one agent required
+  - name: inbox-analyst
+    role: inbox-analyst                # inbox-analyst | research-agent | process-automator | supervisor
+
 gateway:
   bind: loopback                       # loopback (default, safe) | lan (exposes to network)
 
-router:
-  enabled: true
+routing:                               # Global routing config
   rules:                               # Custom routing rules (first match wins per dimension)
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"      # Must be a local model — cloud models are overridden
@@ -322,10 +327,13 @@ router:
       model: "anthropic/claude-sonnet-4-5"
     - condition: "over_budget"
       model: "ollama/llama3.3:8b"
-  sensitivity_keywords:                # Additional blocklist words that trigger PII routing (merged with sensitivity.blocklist)
-    - "password"
-    - "secret"
-    - "confidential"
+  sensitivity:                         # Sensitivity config (PII detection + keywords)
+    keywords:                          # Blocklist words that trigger PII routing
+      - "password"
+      - "secret"
+      - "confidential"
+      - "internal-only"
+    pii_detection: true                # Enabled by default; disable only for controlled experiments
   priority:                            # Dimension evaluation order
     - policy                           # Channel/user data classification
     - sensitivity                      # PII detection
@@ -335,6 +343,8 @@ router:
   budget:
     daily_limit: 10.00                 # USD per day
     fallback_model: "sglang/qwen3-32b" # Used when over budget
+  policy:
+    default_tier: internal
   health_check:
     enabled: true
     interval_seconds: 10               # How often to probe
@@ -346,18 +356,12 @@ router:
     retry_attempts: 2                  # Retries per probe (0 disables)
     retry_delay_ms: 500                # Delay between retries
 
-sensitivity:
-  pii_detection: true                  # Enabled by default; disable only for controlled experiments
-  blocklist:                           # Merged into router.sensitivity_keywords
-    - "internal-only"
-
-compliance:
+compliance:                            # Compliance config (enabled + frameworks)
   enabled: true
-
-compliance_frameworks:                 # Regulatory framework profiles
-  - "hipaa"
-  - "pci-dss"
-  # Also available: gdpr, ccpa, sox
+  frameworks:                          # Regulatory framework profiles
+    - "hipaa"
+    - "pci-dss"
+    # Also available: gdpr, ccpa, sox
 
 dashboard:
   enabled: true
@@ -367,7 +371,7 @@ dashboard:
     username: admin
     password: "your-secure-password"   # Min 8 characters
 
-runtime:                               # Runtime configuration (managed sidecar or host endpoint)
+local_model:                           # Local model runtime (managed sidecar or host endpoint)
   engine: "sglang"                     # ollama | sglang | vllm
   location: "container"                # container (managed sidecar) | host (external runtime)
   host_url: "http://host.docker.internal:30000"  # Required/recommended for location=host
@@ -406,20 +410,21 @@ alerts:
       username: ""
       password: ""
 
-# OpenClaw config passthrough — anything here merges into the generated openclaw.json
+# OpenClaw config passthrough — named map of instances, each merged into generated openclaw.json
 openclaw:
-  channels:
-    discord:
-      enabled: true
-      token: "${DISCORD_BOT_TOKEN}"
-  agents:
-    defaults:
-      tools:
-        sandbox: { enabled: true }
-        browser: { enabled: true, headless: true }
+  default:                             # Instance name (at least one required)
+    channels:
+      discord:
+        enabled: true
+        token: "${DISCORD_BOT_TOKEN}"
+    agents:
+      defaults:
+        tools:
+          sandbox: { enabled: true }
+          browser: { enabled: true, headless: true }
 ```
 
-NOTE: `deployment.agent_runtime` chooses the orchestration backend for agent execution. `runtime.engine` is independent and controls the local model-serving runtime used by the router and gateway.
+NOTE: `deployment.agent_runtime` chooses the orchestration backend for agent execution. `local_model.engine` is independent and controls the local model-serving runtime used by the router and gateway.
 
 ### Valid Routing Conditions
 
@@ -532,15 +537,17 @@ Simplest setup. All inference goes to cloud APIs. No GPU needed.
 
 ```yaml
 name: my-agent
-role: inbox-analyst
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   credential_mode: env
-  api_key: "${ANTHROPIC_API_KEY}"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
 gateway:
   bind: loopback
-router:
-  enabled: true
+routing:
   # No PII rules needed — no local model to route to
   # PII safety invariant will BLOCK requests with PII since no local model exists
 compliance:
@@ -549,6 +556,8 @@ dashboard:
   enabled: true
   auth:
     enabled: false
+openclaw:
+  default: {}
 ```
 
 **Important**: Without a local model configured, any request containing PII will be **blocked** (not routed to cloud). This is by design — the safety invariant prevents PII from reaching cloud providers. If you need to handle PII, you need a local model.
@@ -559,16 +568,18 @@ Recommended for production. PII stays local, complex tasks go cloud.
 
 ```yaml
 name: my-agent
-role: inbox-analyst
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   credential_mode: env
-  api_key: "${ANTHROPIC_API_KEY}"
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
 gateway:
   bind: loopback
-router:
-  enabled: true
+routing:
   rules:
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"
@@ -582,7 +593,7 @@ router:
   health_check:
     enabled: true
     failover_policy: failover-safe
-runtime:
+local_model:
   engine: "ollama"
   location: "container"
   model: "llama3.3:8b"
@@ -596,6 +607,8 @@ dashboard:
     enabled: true
     username: admin
     password: "${DASHBOARD_PASSWORD}"
+openclaw:
+  default: {}
 ```
 
 ### Mac Mini-First Hybrid (Recommended for local/private setups)
@@ -604,19 +617,21 @@ Run OpenClaw + Clawforce in Docker, but keep Ollama native on macOS for best App
 
 ```yaml
 name: my-agent
-role: inbox-analyst
 models:
-  primary: "anthropic/claude-sonnet-4-5"
+  cloud: "anthropic/claude-sonnet-4-5"
   local: "ollama/llama3.3:8b"
   credential_mode: env
-  api_key: "${ANTHROPIC_API_KEY}"
-runtime:
+  provider_keys:
+    anthropic: "${ANTHROPIC_API_KEY}"
+agents:
+  - name: inbox-analyst
+    role: inbox-analyst
+local_model:
   engine: "ollama"
   location: "host"
   host_url: "http://host.docker.internal:11434"
   model: "llama3.3:8b"
-router:
-  enabled: true
+routing:
   rules:
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"
@@ -633,11 +648,13 @@ dashboard:
     enabled: true
     username: admin
     password: "${DASHBOARD_PASSWORD}"
+openclaw:
+  default: {}
 ```
 
 Notes:
 - Start your host runtime first (for example, Ollama on macOS).
-- `runtime.location: host` means Clawforce will not create a runtime sidecar container.
+- `local_model.location: host` means Clawforce will not create a runtime sidecar container.
 - The gateway still enforces the same PII routing invariants.
 
 ### Split Architecture (Production)
@@ -647,7 +664,7 @@ Gateway on a cheap VPS, GPU inference on a separate server.
 Use host runtime mode and point the runtime endpoint at your remote inference server or load balancer:
 
 ```yaml
-runtime:
+local_model:
   engine: "ollama"                     # or sglang / vllm
   location: "host"
   host_url: "http://gpu-server.internal:11434"
@@ -725,16 +742,17 @@ The routing engine is rule-based with dimension prioritization. To add custom be
 
 1. **Add sensitivity keywords** for domain-specific PII:
    ```yaml
-   router:
-     sensitivity_keywords:
-       - "patient_id"
-       - "mrn"        # Medical Record Number
-       - "account_number"
+   routing:
+     sensitivity:
+       keywords:
+         - "patient_id"
+         - "mrn"        # Medical Record Number
+         - "account_number"
    ```
 
 2. **Customize dimension priority** — e.g., always check budget before domain:
    ```yaml
-   router:
+   routing:
      priority: [policy, sensitivity, cost, complexity, domain]
    ```
 
@@ -751,19 +769,20 @@ The compliance profile system (`compliance-profiles.ts`) defines per-framework r
 
 ### OpenClaw Passthrough
 
-Anything under the `openclaw:` key in `clawforce.yaml` is merged directly into the generated `openclaw.json`. This gives you full access to OpenClaw's configuration without Clawforce needing to understand every OpenClaw option:
+The `openclaw:` key in `clawforce.yaml` is a named map of OpenClaw instances. Each instance's config is merged directly into the generated `openclaw.json`. This gives you full access to OpenClaw's configuration without Clawforce needing to understand every OpenClaw option:
 
 ```yaml
 openclaw:
-  agents:
-    defaults:
-      tools:
-        sandbox: { enabled: true }
-        browser: { enabled: true, headless: true }
-        memory: { enabled: true }
-      model:
-        temperature: 0.7
-        maxTokens: 4096
+  default:
+    agents:
+      defaults:
+        tools:
+          sandbox: { enabled: true }
+          browser: { enabled: true, headless: true }
+          memory: { enabled: true }
+        model:
+          temperature: 0.7
+          maxTokens: 4096
 ```
 
 ---

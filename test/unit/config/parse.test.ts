@@ -19,33 +19,37 @@ describe("parseConfig", () => {
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
 
     expect(config.name).toBe("test-corp");
-    expect(config.role).toBe("inbox-analyst");
-    expect(config.openclaw?.channels).toEqual({
-      discord: { enabled: true },
+    expect(config.agents[0].role).toBe("inbox-analyst");
+    expect(config.openclaw.default).toEqual({
+      channels: {
+        discord: { enabled: true },
+      },
     });
-    expect(config.models!.primary).toBe("anthropic/claude-sonnet-4-5");
-    expect(config.models!.local).toBe("ollama/llama3.3:8b");
-    expect(config.models!.provider_keys?.anthropic).toBe("sk-ant-test123");
+    expect(config.models.cloud).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.models.local).toBe("ollama/llama3.3:8b");
+    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-test123");
     expect(config.approval?.mode).toBe("hybrid");
     expect(config.approval?.require_approval_for).toEqual([
       "browser",
       "message.send",
     ]);
-    expect(config.runtime?.engine).toBe("ollama");
-    expect(config.runtime?.location).toBe("container");
-    expect(config.runtime?.model).toBe("llama3.3:8b");
+    expect(config.local_model?.engine).toBe("ollama");
+    expect(config.local_model?.location).toBe("container");
+    expect(config.local_model?.model).toBe("llama3.3:8b");
   });
 
   it("should parse a minimal config", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
 
     expect(config.name).toBe("minimal");
-    expect(config.role).toBe("research-agent");
-    expect(config.openclaw?.channels).toEqual({
-      discord: { enabled: true },
+    expect(config.agents[0].role).toBe("research-agent");
+    expect(config.openclaw.default).toEqual({
+      channels: {
+        discord: { enabled: true },
+      },
     });
     expect(config.approval).toBeUndefined();
-    expect(config.runtime).toBeUndefined();
+    expect(config.local_model).toBeUndefined();
   });
 
   it("should parse deployment.agent_runtime when explicitly configured", () => {
@@ -75,7 +79,7 @@ describe("parseConfig", () => {
   it("should expand environment variables", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-expanded";
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
-    expect(config.models!.provider_keys?.anthropic).toBe("sk-ant-expanded");
+    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-expanded");
   });
 
   it("should throw on missing env var", () => {
@@ -91,15 +95,17 @@ describe("parseConfig", () => {
     ).toThrow("Config validation failed");
   });
 
-  it("should allow supervisor role in single-agent mode", () => {
-    const config = parseConfig(join(fixturesDir, "invalid-single-agent-supervisor.yaml"));
-    expect(config.role).toBe("supervisor");
+  it("should reject supervisor agent without supervises list", () => {
+    expect(() =>
+      parseConfig(join(fixturesDir, "invalid-single-agent-supervisor.yaml")),
+    ).toThrow("must define a non-empty supervises list");
   });
 
-  it("should default role to supervisor when role and agents are omitted", () => {
+  it("should parse a config with supervisor agent that has supervises list", () => {
     const config = parseConfig(join(fixturesDir, "valid-default-role-supervisor.yaml"));
-    expect(config.role).toBe("supervisor");
-    expect(config.agents).toBeUndefined();
+    const supervisor = config.agents.find((a) => a.role === "supervisor");
+    expect(supervisor).toBeDefined();
+    expect(supervisor?.supervises).toEqual(["worker"]);
   });
 
   it("should reject invalid channel ID", () => {
@@ -114,14 +120,13 @@ describe("parseConfig", () => {
     );
   });
 
-  it("should parse Phase 1 config with router, compliance, and dashboard", () => {
+  it("should parse Phase 1 config with routing, compliance, and dashboard", () => {
     const config = parseConfig(join(fixturesDir, "full-phase1-config.yaml"));
 
-    expect(config.router?.enabled).toBe(true);
-    expect(config.router?.rules).toHaveLength(3);
-    expect(config.router?.rules?.[0].condition).toBe("pii_detected");
-    expect(config.router?.rules?.[0].model).toBe("ollama/llama3.3:8b");
-    expect(config.router?.sensitivity_keywords).toEqual(["password", "secret"]);
+    expect(config.routing?.rules).toHaveLength(3);
+    expect(config.routing?.rules?.[0].condition).toBe("pii_detected");
+    expect(config.routing?.rules?.[0].model).toBe("ollama/llama3.3:8b");
+    expect(config.routing?.sensitivity?.keywords).toEqual(["password", "secret"]);
 
     expect(config.compliance?.enabled).toBe(true);
 
@@ -130,39 +135,39 @@ describe("parseConfig", () => {
   });
 
   it("should allow config without Phase 1 fields", () => {
-    const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
-    expect(config.router).toBeUndefined();
+    const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
+    expect(config.routing).toBeUndefined();
     expect(config.compliance).toBeUndefined();
     expect(config.dashboard).toBeUndefined();
   });
 
-  it("should parse runtime config with SGLang engine", () => {
+  it("should parse local_model config with SGLang engine", () => {
     const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
-    expect(config.runtime?.engine).toBe("sglang");
-    expect(config.runtime?.location).toBe("container");
-    expect(config.runtime?.model).toBe("qwen3-32b");
-    expect(config.runtime?.gpu).toBe("nvidia");
-    expect(config.runtime?.quantization).toBe("fp16");
-    expect(config.runtime?.port).toBe(30000);
+    expect(config.local_model?.engine).toBe("sglang");
+    expect(config.local_model?.location).toBe("container");
+    expect(config.local_model?.model).toBe("qwen3-32b");
+    expect(config.local_model?.gpu).toBe("nvidia");
+    expect(config.local_model?.quantization).toBe("fp16");
+    expect(config.local_model?.port).toBe(30000);
   });
 
-  it("should parse runtime host mode for ollama", () => {
+  it("should parse local_model host mode for ollama", () => {
     const config = parseConfig(join(fixturesDir, "runtime-host-ollama.yaml"));
-    expect(config.runtime?.engine).toBe("ollama");
-    expect(config.runtime?.location).toBe("host");
-    expect(config.runtime?.host_url).toBe("http://host.docker.internal:11434");
+    expect(config.local_model?.engine).toBe("ollama");
+    expect(config.local_model?.location).toBe("host");
+    expect(config.local_model?.host_url).toBe("http://host.docker.internal:11434");
   });
 
-  it("should parse compliance_frameworks array", () => {
+  it("should parse compliance.frameworks array", () => {
     const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
-    expect(config.compliance_frameworks).toEqual(["hipaa", "pci-dss"]);
+    expect(config.compliance?.frameworks).toEqual(["hipaa", "pci-dss"]);
   });
 
   it("should parse sensitivity threshold configuration", () => {
     const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
-    expect(config.sensitivity?.pii_detection).toBe(true);
-    expect(config.sensitivity?.pii_confidence_threshold).toBe(0.8);
-    expect(config.sensitivity?.pii_pattern_thresholds).toEqual({
+    expect(config.routing?.sensitivity?.pii_detection).toBe(true);
+    expect(config.routing?.sensitivity?.pii_confidence_threshold).toBe(0.8);
+    expect(config.routing?.sensitivity?.pii_pattern_thresholds).toEqual({
       ip_address: 0.5,
     });
   });
@@ -170,7 +175,8 @@ describe("parseConfig", () => {
   it("should carry parsed sensitivity thresholds into generated router config", () => {
     const parsed = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
     const generated = generateOpenClawConfig(parsed);
-    const routerConfig = generated.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
+    const defaultInstance = generated.get("default")!;
+    const routerConfig = defaultInstance.plugins?.entries?.["clawforce-router"].config as Record<string, unknown>;
 
     expect(routerConfig.piiThreshold).toBe(0.8);
     expect(routerConfig.piiPatternThresholds).toEqual({
@@ -178,10 +184,10 @@ describe("parseConfig", () => {
     });
   });
 
-  it("should allow config without runtime", () => {
+  it("should allow config without local_model", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
-    expect(config.runtime).toBeUndefined();
-    expect(config.compliance_frameworks).toBeUndefined();
+    expect(config.local_model).toBeUndefined();
+    expect(config.compliance?.frameworks).toBeUndefined();
   });
 
   it("should reject unsupported queue failover policy", () => {
@@ -224,8 +230,8 @@ describe("parseConfig", () => {
 
   it("should parse auth_profile credential mode when profile is provided", () => {
     const config = parseConfig(join(fixturesDir, "valid-auth-profile-config.yaml"));
-    expect(config.models!.credential_mode).toBe("auth_profile");
-    expect(config.models!.auth_profile).toBe("corp-prod");
+    expect(config.models.credential_mode).toBe("auth_profile");
+    expect(config.models.auth_profile).toBe("corp-prod");
   });
 
   it("should reject auth_profile credential mode without profile", () => {
@@ -242,9 +248,9 @@ describe("parseConfig", () => {
 
   it("should allow env credential mode without provider key for local models", () => {
     const config = parseConfig(join(fixturesDir, "valid-env-local-without-api-key.yaml"));
-    expect(config.models!.credential_mode).toBe("env");
-    expect(config.models!.provider_keys).toBeUndefined();
-    expect(config.models!.primary).toBe("ollama/llama3.3:8b");
+    expect(config.models.credential_mode).toBe("env");
+    expect(config.models.provider_keys).toBeUndefined();
+    expect(config.models.cloud).toBe("ollama/llama3.3:8b");
   });
 });
 
@@ -261,31 +267,23 @@ describe("parseConfig — multi-agent", () => {
     const config = parseConfig(join(fixturesDir, "multi-agent-basic.yaml"));
 
     expect(config.name).toBe("test-workforce");
-    expect(config.role).toBeUndefined();
-    expect(config.models).toBeUndefined();
     expect(config.agents).toHaveLength(2);
-    expect(config.agents![0].name).toBe("inbox-analyst");
-    expect(config.agents![0].role).toBe("inbox-analyst");
-    expect(config.agents![0].routing?.budget_daily).toBe(5.0);
-    expect(config.agents![1].name).toBe("research-agent");
-    expect(config.agents![1].routing?.rules).toHaveLength(1);
-    expect(config.defaults?.models.cloud).toBe("anthropic/claude-sonnet-4-5");
-    expect(config.defaults?.models.local).toBe("ollama/llama3.3:8b");
+    expect(config.agents[0].name).toBe("inbox-analyst");
+    expect(config.agents[0].role).toBe("inbox-analyst");
+    expect(config.agents[0].routing?.budget?.daily_limit).toBe(5.0);
+    expect(config.agents[1].name).toBe("research-agent");
+    expect(config.agents[1].routing?.rules).toHaveLength(1);
+    expect(config.models.cloud).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.models.local).toBe("ollama/llama3.3:8b");
   });
 
   it("should parse a multi-agent config with supervisor references", () => {
     const config = parseConfig(join(fixturesDir, "multi-agent-supervisor.yaml"));
 
     expect(config.agents).toHaveLength(3);
-    const ultron = config.agents!.find((a) => a.name === "ultron");
+    const ultron = config.agents.find((a) => a.name === "ultron");
     expect(ultron?.role).toBe("supervisor");
     expect(ultron?.supervises).toEqual(["inbox-analyst", "research-agent"]);
-  });
-
-  it("should reject config with both role and agents", () => {
-    expect(() =>
-      parseConfig(join(fixturesDir, "invalid-multi-agent-both-role-and-agents.yaml")),
-    ).toThrow("EITHER 'role' (single-agent) OR 'agents' (multi-agent)");
   });
 
   it("should reject config with duplicate agent names", () => {
@@ -306,17 +304,15 @@ describe("parseConfig — multi-agent", () => {
     ).toThrow("must define a non-empty supervises list");
   });
 
-  it("should reject multi-agent config without defaults.models.cloud", () => {
+  it("should reject multi-agent config without models.cloud", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-multi-agent-no-defaults.yaml")),
-    ).toThrow("defaults.models.cloud is required");
+    ).toThrow("Config validation failed");
   });
 
-  it("should preserve backward compatibility with single-agent configs", () => {
+  it("should parse single-agent configs with agents array", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
-    expect(config.role).toBe("research-agent");
-    expect(config.models!.primary).toBe("anthropic/claude-sonnet-4-5");
-    expect(config.agents).toBeUndefined();
-    expect(config.defaults).toBeUndefined();
+    expect(config.agents[0].role).toBe("research-agent");
+    expect(config.models.cloud).toBe("anthropic/claude-sonnet-4-5");
   });
 });
