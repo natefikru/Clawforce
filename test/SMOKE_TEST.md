@@ -7,7 +7,7 @@ Run this checklist after each build to validate the deployment works end-to-end.
 - [ ] Docker Desktop running
 - [ ] Anthropic API key set (`export ANTHROPIC_API_KEY="sk-ant-..."`)
 - [ ] At least one connector configured in `openclaw.channels`
-- [ ] If using cloud model + `credential_mode: env`, ensure `models.api_key` is configured
+- [ ] If using cloud models, ensure each cloud model entry has an `api_key` or a top-level `auth_profile` is set
 
 ## Test Steps
 
