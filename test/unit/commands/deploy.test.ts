@@ -53,20 +53,20 @@ describe("deployCommand", () => {
     expect(existsSync(configPath)).toBe(true);
 
     const config = JSON.parse(readFileSync(configPath, "utf8"));
-    expect(config.agents.defaults.model.primary).toBe(
-      "anthropic/claude-sonnet-4-5",
-    );
+    // valid-config.yaml has no models — OpenClaw owns the default model
+    expect(config.agents.defaults).toBeDefined();
     expect(config.channels.discord.enabled).toBe(true);
   });
 
-  it("should generate openclaw.json when deployment.agent_runtime=openclaw", async () => {
+  it("should generate openclaw.json when agent runtime is openclaw", async () => {
     const runtimeDeployDir = join(process.cwd(), "clawforce-minimal-agent-runtime");
     await deployCommand(join(fixturesDir, "valid-deployment-agent-runtime.yaml"));
     const configPath = join(runtimeDeployDir, "config", "openclaw.json");
     expect(existsSync(configPath)).toBe(true);
 
     const config = JSON.parse(readFileSync(configPath, "utf8"));
-    expect(config.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
+    // No models defined — OpenClaw owns the default model
+    expect(config.agents.defaults).toBeDefined();
     expect(config.channels.discord.enabled).toBe(true);
 
     if (existsSync(runtimeDeployDir)) {
@@ -90,7 +90,7 @@ describe("deployCommand", () => {
 
     const env = readFileSync(envPath, "utf8");
     expect(env).toContain("GATEWAY_TOKEN=");
-    expect(env).toContain("ANTHROPIC_API_KEY=sk-ant-test123");
+    // valid-config.yaml has no cloud models — no provider API keys in .env
   });
 
   it("should setup workspace with SKILL.md and AGENTS.md", async () => {
@@ -126,24 +126,18 @@ describe("deployCommand", () => {
     ).rejects.toThrow("Container failed to start");
   });
 
-  it("should pull ollama model when enabled", async () => {
+  it("should not pull ollama model when no local model configured", async () => {
     await deployCommand(join(fixturesDir, "valid-config.yaml"));
-    // valid-config.yaml has ollama enabled with llama3.3:8b
-    expect(exec).toHaveBeenCalledWith(
+    // valid-config.yaml has no local models — no ollama pull
+    expect(exec).not.toHaveBeenCalledWith(
       "docker",
       ["compose", "up", "-d", "ollama"],
-      expect.objectContaining({ cwd: deployDir }),
+      expect.anything(),
     );
-    expect(exec).toHaveBeenCalledWith(
+    expect(exec).not.toHaveBeenCalledWith(
       "docker",
-      [
-        "exec",
-        "clawforce-test-corp-ollama",
-        "ollama",
-        "pull",
-        "llama3.3:8b",
-      ],
-      expect.objectContaining({ cwd: deployDir }),
+      expect.arrayContaining(["ollama", "pull"]),
+      expect.anything(),
     );
   });
 

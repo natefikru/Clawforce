@@ -1,10 +1,5 @@
 name: "test-ultron"
 
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
-
 agents:
   - name: inbox-analyst
     role: inbox-analyst

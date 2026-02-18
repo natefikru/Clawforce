@@ -1,11 +1,18 @@
 name: "test-workforce"
 
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      port: 11434
 
 routing:
   priority: [policy, sensitivity, cost, domain, complexity]
@@ -31,7 +38,7 @@ agents:
         daily_limit: 8.00
       rules:
         - condition: high_complexity
-          model: anthropic/claude-sonnet-4-5
+          model: claude
 
 openclaw:
   default:

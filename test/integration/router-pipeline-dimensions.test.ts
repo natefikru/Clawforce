@@ -219,12 +219,7 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
     it("applies policy tiers from generated plugin config (snake_case config input)", () => {
       const results = generateOpenClawConfig({
         name: "policy-mapping-check",
-        agents: [{ name: "test-agent", role: "inbox-analyst" }],
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          credential_mode: "env",
-          provider_keys: { anthropic: "${ANTHROPIC_API_KEY}" },
-        },
+        agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
         routing: {
           policy: {
             default_tier: "public",

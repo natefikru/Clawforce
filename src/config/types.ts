@@ -1,19 +1,5 @@
 import { z } from "zod";
 
-const localModelPrefixes = ["ollama/", "local/", "sglang/", "vllm/"] as const;
-
-function getModelProvider(model: string): string | undefined {
-  const slashIndex = model.indexOf("/");
-  if (slashIndex <= 0) return undefined;
-  return model.slice(0, slashIndex).toLowerCase();
-}
-
-function modelRequiresProviderApiKey(model: string): boolean {
-  const provider = getModelProvider(model);
-  if (!provider) return false;
-  return !localModelPrefixes.some((prefix) => model.startsWith(prefix));
-}
-
 // -- Alert schemas (unchanged) --
 
 const alertTypesSchema = z.object({
@@ -202,6 +188,31 @@ const agentRoutingSchema = z.object({
   priority: z.array(routingPriorityEnum).optional(),
 });
 
+// -- Model schemas (flat list of routing targets) --
+
+const modelEngineSchema = z.object({
+  runtime: z.string().min(1),
+  location: z.enum(["container", "host"]).default("container"),
+  host_url: z.string().url().optional(),
+  model: z.string().optional(),
+  gpu: z.enum(["nvidia", "amd", "none"]).optional(),
+  quantization: z.enum(["fp16", "int8", "int4", "awq", "gptq"]).optional(),
+  port: z.number().default(30000),
+  options: z.record(z.unknown()).optional(),
+});
+
+const modelEntrySchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, "Model name must be lowercase alphanumeric with hyphens"),
+  id: z.string().min(1),
+  type: z.enum(["local", "cloud"]),
+  api_key: z.string().min(1).optional(),
+  engine: modelEngineSchema.optional(),
+});
+
 // -- Agent schema --
 
 const AgentConfigSchema = z.object({
@@ -211,6 +222,7 @@ const AgentConfigSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Agent name must be lowercase alphanumeric with hyphens"),
   role: z.enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"]),
+  runtime: z.enum(["openclaw"]).default("openclaw"),
   openclaw: z.string().min(1).optional(),
   routing: agentRoutingSchema.optional(),
   skills: z.array(z.string()).optional(),
@@ -220,16 +232,6 @@ const AgentConfigSchema = z.object({
       mode: z.enum(["off", "non-main", "all"]).default("off"),
     })
     .optional(),
-});
-
-// -- Models schema (unified: always top-level) --
-
-const modelsSchema = z.object({
-  cloud: z.string().min(1),
-  local: z.string().optional(),
-  provider_keys: z.record(z.string(), z.string().min(1)).optional(),
-  credential_mode: z.enum(["env", "auth_profile"]).optional(),
-  auth_profile: z.string().min(1).optional(),
 });
 
 // -- Dashboard schema (unchanged) --
@@ -261,32 +263,13 @@ const dashboardSchema = z
     }
   });
 
-// -- Compliance schema (merged: enabled + frameworks) --
+// -- Compliance schema (unchanged) --
 
 const complianceSchema = z.object({
   enabled: z.boolean().default(true),
   frameworks: z
     .array(z.enum(["hipaa", "pci-dss", "gdpr", "ccpa", "sox"]))
     .optional(),
-});
-
-// -- Local model schema (renamed from runtime) --
-
-const localModelSchema = z.object({
-  engine: z.string().min(1).default("sglang"),
-  location: z.enum(["container", "host"]).default("container"),
-  host_url: z.string().url().optional(),
-  model: z.string().default("qwen3-32b"),
-  gpu: z.enum(["nvidia", "amd", "none"]).optional(),
-  quantization: z.enum(["fp16", "int8", "int4", "awq", "gptq"]).optional(),
-  port: z.number().default(30000),
-  options: z.record(z.unknown()).optional(),
-});
-
-// -- Deployment schema (unchanged) --
-
-const deploymentSchema = z.object({
-  agent_runtime: z.enum(["openclaw"]).default("openclaw"),
 });
 
 // -- Top-level config schema --
@@ -298,16 +281,18 @@ export const ClawforceConfigSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Name must be lowercase alphanumeric with hyphens"),
 
-  models: modelsSchema,
-
   agents: z.array(AgentConfigSchema).min(1),
+
+  // Flat list of routing targets — only needed when routing rules exist
+  models: z.array(modelEntrySchema).optional(),
+
+  // Optional: enterprise OpenClaw credential profile (replaces per-model api_keys)
+  auth_profile: z.string().min(1).optional(),
 
   routing: routingSchema.optional(),
 
   // Named map of openclaw configs — each key is an instance name, value is raw passthrough
   openclaw: z.record(z.string(), z.record(z.unknown())),
-
-  local_model: localModelSchema.optional(),
 
   compliance: complianceSchema.optional(),
 
@@ -318,10 +303,9 @@ export const ClawforceConfigSchema = z.object({
   gateway: z
     .object({
       bind: z.enum(["loopback", "lan"]).default("loopback"),
+      port: z.number().int().positive().default(18789),
     })
     .optional(),
-
-  deployment: deploymentSchema.optional(),
 
   plugins: z
     .object({
@@ -340,8 +324,8 @@ export const ClawforceConfigSchema = z.object({
   capabilities: z.enum(["minimal", "standard", "full"]).optional(),
 
 }).superRefine((data, ctx) => {
-  const models = data.models as z.infer<typeof modelsSchema>;
-  const agents = data.agents as z.infer<typeof AgentConfigSchema>[];
+  const models = data.models ?? [];
+  const agents = data.agents;
   const openclaw = data.openclaw as Record<string, Record<string, unknown>>;
 
   // 1. OpenClaw must have at least one instance
@@ -355,34 +339,104 @@ export const ClawforceConfigSchema = z.object({
     return;
   }
 
-  // 2. Credential mode validation
-  const credentialMode = models.credential_mode ?? "env";
-  if (credentialMode === "auth_profile" && !models.auth_profile) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "models.auth_profile is required when models.credential_mode=auth_profile",
-      path: ["models", "auth_profile"],
-    });
-  }
-  if (credentialMode === "env" && modelRequiresProviderApiKey(models.cloud)) {
-    const provider = getModelProvider(models.cloud);
-    const providerKey = provider ? models.provider_keys?.[provider] : undefined;
-    if (!provider || !providerKey) {
-      const providerLabel = provider ?? "<provider>";
+  // 2. Model list validation
+  const modelNames = new Set<string>();
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+
+    // Duplicate model names
+    if (modelNames.has(model.name)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message:
-          `models.provider_keys.${providerLabel} is required when models.credential_mode=env and models.cloud is a cloud provider model`,
-        path: ["models", "provider_keys", providerLabel],
+        message: `Duplicate model name '${model.name}' — model names must be unique`,
+        path: ["models", i, "name"],
+      });
+    }
+    modelNames.add(model.name);
+
+    // Cloud models require api_key when auth_profile is not set
+    if (model.type === "cloud" && !model.api_key && !data.auth_profile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Cloud model '${model.name}' requires api_key when auth_profile is not set`,
+        path: ["models", i, "api_key"],
+      });
+    }
+
+    // Local models require engine config
+    if (model.type === "local" && !model.engine) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Local model '${model.name}' requires engine configuration`,
+        path: ["models", i, "engine"],
       });
     }
   }
 
-  // 3. Unique agent names
+  // 3. Routing rules must reference defined model names
+  const validateModelRef = (modelRef: string, path: (string | number)[]) => {
+    if (models.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Routing references model '${modelRef}' but no models are defined`,
+        path,
+      });
+    } else if (!modelNames.has(modelRef)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Routing references model '${modelRef}', but no model with that name exists in models list`,
+        path,
+      });
+    }
+  };
+
+  if (data.routing?.rules) {
+    for (let i = 0; i < data.routing.rules.length; i++) {
+      validateModelRef(data.routing.rules[i].model, ["routing", "rules", i, "model"]);
+    }
+  }
+
+  if (data.routing?.budget?.fallback_model) {
+    validateModelRef(data.routing.budget.fallback_model, ["routing", "budget", "fallback_model"]);
+  }
+
+  // Validate per-agent routing rule model references
+  for (let i = 0; i < agents.length; i++) {
+    const agent = agents[i];
+    if (agent.routing?.rules) {
+      for (let j = 0; j < agent.routing.rules.length; j++) {
+        validateModelRef(
+          agent.routing.rules[j].model,
+          ["agents", i, "routing", "rules", j, "model"],
+        );
+      }
+    }
+    if (agent.routing?.budget?.fallback_model) {
+      validateModelRef(
+        agent.routing.budget.fallback_model,
+        ["agents", i, "routing", "budget", "fallback_model"],
+      );
+    }
+  }
+
+  // 4. PII safety: if routing exists with PII detection, require at least one local model
+  const piiEnabled = data.routing?.sensitivity?.pii_detection !== false;
+  if (data.routing && piiEnabled && models.length > 0) {
+    const hasLocal = models.some((m) => m.type === "local");
+    if (!hasLocal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Routing with PII detection enabled requires at least one model with type=local",
+        path: ["models"],
+      });
+    }
+  }
+
+  // 5. Unique agent names
   const agentNames = agents.map((a) => a.name);
-  const seen = new Set<string>();
+  const seenAgents = new Set<string>();
   for (const name of agentNames) {
-    if (seen.has(name)) {
+    if (seenAgents.has(name)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: `Duplicate agent name '${name}' — agent names must be unique`,
@@ -390,14 +444,13 @@ export const ClawforceConfigSchema = z.object({
       });
       break;
     }
-    seen.add(name);
+    seenAgents.add(name);
   }
 
-  // 4. OpenClaw instance references
+  // 6. OpenClaw instance references
   const instanceSet = new Set(openclawInstanceNames);
 
   if (openclawInstanceNames.length > 1) {
-    // Multiple instances: every agent must specify openclaw reference
     for (let i = 0; i < agents.length; i++) {
       const agent = agents[i];
       if (!agent.openclaw) {
@@ -415,7 +468,6 @@ export const ClawforceConfigSchema = z.object({
       }
     }
   } else if (openclawInstanceNames.length === 1) {
-    // Single instance: validate any explicit references
     for (let i = 0; i < agents.length; i++) {
       const agent = agents[i];
       if (agent.openclaw && !instanceSet.has(agent.openclaw)) {
@@ -428,7 +480,7 @@ export const ClawforceConfigSchema = z.object({
     }
   }
 
-  // 5. Supervisor validation
+  // 7. Supervisor validation
   const nameSet = new Set(agentNames);
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
@@ -463,16 +515,14 @@ export const ClawforceConfigSchema = z.object({
 
 export type ClawforceConfig = z.infer<typeof ClawforceConfigSchema>;
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
-export type AgentRuntime = z.infer<typeof deploymentSchema>["agent_runtime"];
+export type ModelEntry = z.infer<typeof modelEntrySchema>;
+export type ModelEngine = z.infer<typeof modelEngineSchema>;
+export type AgentRuntime = "openclaw";
 
-export function resolveAgentRuntime(config: ClawforceConfig): AgentRuntime {
-  return config.deployment?.agent_runtime ?? "openclaw";
+export function resolveAgentRuntime(agent: AgentConfig): AgentRuntime {
+  return agent.runtime ?? "openclaw";
 }
 
-/**
- * Resolves which openclaw instance each agent is assigned to.
- * If only one instance exists, all agents are assigned to it.
- */
 export function resolveAgentOpenclawInstance(
   agent: AgentConfig,
   config: ClawforceConfig,
@@ -480,4 +530,23 @@ export function resolveAgentOpenclawInstance(
   if (agent.openclaw) return agent.openclaw;
   const instanceNames = Object.keys(config.openclaw);
   return instanceNames[0];
+}
+
+export function findModelByName(
+  config: ClawforceConfig,
+  name: string,
+): ModelEntry | undefined {
+  return config.models?.find((m) => m.name === name);
+}
+
+export function getLocalModels(config: ClawforceConfig): ModelEntry[] {
+  return config.models?.filter((m) => m.type === "local") ?? [];
+}
+
+export function getFirstLocalModel(config: ClawforceConfig): ModelEntry | undefined {
+  return config.models?.find((m) => m.type === "local");
+}
+
+export function getLocalModelEngine(config: ClawforceConfig): ModelEngine | undefined {
+  return config.models?.find((m) => m.engine)?.engine;
 }

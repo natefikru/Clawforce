@@ -1,10 +1,5 @@
 name: "invalid-dupes"
 
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
-
 agents:
   - name: my-agent
     role: inbox-analyst

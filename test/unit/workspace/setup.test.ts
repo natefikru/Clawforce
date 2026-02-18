@@ -9,7 +9,7 @@ const testDir = join(import.meta.dirname, "../../tmp/workspace-test");
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst" }],
+    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -17,7 +17,6 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
         },
       },
     },
-    models: { cloud: "anthropic/claude-sonnet-4-5" },
     approval: {
       mode: "hybrid",
       require_approval_for: ["browser", "message.send"],
@@ -65,7 +64,7 @@ describe("setupWorkspace", () => {
   });
 
   it("should not copy cron jobs for research-agent (no cron file)", () => {
-    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "research-agent" }] }), testDir);
+    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "research-agent", runtime: "openclaw" }] }), testDir);
     const cronPath = join(testDir, "data/cron/jobs.json");
     expect(existsSync(cronPath)).toBe(false);
   });
@@ -105,7 +104,7 @@ describe("setupWorkspace", () => {
   });
 
   it("should work for research-agent role", () => {
-    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "research-agent" }] }), testDir);
+    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "research-agent", runtime: "openclaw" }] }), testDir);
     const skillPath = join(testDir, "workspace/test-agent/skills/research-agent/SKILL.md");
     expect(existsSync(skillPath)).toBe(true);
     const content = readFileSync(skillPath, "utf8");
@@ -113,7 +112,7 @@ describe("setupWorkspace", () => {
   });
 
   it("should work for process-automator role", () => {
-    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "process-automator" }] }), testDir);
+    setupWorkspace(makeConfig({ agents: [{ name: "test-agent", role: "process-automator", runtime: "openclaw" }] }), testDir);
     const skillPath = join(
       testDir,
       "workspace/test-agent/skills/process-automator/SKILL.md",
@@ -123,8 +122,8 @@ describe("setupWorkspace", () => {
 
   it("should copy supervisor role template into workspace", () => {
     setupWorkspace(makeConfig({
-      agents: [{ name: "test-agent", role: "supervisor", supervises: ["other-agent"] },
-               { name: "other-agent", role: "inbox-analyst" }],
+      agents: [{ name: "test-agent", role: "supervisor", runtime: "openclaw", supervises: ["other-agent"] },
+               { name: "other-agent", role: "inbox-analyst", runtime: "openclaw" }],
     }), testDir);
     const skillPath = join(testDir, "workspace/test-agent/skills/supervisor/SKILL.md");
     expect(existsSync(skillPath)).toBe(true);
@@ -173,14 +172,10 @@ describe("setupWorkspace", () => {
     expect(existsSync(join(extensionsDir, "clawforce-compliance"))).toBe(true);
   });
 
-  it("should write auth-profile metadata when credential mode is auth_profile", () => {
+  it("should write auth-profile metadata when auth_profile is set", () => {
     setupWorkspace(
       makeConfig({
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          credential_mode: "auth_profile",
-          auth_profile: "corp-prod",
-        },
+        auth_profile: "corp-prod",
       }),
       testDir,
     );
@@ -196,10 +191,9 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
   return {
     name: "test-workforce",
     agents: [
-      { name: "inbox-analyst", role: "inbox-analyst" },
-      { name: "research-agent", role: "research-agent" },
+      { name: "inbox-analyst", role: "inbox-analyst", runtime: "openclaw" },
+      { name: "research-agent", role: "research-agent", runtime: "openclaw" },
     ],
-    models: { cloud: "anthropic/claude-sonnet-4-5" },
     openclaw: { default: { channels: { discord: { enabled: true } } } },
     ...overrides,
   };
@@ -236,14 +230,10 @@ describe("setupWorkspace — multi-agent", () => {
     expect(agentsMd).toContain("Clawforce AI Workforce");
   });
 
-  it("should write auth-profile metadata from models for multi-agent", () => {
+  it("should write auth-profile metadata from config for multi-agent", () => {
     setupWorkspace(
       makeMultiAgentConfig({
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          credential_mode: "auth_profile",
-          auth_profile: "corp-prod",
-        },
+        auth_profile: "corp-prod",
       }),
       testDir,
     );

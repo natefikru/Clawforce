@@ -5,7 +5,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst" }],
+    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -13,12 +13,9 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
         },
       },
     },
-    models: {
-      cloud: "anthropic/claude-sonnet-4-5",
-      provider_keys: {
-        anthropic: "sk-ant-test123",
-      },
-    },
+    models: [
+      { name: "claude", id: "anthropic/claude-sonnet-4-5", type: "cloud", api_key: "sk-ant-test123" },
+    ],
     ...overrides,
   };
 }

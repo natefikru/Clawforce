@@ -3,17 +3,10 @@ name: "minimal-invalid-agent-runtime"
 agents:
   - name: "research-agent"
     role: "research-agent"
-
-deployment:
-  agent_runtime: "other-runtime"
+    runtime: "other-runtime"
 
 openclaw:
   default:
     channels:
       discord:
         enabled: true
-
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"

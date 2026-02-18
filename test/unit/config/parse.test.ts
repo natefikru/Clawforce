@@ -25,17 +25,11 @@ describe("parseConfig", () => {
         discord: { enabled: true },
       },
     });
-    expect(config.models.cloud).toBe("anthropic/claude-sonnet-4-5");
-    expect(config.models.local).toBe("ollama/llama3.3:8b");
-    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-test123");
     expect(config.approval?.mode).toBe("hybrid");
     expect(config.approval?.require_approval_for).toEqual([
       "browser",
       "message.send",
     ]);
-    expect(config.local_model?.engine).toBe("ollama");
-    expect(config.local_model?.location).toBe("container");
-    expect(config.local_model?.model).toBe("llama3.3:8b");
   });
 
   it("should parse a minimal config", () => {
@@ -49,25 +43,22 @@ describe("parseConfig", () => {
       },
     });
     expect(config.approval).toBeUndefined();
-    expect(config.local_model).toBeUndefined();
+    expect(config.models).toBeUndefined();
   });
 
-  it("should parse deployment.agent_runtime when explicitly configured", () => {
-    const config = parseConfig(join(fixturesDir, "valid-deployment-agent-runtime.yaml"));
-    expect(config.deployment?.agent_runtime).toBe("openclaw");
-    expect(resolveAgentRuntime(config)).toBe("openclaw");
-  });
-
-  it("should default deployment.agent_runtime to openclaw when omitted", () => {
+  it("should default agent runtime to openclaw when omitted", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
-    expect(config.deployment).toBeUndefined();
-    expect(resolveAgentRuntime(config)).toBe("openclaw");
+    expect(resolveAgentRuntime(config.agents[0])).toBe("openclaw");
   });
 
-  it("should default deployment.agent_runtime to openclaw when deployment is empty", () => {
+  it("should resolve agent runtime from agent config", () => {
+    const config = parseConfig(join(fixturesDir, "valid-deployment-agent-runtime.yaml"));
+    expect(resolveAgentRuntime(config.agents[0])).toBe("openclaw");
+  });
+
+  it("should resolve agent runtime for minimal config", () => {
     const config = parseConfig(join(fixturesDir, "valid-deployment-empty.yaml"));
-    expect(config.deployment?.agent_runtime).toBe("openclaw");
-    expect(resolveAgentRuntime(config)).toBe("openclaw");
+    expect(resolveAgentRuntime(config.agents[0])).toBe("openclaw");
   });
 
   it("should reject unsupported deployment.agent_runtime values", () => {
@@ -76,15 +67,16 @@ describe("parseConfig", () => {
     ).toThrow("Config validation failed");
   });
 
-  it("should expand environment variables", () => {
+  it("should expand environment variables in model api_keys", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-expanded";
-    const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
-    expect(config.models.provider_keys?.anthropic).toBe("sk-ant-expanded");
+    const config = parseConfig(join(fixturesDir, "full-phase1-config.yaml"));
+    const cloudModel = config.models?.find((m) => m.type === "cloud");
+    expect(cloudModel?.api_key).toBe("sk-ant-expanded");
   });
 
   it("should throw on missing env var", () => {
     delete process.env.ANTHROPIC_API_KEY;
-    expect(() => parseConfig(join(fixturesDir, "valid-config.yaml"))).toThrow(
+    expect(() => parseConfig(join(fixturesDir, "full-phase1-config.yaml"))).toThrow(
       "ANTHROPIC_API_KEY",
     );
   });
@@ -108,7 +100,7 @@ describe("parseConfig", () => {
     expect(supervisor?.supervises).toEqual(["worker"]);
   });
 
-  it("should reject invalid channel ID", () => {
+  it("should reject invalid agent name", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-channel.yaml")),
     ).toThrow("Config validation failed");
@@ -125,7 +117,7 @@ describe("parseConfig", () => {
 
     expect(config.routing?.rules).toHaveLength(3);
     expect(config.routing?.rules?.[0].condition).toBe("pii_detected");
-    expect(config.routing?.rules?.[0].model).toBe("ollama/llama3.3:8b");
+    expect(config.routing?.rules?.[0].model).toBe("llama");
     expect(config.routing?.sensitivity?.keywords).toEqual(["password", "secret"]);
 
     expect(config.compliance?.enabled).toBe(true);
@@ -141,21 +133,23 @@ describe("parseConfig", () => {
     expect(config.dashboard).toBeUndefined();
   });
 
-  it("should parse local_model config with SGLang engine", () => {
+  it("should parse local_model config with SGLang engine from models array", () => {
     const config = parseConfig(join(fixturesDir, "full-5d-config.yaml"));
-    expect(config.local_model?.engine).toBe("sglang");
-    expect(config.local_model?.location).toBe("container");
-    expect(config.local_model?.model).toBe("qwen3-32b");
-    expect(config.local_model?.gpu).toBe("nvidia");
-    expect(config.local_model?.quantization).toBe("fp16");
-    expect(config.local_model?.port).toBe(30000);
+    const localModel = config.models?.find((m) => m.type === "local" && m.engine?.runtime === "sglang");
+    expect(localModel?.engine?.runtime).toBe("sglang");
+    expect(localModel?.engine?.location).toBe("container");
+    expect(localModel?.engine?.model).toBe("qwen3-32b");
+    expect(localModel?.engine?.gpu).toBe("nvidia");
+    expect(localModel?.engine?.quantization).toBe("fp16");
+    expect(localModel?.engine?.port).toBe(30000);
   });
 
-  it("should parse local_model host mode for ollama", () => {
+  it("should parse local_model host mode for ollama from models array", () => {
     const config = parseConfig(join(fixturesDir, "runtime-host-ollama.yaml"));
-    expect(config.local_model?.engine).toBe("ollama");
-    expect(config.local_model?.location).toBe("host");
-    expect(config.local_model?.host_url).toBe("http://host.docker.internal:11434");
+    const localModel = config.models?.find((m) => m.type === "local");
+    expect(localModel?.engine?.runtime).toBe("ollama");
+    expect(localModel?.engine?.location).toBe("host");
+    expect(localModel?.engine?.host_url).toBe("http://host.docker.internal:11434");
   });
 
   it("should parse compliance.frameworks array", () => {
@@ -184,9 +178,9 @@ describe("parseConfig", () => {
     });
   });
 
-  it("should allow config without local_model", () => {
+  it("should allow config without models", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
-    expect(config.local_model).toBeUndefined();
+    expect(config.models).toBeUndefined();
     expect(config.compliance?.frameworks).toBeUndefined();
   });
 
@@ -228,29 +222,29 @@ describe("parseConfig", () => {
     ).toThrow("dashboard.auth must be explicitly configured");
   });
 
-  it("should parse auth_profile credential mode when profile is provided", () => {
+  it("should parse auth_profile when profile is provided at top level", () => {
     const config = parseConfig(join(fixturesDir, "valid-auth-profile-config.yaml"));
-    expect(config.models.credential_mode).toBe("auth_profile");
-    expect(config.models.auth_profile).toBe("corp-prod");
+    expect(config.auth_profile).toBe("corp-prod");
   });
 
-  it("should reject auth_profile credential mode without profile", () => {
+  it("should reject cloud model without api_key when auth_profile is not set", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-auth-profile-config.yaml")),
-    ).toThrow("models.auth_profile is required when models.credential_mode=auth_profile");
+    ).toThrow();
   });
 
-  it("should reject env credential mode without provider key for cloud models", () => {
+  it("should reject cloud model without api_key when no auth_profile", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-env-cloud-without-api-key.yaml")),
-    ).toThrow("models.provider_keys.anthropic is required when models.credential_mode=env");
+    ).toThrow();
   });
 
-  it("should allow env credential mode without provider key for local models", () => {
+  it("should allow local-only models without api_key", () => {
     const config = parseConfig(join(fixturesDir, "valid-env-local-without-api-key.yaml"));
-    expect(config.models.credential_mode).toBe("env");
-    expect(config.models.provider_keys).toBeUndefined();
-    expect(config.models.cloud).toBe("ollama/llama3.3:8b");
+    const localModel = config.models?.find((m) => m.type === "local");
+    expect(localModel).toBeDefined();
+    expect(localModel?.api_key).toBeUndefined();
+    expect(localModel?.id).toBe("ollama/llama3.3:8b");
   });
 });
 
@@ -273,8 +267,8 @@ describe("parseConfig — multi-agent", () => {
     expect(config.agents[0].routing?.budget?.daily_limit).toBe(5.0);
     expect(config.agents[1].name).toBe("research-agent");
     expect(config.agents[1].routing?.rules).toHaveLength(1);
-    expect(config.models.cloud).toBe("anthropic/claude-sonnet-4-5");
-    expect(config.models.local).toBe("ollama/llama3.3:8b");
+    const cloudModel = config.models?.find((m) => m.type === "cloud");
+    expect(cloudModel?.id).toBe("anthropic/claude-sonnet-4-5");
   });
 
   it("should parse a multi-agent config with supervisor references", () => {
@@ -304,15 +298,13 @@ describe("parseConfig — multi-agent", () => {
     ).toThrow("must define a non-empty supervises list");
   });
 
-  it("should reject multi-agent config without models.cloud", () => {
-    expect(() =>
-      parseConfig(join(fixturesDir, "invalid-multi-agent-no-defaults.yaml")),
-    ).toThrow("Config validation failed");
+  it("should allow config without models (models is optional)", () => {
+    const config = parseConfig(join(fixturesDir, "invalid-multi-agent-no-defaults.yaml"));
+    expect(config.models).toBeUndefined();
   });
 
   it("should parse single-agent configs with agents array", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
     expect(config.agents[0].role).toBe("research-agent");
-    expect(config.models.cloud).toBe("anthropic/claude-sonnet-4-5");
   });
 });

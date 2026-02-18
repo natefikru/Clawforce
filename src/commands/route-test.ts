@@ -1,4 +1,5 @@
 import { parseConfig } from "../config/parse.js";
+import { getLocalModels, findModelByName } from "../config/types.js";
 import { detectPII, detectPIITypes } from "../plugins/clawforce-router/pii-detector.js";
 import { analyzeComplexity } from "../plugins/clawforce-router/complexity-analyzer.js";
 import { detectDomain } from "../plugins/clawforce-router/domain-detector.js";
@@ -37,10 +38,21 @@ export function routeTest(
 ): RouteTestResult {
   const config = parseConfig(configPath);
 
-  const defaultModel = config.models.cloud;
   const routerConfig = config.routing;
+  const localModels = getLocalModels(config);
 
-  const rules: RoutingRule[] = routerConfig?.rules ?? getDefaultRules();
+  // Use the first cloud model as default for budget estimation,
+  // or fall back to a generic identifier (OpenClaw owns the actual default)
+  const firstCloudModel = config.models?.find((m) => m.type === "cloud");
+  const defaultModel = firstCloudModel?.id ?? "anthropic/claude-sonnet-4-5";
+  const defaultLocalModel = localModels[0]?.id;
+
+  // Translate model name references in rules to full model IDs
+  const rawRules: RoutingRule[] = routerConfig?.rules ?? getDefaultRules();
+  const rules: RoutingRule[] = rawRules.map((r) => ({
+    ...r,
+    model: findModelByName(config, r.model)?.id ?? r.model,
+  }));
   const sensitivityKeywords = routerConfig?.sensitivity?.keywords ?? [];
   const priority = routerConfig?.priority as RoutingDimension[] | undefined;
 
@@ -59,10 +71,14 @@ export function routeTest(
   // Dimension 4: Budget
   let budgetTracker: BudgetTracker | null = null;
   if (config.routing?.budget) {
+    const fallbackModelName = config.routing.budget.fallback_model;
+    const fallbackModelId = fallbackModelName
+      ? (findModelByName(config, fallbackModelName)?.id ?? fallbackModelName)
+      : undefined;
     const budgetConfig: BudgetConfig = {
       dailyLimit: config.routing.budget.daily_limit,
       perRequestCap: config.routing.budget.per_request_cap,
-      fallbackModel: config.routing.budget.fallback_model,
+      fallbackModel: fallbackModelId ?? defaultLocalModel ?? defaultModel,
     };
     budgetTracker = new BudgetTracker(budgetConfig);
   }
@@ -84,6 +100,7 @@ export function routeTest(
     budgetCheck,
     rules,
     defaultModel,
+    defaultLocalModel,
     priority,
   });
 

@@ -8,12 +8,6 @@ function baseConfig(dashboardOverride?: Record<string, unknown>) {
     openclaw: {
       default: { channels: { discord: { enabled: true } } },
     },
-    models: {
-      cloud: "anthropic/claude-sonnet-4-5",
-      provider_keys: {
-        anthropic: "sk-ant-test123",
-      },
-    },
     dashboard: dashboardOverride,
   };
 }

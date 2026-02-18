@@ -11,25 +11,47 @@ openclaw:
         enabled: true
 
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      port: 11434
+  - name: gpt4o
+    id: "openai/gpt-4o"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+  - name: qwen
+    id: "sglang/qwen3-32b"
+    type: local
+    engine:
+      runtime: sglang
+      location: container
+      model: "qwen3-32b"
+      gpu: nvidia
+      quantization: fp16
+      port: 30000
 
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: llama
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: llama
     - condition: "high_complexity"
-      model: "anthropic/claude-sonnet-4-5"
+      model: claude
     - condition: "domain_code"
-      model: "openai/gpt-4o"
+      model: gpt4o
     - condition: "domain_writing"
-      model: "anthropic/claude-sonnet-4-5"
+      model: claude
     - condition: "over_budget"
-      model: "ollama/llama3.3:8b"
+      model: llama
   sensitivity:
     keywords:
       - "password"
@@ -50,14 +72,7 @@ routing:
     retry_delay_ms: 500
   budget:
     daily_limit: 10.00
-    fallback_model: "ollama/llama3.3:8b"
-
-local_model:
-  engine: "sglang"
-  model: "qwen3-32b"
-  gpu: "nvidia"
-  quantization: "fp16"
-  port: 30000
+    fallback_model: llama
 
 compliance:
   enabled: true

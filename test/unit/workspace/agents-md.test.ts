@@ -5,7 +5,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "acme-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst" }],
+    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -13,7 +13,6 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
         },
       },
     },
-    models: { cloud: "anthropic/claude-sonnet-4-5" },
     ...overrides,
   };
 }
@@ -30,12 +29,12 @@ describe("generateAgentsMd", () => {
   });
 
   it("should show Research Agent for research-agent role", () => {
-    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "research-agent" }] }));
+    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "research-agent", runtime: "openclaw" }] }));
     expect(md).toContain("Research Agent");
   });
 
   it("should show Process Automator for process-automator role", () => {
-    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "process-automator" }] }));
+    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "process-automator", runtime: "openclaw" }] }));
     expect(md).toContain("Process Automator");
   });
 
@@ -86,18 +85,20 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
       {
         name: "inbox-analyst",
         role: "inbox-analyst",
+        runtime: "openclaw",
       },
       {
         name: "research-agent",
         role: "research-agent",
+        runtime: "openclaw",
       },
       {
         name: "ultron",
         role: "process-automator",
+        runtime: "openclaw",
         supervises: ["inbox-analyst", "research-agent"],
       },
     ],
-    models: { cloud: "anthropic/claude-sonnet-4-5" },
     openclaw: { default: { channels: { discord: { enabled: true } } } },
     ...overrides,
   };

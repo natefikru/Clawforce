@@ -1,5 +1,7 @@
 name: "auth-profile-valid"
 
+auth_profile: "corp-prod"
+
 agents:
   - name: "test-agent"
     role: "inbox-analyst"
@@ -9,8 +11,3 @@ openclaw:
     channels:
       discord:
         enabled: true
-
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  credential_mode: "auth_profile"
-  auth_profile: "corp-prod"

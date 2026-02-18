@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import { parseConfig } from "../config/parse.js";
 import { generateCompose } from "../config/generate-compose.js";
 import { generateEnv } from "../config/generate-env.js";
-import { resolveAgentRuntime } from "../config/types.js";
+import { resolveAgentRuntime, getLocalModelEngine } from "../config/types.js";
 import { getAgentRuntimeAdapter } from "../config/agent-runtime/registry.js";
 import { setupWorkspace } from "../workspace/setup.js";
 import { exec } from "../docker/exec.js";
@@ -36,7 +36,7 @@ export async function deployCommand(configPath: string): Promise<void> {
   logger.success("Workspace ready");
 
   // 4. Generate agent runtime config artifacts
-  const agentRuntime = resolveAgentRuntime(config);
+  const agentRuntime = resolveAgentRuntime(config.agents[0]);
   const runtimeAdapter = getAgentRuntimeAdapter(agentRuntime);
   logger.step(`Generating ${agentRuntime} runtime config...`);
   const runtimeOutputs = runtimeAdapter.generate(config);
@@ -98,19 +98,15 @@ export async function deployCommand(configPath: string): Promise<void> {
   }
 
   // 8. Run runtime pre-start hooks for managed container runtimes
-  if (config.local_model?.location !== "host") {
-    const runtimeEngine = config.local_model?.engine ?? "sglang";
-    const adapter = getRuntimeEngineAdapter(runtimeEngine);
+  const localEngine = getLocalModelEngine(config);
+  if (localEngine && localEngine.location !== "host") {
+    const runtimeName = localEngine.runtime ?? "sglang";
+    const adapter = getRuntimeEngineAdapter(runtimeName);
     if (adapter.preGatewayStart) {
       await adapter.preGatewayStart({
         configName: config.name,
         deployDir,
-        runtime: config.local_model ?? {
-          engine: runtimeEngine,
-          location: "container",
-          model: "qwen3-32b",
-          port: adapter.defaultPort,
-        },
+        runtime: localEngine,
         exec,
         logger: {
           step: logger.step,

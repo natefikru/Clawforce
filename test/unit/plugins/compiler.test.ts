@@ -20,16 +20,13 @@ function makeTempDir(prefix: string): string {
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst" }],
+    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
           discord: { enabled: true },
         },
       },
-    },
-    models: {
-      cloud: "anthropic/claude-sonnet-4-5",
     },
     ...overrides,
   };
