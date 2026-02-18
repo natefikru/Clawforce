@@ -2,7 +2,7 @@ name: "test"
 
 agents:
   - name: "test-agent"
-    role: "nonexistent-role"
+    # workspace intentionally omitted to test missing workspace validation
 
 openclaw:
   default:

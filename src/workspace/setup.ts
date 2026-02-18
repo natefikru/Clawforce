@@ -1,7 +1,6 @@
-import { mkdirSync, cpSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import { writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { type ClawforceConfig } from "../config/types.js";
 import { generateAgentsMd } from "./agents-md.js";
 import {
@@ -9,33 +8,15 @@ import {
   enabledPluginsForConfig,
 } from "../plugins/compiler.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const templatesDir = join(__dirname, "..", "..", "templates");
-
 export function setupWorkspace(config: ClawforceConfig, deployDir: string): void {
   const workspaceDir = join(deployDir, "workspace");
   const configDir = join(deployDir, "config");
   const dataDir = join(deployDir, "data");
 
   // Create directory structure
-  mkdirSync(join(workspaceDir, "skills"), { recursive: true });
+  mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(configDir, { recursive: true });
   mkdirSync(join(dataDir, "cron"), { recursive: true });
-
-  // Copy role SKILL.md into workspace for each agent
-  for (const agent of config.agents) {
-    const agentSkillDir = join(workspaceDir, agent.name, "skills", agent.role);
-    mkdirSync(agentSkillDir, { recursive: true });
-    const skillMdPath = join(templatesDir, "roles", agent.role, "SKILL.md");
-    if (existsSync(skillMdPath)) {
-      cpSync(skillMdPath, join(agentSkillDir, "SKILL.md"));
-    }
-    const cronJobsPath = join(templatesDir, "roles", agent.role, "cron-jobs.json");
-    const targetCronPath = join(dataDir, "cron", "jobs.json");
-    if (existsSync(cronJobsPath) && !existsSync(targetCronPath)) {
-      cpSync(cronJobsPath, targetCronPath);
-    }
-  }
 
   // Generate AGENTS.md
   const agentsMd = generateAgentsMd(config);

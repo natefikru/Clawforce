@@ -219,7 +219,7 @@ describe("Router Pipeline Dimensions (Layer 4)", () => {
     it("applies policy tiers from generated plugin config (snake_case config input)", () => {
       const results = generateOpenClawConfig({
         name: "policy-mapping-check",
-        agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
+        agents: [{ name: "test-agent", workspace: "./workspaces/test-agent", runtime: "openclaw" }],
         routing: {
           policy: {
             default_tier: "public",

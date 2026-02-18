@@ -4,7 +4,7 @@ import { ClawforceConfigSchema } from "../../../src/config/types.js";
 function baseConfig(alertsOverride?: Record<string, unknown>) {
   return {
     name: "alerts-test",
-    agents: [{ name: "test-agent", role: "research-agent" }],
+    agents: [{ name: "test-agent", workspace: "./workspaces/test-agent" }],
     openclaw: {
       default: { channels: { discord: { enabled: true } } },
     },

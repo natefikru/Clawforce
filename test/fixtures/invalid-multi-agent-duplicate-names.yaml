@@ -2,9 +2,9 @@ name: "invalid-dupes"
 
 agents:
   - name: my-agent
-    role: inbox-analyst
+    workspace: "./workspaces/my-agent"
   - name: my-agent
-    role: research-agent
+    workspace: "./workspaces/my-agent"
 
 openclaw:
   default:

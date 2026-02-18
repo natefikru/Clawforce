@@ -2,9 +2,10 @@ name: "invalid-supervisor-no-supervises"
 
 agents:
   - name: ultron
-    role: supervisor
+    workspace: "./workspaces/ultron"
+    supervises: []
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: "./workspaces/inbox-analyst"
 
 openclaw:
   default:

@@ -36,7 +36,7 @@ describe("Deploy Lifecycle Integration", () => {
     // 1. Parse config
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
     expect(config.name).toBe("test-corp");
-    expect(config.agents[0].role).toBe("inbox-analyst");
+    expect(config.agents[0].workspace).toBeDefined();
 
     // 2. Setup workspace
     setupWorkspace(config, testDeployDir);
@@ -67,17 +67,11 @@ describe("Deploy Lifecycle Integration", () => {
     // Verify complete directory structure
     expect(existsSync(join(testDeployDir, "workspace"))).toBe(true);
     expect(existsSync(join(testDeployDir, "workspace/AGENTS.md"))).toBe(true);
-    expect(
-      existsSync(
-        join(testDeployDir, "workspace/test-agent/skills/inbox-analyst/SKILL.md"),
-      ),
-    ).toBe(true);
+    // Per-agent workspace dirs are NOT created by ClawForce — users manage them
     expect(existsSync(join(testDeployDir, "config/openclaw.json"))).toBe(true);
     expect(existsSync(join(testDeployDir, "docker-compose.yml"))).toBe(true);
     expect(existsSync(join(testDeployDir, ".env"))).toBe(true);
     expect(existsSync(join(testDeployDir, "data/audit.jsonl"))).toBe(true);
-    expect(existsSync(join(testDeployDir, "data/cron/jobs.json"))).toBe(true);
-
     // Verify openclaw.json content
     const oc = JSON.parse(
       readFileSync(join(testDeployDir, "config/openclaw.json"), "utf8"),
@@ -85,7 +79,6 @@ describe("Deploy Lifecycle Integration", () => {
     // valid-config.yaml has no models — OpenClaw owns the default model
     expect(oc.agents.defaults).toBeDefined();
     expect(oc.channels.discord.enabled).toBe(true);
-    expect(oc.cron.enabled).toBe(true);
     expect(oc.hooks.enabled).toBe(true);
 
     // Verify docker-compose.yml content
@@ -109,15 +102,11 @@ describe("Deploy Lifecycle Integration", () => {
       "utf8",
     );
     expect(agentsMd).toContain("test-corp");
-    expect(agentsMd).toContain("Inbox Analyst");
+    expect(agentsMd).toContain("test-agent");
     expect(agentsMd).toContain("hybrid");
 
-    // Verify cron jobs
-    const cronJobs = JSON.parse(
-      readFileSync(join(testDeployDir, "data/cron/jobs.json"), "utf8"),
-    );
-    expect(cronJobs[0].name).toBe("daily-briefing");
-    expect(cronJobs[0].schedule.expr).toBe("0 8 * * 1-5");
+    // Verify workspace structure
+    expect(existsSync(join(testDeployDir, "workspace"))).toBe(true);
   });
 
   it("should work with minimal config (no ollama, no approval)", () => {
@@ -145,15 +134,8 @@ describe("Deploy Lifecycle Integration", () => {
       );
       expect(compose.services.ollama).toBeUndefined();
 
-      // Verify research-agent skill
-      expect(
-        existsSync(
-          join(minDir, "workspace/research-agent/skills/research-agent/SKILL.md"),
-        ),
-      ).toBe(true);
-
-      // No cron jobs for research-agent
-      expect(existsSync(join(minDir, "data/cron/jobs.json"))).toBe(false);
+      // Verify AGENTS.md created
+      expect(existsSync(join(minDir, "workspace/AGENTS.md"))).toBe(true);
     } finally {
       if (existsSync(minDir)) {
         rmSync(minDir, { recursive: true, force: true });

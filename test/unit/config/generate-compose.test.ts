@@ -6,7 +6,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
+    agents: [{ name: "test-agent", workspace: "./workspaces/test-agent", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {

@@ -4,7 +4,7 @@ auth_profile: "corp-prod"
 
 agents:
   - name: "test-agent"
-    role: "inbox-analyst"
+    workspace: "./workspaces/test-agent"
 
 openclaw:
   default:

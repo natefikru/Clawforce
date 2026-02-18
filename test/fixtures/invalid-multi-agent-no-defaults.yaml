@@ -2,7 +2,7 @@ name: "test-no-defaults"
 
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: "./workspaces/inbox-analyst"
 
 openclaw:
   default:

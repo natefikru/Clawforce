@@ -221,11 +221,10 @@ const AgentConfigSchema = z.object({
     .min(1)
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Agent name must be lowercase alphanumeric with hyphens"),
-  role: z.enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"]),
+  workspace: z.string().min(1),
   runtime: z.enum(["openclaw"]).default("openclaw"),
   openclaw: z.string().min(1).optional(),
   routing: agentRoutingSchema.optional(),
-  skills: z.array(z.string()).optional(),
   supervises: z.array(z.string()).optional(),
   sandbox: z
     .object({
@@ -485,10 +484,10 @@ export const ClawforceConfigSchema = z.object({
   const nameSet = new Set(agentNames);
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
-    if (agent.role === "supervisor" && (!agent.supervises || agent.supervises.length === 0)) {
+    if (agent.supervises !== undefined && agent.supervises.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Supervisor agent '${agent.name}' must define a non-empty supervises list`,
+        message: `Agent '${agent.name}' has an empty supervises list — either add agent names or remove the field`,
         path: ["agents", i, "supervises"],
       });
     }

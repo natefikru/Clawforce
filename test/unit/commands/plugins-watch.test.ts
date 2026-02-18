@@ -35,19 +35,15 @@ describe("plugins commands", () => {
     vi.clearAllMocks();
     vi.mocked(parseConfig).mockReturnValue({
       name: "test",
-      role: "research-agent",
+      agents: [{ name: "test-agent", workspace: "./workspaces/test-agent" }],
       openclaw: {
-        channels: {
-          discord: {
-            enabled: true,
-            token: "discord-bot-token",
+        default: {
+          channels: {
+            discord: {
+              enabled: true,
+              token: "discord-bot-token",
+            },
           },
-        },
-      },
-      models: {
-        primary: "anthropic/claude-sonnet-4-5",
-        provider_keys: {
-          anthropic: "sk-ant-test",
         },
       },
     } as never);

@@ -5,7 +5,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "acme-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
+    agents: [{ name: "test-agent", workspace: "./workspaces/test-agent", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -23,19 +23,9 @@ describe("generateAgentsMd", () => {
     expect(md).toContain("acme-corp");
   });
 
-  it("should include role display name", () => {
+  it("should include agent name", () => {
     const md = generateAgentsMd(makeConfig());
-    expect(md).toContain("Inbox Analyst");
-  });
-
-  it("should show Research Agent for research-agent role", () => {
-    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "research-agent", runtime: "openclaw" }] }));
-    expect(md).toContain("Research Agent");
-  });
-
-  it("should show Process Automator for process-automator role", () => {
-    const md = generateAgentsMd(makeConfig({ agents: [{ name: "test-agent", role: "process-automator", runtime: "openclaw" }] }));
-    expect(md).toContain("Process Automator");
+    expect(md).toContain("test-agent");
   });
 
   it("should default to autonomous mode", () => {
@@ -84,17 +74,17 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
     agents: [
       {
         name: "inbox-analyst",
-        role: "inbox-analyst",
+        workspace: "./workspaces/inbox-analyst",
         runtime: "openclaw",
       },
       {
         name: "research-agent",
-        role: "research-agent",
+        workspace: "./workspaces/research-agent",
         runtime: "openclaw",
       },
       {
         name: "ultron",
-        role: "process-automator",
+        workspace: "./workspaces/ultron",
         runtime: "openclaw",
         supervises: ["inbox-analyst", "research-agent"],
       },
@@ -110,11 +100,11 @@ describe("generateAgentsMd — multi-agent", () => {
     expect(md).toContain("Clawforce AI Workforce");
   });
 
-  it("should list all agents with roles", () => {
+  it("should list all agents by name", () => {
     const md = generateAgentsMd(makeMultiAgentConfig());
-    expect(md).toContain("inbox-analyst (Inbox Analyst)");
-    expect(md).toContain("research-agent (Research Agent)");
-    expect(md).toContain("ultron (Process Automator)");
+    expect(md).toContain("inbox-analyst");
+    expect(md).toContain("research-agent");
+    expect(md).toContain("ultron");
   });
 
   it("should list supervision relationships", () => {
@@ -122,9 +112,9 @@ describe("generateAgentsMd — multi-agent", () => {
     expect(md).toContain("**Supervises**: inbox-analyst, research-agent");
   });
 
-  it("should include per-agent SKILL.md paths", () => {
+  it("should include per-agent workspace paths", () => {
     const md = generateAgentsMd(makeMultiAgentConfig());
-    expect(md).toContain("workspace/inbox-analyst/skills/inbox-analyst/SKILL.md");
-    expect(md).toContain("workspace/ultron/skills/process-automator/SKILL.md");
+    expect(md).toContain("inbox-analyst");
+    expect(md).toContain("ultron");
   });
 });

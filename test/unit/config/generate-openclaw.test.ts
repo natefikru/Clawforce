@@ -10,7 +10,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "inbox-analyst", role: "inbox-analyst", runtime: "openclaw" }],
+    agents: [{ name: "inbox-analyst", workspace: "./workspaces/inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -100,28 +100,25 @@ describe("generateOpenClawConfig", () => {
     expect(gateway.bind).toBe("lan");
   });
 
-  it("should enable cron for inbox-analyst role", () => {
-    const resultMap = generateOpenClawConfig(
-      makeConfig({ agents: [{ name: "inbox-analyst", role: "inbox-analyst", runtime: "openclaw" }] }),
-    );
-    const result = resultMap.get("default")!;
-    expect(result.cron?.enabled).toBe(true);
-  });
-
-  it("should enable cron for process-automator role", () => {
-    const resultMap = generateOpenClawConfig(
-      makeConfig({ agents: [{ name: "process-automator", role: "process-automator", runtime: "openclaw" }] }),
-    );
-    const result = resultMap.get("default")!;
-    expect(result.cron?.enabled).toBe(true);
-  });
-
-  it("should not enable cron for research-agent role", () => {
-    const resultMap = generateOpenClawConfig(
-      makeConfig({ agents: [{ name: "research-agent", role: "research-agent", runtime: "openclaw" }] }),
-    );
+  it("should not auto-enable cron (cron is configured via openclaw passthrough)", () => {
+    const resultMap = generateOpenClawConfig(makeConfig());
     const result = resultMap.get("default")!;
     expect(result.cron?.enabled).toBeUndefined();
+  });
+
+  it("should enable cron via openclaw passthrough", () => {
+    const resultMap = generateOpenClawConfig(
+      makeConfig({
+        openclaw: {
+          default: {
+            channels: { discord: { enabled: true } },
+            cron: { enabled: true, store: "/home/node/.openclaw/data/cron/jobs.json" },
+          },
+        },
+      }),
+    );
+    const result = resultMap.get("default")!;
+    expect(result.cron?.enabled).toBe(true);
   });
 
   it("should enable hooks with command-logger", () => {
@@ -674,13 +671,13 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
     agents: [
       {
         name: "inbox-analyst",
-        role: "inbox-analyst",
+        workspace: "./workspaces/inbox-analyst",
         runtime: "openclaw",
         routing: { budget: { daily_limit: 5.0 } },
       },
       {
         name: "research-agent",
-        role: "research-agent",
+        workspace: "./workspaces/research-agent",
         runtime: "openclaw",
         routing: {
           budget: { daily_limit: 8.0 },
@@ -787,8 +784,8 @@ describe("generateOpenClawConfig — multi-agent", () => {
     const resultMap = generateOpenClawConfig(
       makeMultiAgentConfig({
         agents: [
-          { name: "agent-a", role: "inbox-analyst", runtime: "openclaw" },
-          { name: "agent-b", role: "research-agent", runtime: "openclaw" },
+          { name: "agent-a", workspace: "./workspaces/agent-a", runtime: "openclaw" },
+          { name: "agent-b", workspace: "./workspaces/agent-b", runtime: "openclaw" },
         ],
         routing: {},
       }),
@@ -798,11 +795,10 @@ describe("generateOpenClawConfig — multi-agent", () => {
     expect(routerCfg.agentBudgets).toBeUndefined();
   });
 
-  it("should merge role partials for all unique roles in multi-agent", () => {
+  it("should not auto-enable cron in multi-agent (use passthrough instead)", () => {
     const resultMap = generateOpenClawConfig(makeMultiAgentConfig());
     const result = resultMap.get("default")!;
-    // inbox-analyst role partial enables cron
-    expect(result.cron?.enabled).toBe(true);
+    expect(result.cron?.enabled).toBeUndefined();
   });
 
   it("should preserve openclaw passthrough in multi-agent mode", () => {
@@ -832,8 +828,8 @@ describe("generateOpenClawConfig — multi-agent", () => {
     const resultMap = generateOpenClawConfig({
       name: "multi-instance-corp",
       agents: [
-        { name: "support-bot", role: "inbox-analyst", runtime: "openclaw", openclaw: "support-instance" },
-        { name: "research-bot", role: "research-agent", runtime: "openclaw", openclaw: "research-instance" },
+        { name: "support-bot", workspace: "./workspaces/support-bot", runtime: "openclaw", openclaw: "support-instance" },
+        { name: "research-bot", workspace: "./workspaces/research-bot", runtime: "openclaw", openclaw: "research-instance" },
       ],
       openclaw: {
         "support-instance": { channels: { discord: { enabled: true } } },
@@ -862,13 +858,13 @@ describe("generateOpenClawConfig — multi-agent", () => {
         agents: [
           {
             name: "ultron",
-            role: "supervisor",
+            workspace: "./workspaces/ultron",
             runtime: "openclaw",
             supervises: ["inbox-analyst"],
           },
           {
             name: "inbox-analyst",
-            role: "inbox-analyst",
+            workspace: "./workspaces/inbox-analyst",
             runtime: "openclaw",
           },
         ],

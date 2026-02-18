@@ -2,7 +2,7 @@ name: "alerts-config"
 
 agents:
   - name: "test-agent"
-    role: "inbox-analyst"
+    workspace: "./workspaces/test-agent"
 
 openclaw:
   default:
