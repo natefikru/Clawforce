@@ -1,16 +1,20 @@
 name: "runtime-e2e-local"
-role: "inbox-analyst"
+
+agents:
+  - name: "inbox-analyst"
+    role: "inbox-analyst"
 
 openclaw:
-  channels:
-    discord:
-      enabled: true
+  default:
+    channels:
+      discord:
+        enabled: true
 
 models:
-  primary: "ollama/llama3.3:8b"
+  cloud: "ollama/llama3.3:8b"
   credential_mode: "env"
 
-runtime:
+local_model:
   engine: "ollama"
   location: "host"
   host_url: "http://host.docker.internal:11434"
@@ -19,8 +23,7 @@ runtime:
 gateway:
   bind: "loopback"
 
-router:
-  enabled: true
+routing:
   rules:
     - condition: "pii_detected"
       model: "ollama/llama3.3:8b"
