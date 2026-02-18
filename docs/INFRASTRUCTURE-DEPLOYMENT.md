@@ -137,16 +137,20 @@ Gateway and local model inference on the same machine. Best cost-performance for
 Run OpenClaw + Clawforce in Docker, but run local inference natively on macOS (for example, Ollama with Apple Silicon acceleration).
 
 ```yaml
-local_model:
-  engine: "ollama"
-  location: "host"
-  host_url: "http://host.docker.internal:11434"
-  model: "llama3.3:8b"
+models:
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: host
+      host_url: "http://host.docker.internal:11434"
+      model: "llama3.3:8b"
 ```
 
 **How this works:**
-1. `local_model.location: host` tells Clawforce not to launch an inference sidecar container.
-2. The gateway routes local-model traffic to `local_model.host_url`.
+1. `engine.location: host` on the model entry tells Clawforce not to launch an inference sidecar container.
+2. The gateway routes local-model traffic to the `engine.host_url`.
 3. Router/compliance/PII invariants remain unchanged.
 
 **Best for:** Home-lab and small-team deployments that want local privacy and lower recurring cloud spend without managing Linux GPU servers.
@@ -195,12 +199,17 @@ Gateway on a cheap VPS, local models on a dedicated GPU server. Most flexible an
 4. **Multi-agent ready** — You can scale GPU inference independently and place a load balancer in front of inference nodes
 5. **Hybrid routing** — PII-sensitive requests go to local GPU, everything else to cloud APIs
 
-**Connection:** Configure remote inference directly in `clawforce.yaml`:
+**Connection:** Configure remote inference directly on the model entry in `clawforce.yaml`:
 ```yaml
-local_model:
-  engine: "ollama" # or sglang / vllm
-  location: "host"
-  host_url: "http://gpu-lb.internal:11434"
+models:
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama            # or sglang / vllm
+      location: host
+      host_url: "http://gpu-lb.internal:11434"
+      model: "llama3.3:8b"
 ```
 
 **Best for:** Production deployments, multi-agent orchestration (Phase 2B+), regulated industries.

@@ -69,15 +69,19 @@ agents:
     role: supervisor
     supervises: []
 
-deployment:
-  agent_runtime: openclaw
-
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 
 gateway:
   bind: loopback
@@ -91,9 +95,9 @@ dashboard:
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
   sensitivity:
     pii_detection: true
     keywords: ["password", "secret"]
@@ -107,19 +111,13 @@ openclaw:
       discord:
         enabled: true
         token: "${DISCORD_BOT_TOKEN}"
-
-local_model:
-  engine: "ollama"
-  location: "container"
-  model: "llama3.3:8b"
-  gpu: "nvidia"
 EOF
 
 # Deploy
 clawforce deploy -c clawforce.yaml
 ```
 
-This starts an OpenClaw gateway, a local model via the configured runtime engine, the compliance logger, and the monitoring dashboard — all via Docker Compose.
+This starts an OpenClaw gateway, a local model via the configured engine, the compliance logger, and the monitoring dashboard — all via Docker Compose.
 
 Secure-by-default deployment behavior:
 - Gateway binds to `loopback` unless explicitly set to `gateway.bind: lan`.
@@ -146,22 +144,22 @@ PII never routes to cloud models. This is enforced as a post-routing safety inva
 routing:
   rules:
     - condition: "pii_detected"
-      model: "sglang/qwen3-32b"
+      model: "qwen"                    # references model by name from models list
     - condition: "medium_complexity"
-      model: "openai/gpt-4o-mini"
+      model: "gpt4o-mini"
     - condition: "high_complexity"
-      model: "anthropic/claude-sonnet-4-5"
+      model: "claude"
     - condition: "domain_code"
-      model: "openai/gpt-4o"
+      model: "gpt4o"
     - condition: "over_budget"
-      model: "sglang/qwen3-32b"
+      model: "qwen"
   sensitivity:
     keywords: ["password", "secret", "confidential"]
     pii_detection: true
   priority: ["sensitivity", "cost", "domain", "complexity"]
   budget:
     daily_limit: 10.00
-    fallback_model: "sglang/qwen3-32b"
+    fallback_model: "qwen"
 ```
 
 ### Model Health and Failover
@@ -239,11 +237,18 @@ Deploy multiple specialized agents from a single config, each with its own role,
 name: my-workforce
 
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 
 agents:
   - name: ops-supervisor
@@ -252,13 +257,13 @@ agents:
     routing:
       budget:
         daily_limit: 5.00
-        fallback_model: "ollama/llama3.3:8b"
+        fallback_model: "llama"
   - name: research-agent
     role: research-agent
     routing:
       budget:
         daily_limit: 10.00
-        fallback_model: "ollama/llama3.3:8b"
+        fallback_model: "llama"
 
 openclaw:
   default:
@@ -266,12 +271,6 @@ openclaw:
       discord:
         enabled: true
         token: "${DISCORD_BOT_TOKEN}"
-
-local_model:
-  engine: "ollama"
-  location: "container"
-  model: "llama3.3:8b"
-  gpu: "nvidia"
 ```
 
 Per-agent budget isolation, channel routing, and supervisor hierarchies. See [docs/MULTI-AGENT.md](docs/MULTI-AGENT.md) for the full reference.
@@ -331,33 +330,47 @@ Full `clawforce.yaml` reference:
 name: my-agent
 
 # Agents array — at least one agent required. No separate "single-agent" mode.
+# Runtime defaults to "openclaw" per agent; override with an explicit runtime field.
 agents:
   - name: my-agent
     role: supervisor             # inbox-analyst | research-agent | process-automator | supervisor
     supervises: [helper-agent]   # Required for supervisor role; list of agent names this agent manages
     openclaw: default            # Optional; required when multiple openclaw instances are defined
+    runtime: openclaw            # Optional; defaults to "openclaw"
     routing:                     # Optional per-agent routing overrides
       budget:
         daily_limit: 5.00
-        fallback_model: "sglang/qwen3-32b"
+        fallback_model: "qwen"   # references model by name
       rules:
         - condition: high_complexity
-          model: "anthropic/claude-sonnet-4-5"
+          model: "claude"        # references model by name
   - name: helper-agent
     role: research-agent
 
-deployment:
-  agent_runtime: openclaw        # Agent orchestration runtime target (defaults to openclaw)
-
+# Models list — ONLY needed when routing rules reference specific models.
+# If no routing rules, no models section needed. The OpenClaw passthrough section
+# owns the default model via the openclaw config.
+# Routing rules reference models by name (validated at parse time).
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "sglang/qwen3-32b"
-  credential_mode: env           # env | auth_profile
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"   # used when credential_mode=env
+  - name: qwen
+    id: "sglang/qwen3-32b"
+    type: local
+    engine:
+      runtime: sglang              # ollama | sglang | vllm
+      location: container          # container | host
+      model: "qwen3-32b"
+      gpu: nvidia                  # nvidia | amd | none
+      port: 30000                  # engine port (sglang default: 30000)
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+
+auth_profile: "corp-prod"         # Optional top-level auth profile (replaces old credential_mode)
 
 gateway:
   bind: loopback                 # loopback | lan
+  port: 18789                    # Optional gateway port
 
 routing:
   rules: []                      # Custom routing rules (pii_detected | low_complexity | medium_complexity | high_complexity | domain_* | over_budget)
@@ -377,7 +390,7 @@ routing:
     default_tier: internal       # restricted | confidential | internal | public
   budget:
     daily_limit: 10.00
-    fallback_model: "sglang/qwen3-32b"
+    fallback_model: "qwen"       # references model by name
   health_check:
     enabled: true
     failover_policy: block       # block | failover-safe (queue not implemented)
@@ -397,13 +410,6 @@ dashboard:
     enabled: true
     username: admin
     password: "your-secure-password"  # Min 8 characters
-
-local_model:
-  engine: "sglang"               # Runtime engine id (e.g. ollama | sglang | vllm)
-  location: "container"          # container | host
-  model: "qwen3-32b"
-  gpu: nvidia                    # nvidia | amd | none
-  port: 30000                    # engine port (sglang default: 30000)
 
 capabilities: full               # minimal | standard | full
 
@@ -453,7 +459,7 @@ openclaw:
   #       token: "${SLACK_BOT_TOKEN}"
 ```
 
-NOTE: `deployment.agent_runtime` selects the agent orchestration target (currently `openclaw`). `local_model.engine` is separate and selects the model-serving engine (`ollama`, `sglang`, `vllm`) for local inference.
+NOTE: The `models` list is only needed when routing rules reference specific models by name. If you have no routing rules, you can omit it entirely — the OpenClaw passthrough section owns the default model. The old `deployment` section has been removed; runtime defaults to `"openclaw"` per agent and can be overridden with an explicit `runtime` field on each agent. Engine config for local models (ollama, sglang, vllm) is now inline on each local model entry rather than in a separate `local_model` section.
 
 ---
 

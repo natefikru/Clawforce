@@ -95,9 +95,18 @@ name: acme-ai-workforce
 # Shared defaults (inherited by all agents unless overridden)
 defaults:
   models:
-    cloud: anthropic/claude-sonnet-4-5
-    local: sglang/qwen3-32b
-    credential_mode: env
+    - name: qwen
+      id: sglang/qwen3-32b
+      type: local
+      engine:
+        runtime: sglang
+        location: container
+        model: qwen3-32b
+        gpu: nvidia
+    - name: claude
+      id: anthropic/claude-sonnet-4-5
+      type: cloud
+      api_key: "${ANTHROPIC_API_KEY}"
   router:
     priority: [policy, sensitivity, cost, domain, complexity]
     sensitivity_keywords: [confidential, restricted]
@@ -131,7 +140,7 @@ agents:
         daily_limit: 8.00
       rules:
         - condition: domain_research
-          model: anthropic/claude-sonnet-4-5
+          model: "claude"
     skills:
       - web-research
       - report-generation

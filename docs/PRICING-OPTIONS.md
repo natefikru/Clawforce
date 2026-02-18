@@ -39,15 +39,15 @@ The ROI calculator (Phase 3.2) is designed to generate these numbers automatical
 
 ## The API Key Question
 
-Clawforce already supports two credential modes via `credential_mode` in `clawforce.yaml`:
+Clawforce supports two credential approaches in `clawforce.yaml`:
 
 | Mode | How It Works | Who Pays for Tokens |
 |------|-------------|-------------------|
-| `env` | Customer puts their `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in `.env` | Customer pays provider directly |
-| `auth_profile` | Uses OpenClaw's built-in auth profile rotation with multiple keys | Customer pays provider directly |
+| Inline `api_key` | Customer sets `api_key` on each cloud model entry (supports `${ENV_VAR}` expansion) | Customer pays provider directly |
+| `auth_profile` | Top-level `auth_profile` field uses OpenClaw's built-in auth profile rotation with multiple keys | Customer pays provider directly |
 | **Future: `managed`** | Clawforce provides API access, bills customer at markup | We pay provider, bill customer |
 
-**Default recommendation**: Let customers use their own keys (`env` mode). This removes pricing friction, builds trust, and strengthens the data sovereignty pitch ("your keys, your data, your network"). The `managed` mode is a Phase 3+ add-on for customers who want single-vendor billing simplicity.
+**Default recommendation**: Let customers use their own keys (inline `api_key` mode). This removes pricing friction, builds trust, and strengthens the data sovereignty pitch ("your keys, your data, your network"). The `managed` mode is a Phase 3+ add-on for customers who want single-vendor billing simplicity.
 
 ---
 
