@@ -419,8 +419,9 @@ export const ClawforceConfigSchema = z.object({
     }
   }
 
-  // 4. PII safety: if routing exists with PII detection, require at least one local model
-  const piiEnabled = data.routing?.sensitivity?.pii_detection !== false;
+  // 4. PII safety: if routing has PII detection enabled or pii_detected rule, require at least one local model
+  const hasPiiRule = data.routing?.rules?.some((r: { condition: string }) => r.condition === "pii_detected");
+  const piiEnabled = data.routing?.sensitivity?.pii_detection === true || hasPiiRule;
   if (data.routing && piiEnabled && models.length > 0) {
     const hasLocal = models.some((m) => m.type === "local");
     if (!hasLocal) {

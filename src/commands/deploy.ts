@@ -164,7 +164,7 @@ export async function deployCommand(configPath: string): Promise<void> {
   }
 
   logger.header("Deployment successful!");
-  logger.info(`Gateway:          ws://127.0.0.1:18789`);
+  logger.info(`Gateway:          ws://127.0.0.1:${config.gateway?.port ?? 18789}`);
   logger.info(`Agents:           ${config.agents.map((a) => `${a.name} (${a.role})`).join(", ")}`);
   logger.info(`Deploy dir:       ${deployDir}`);
   if (config.dashboard && config.dashboard.enabled !== false) {

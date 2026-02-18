@@ -150,6 +150,21 @@ describe("ClawforceConfigSchema (v2)", () => {
       expect(result.error.errors.some((e) => e.message.includes("cannot supervise itself"))).toBe(true);
     });
 
+    it("should reject duplicate model names", () => {
+      const result = ClawforceConfigSchema.safeParse({
+        name: "test",
+        models: [
+          { name: "llama", id: "ollama/llama3.3:8b", type: "local", engine: { runtime: "ollama", location: "container", model: "llama3.3:8b" } },
+          { name: "llama", id: "ollama/llama3.3:70b", type: "local", engine: { runtime: "ollama", location: "container", model: "llama3.3:70b" } },
+        ],
+        agents: [{ name: "a", role: "inbox-analyst" }],
+        openclaw: { default: { channels: {} } },
+      });
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error.errors.some((e) => e.message.includes("Duplicate model name"))).toBe(true);
+    });
+
     it("should reject cloud model without api_key when auth_profile is not set", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",

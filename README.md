@@ -66,8 +66,7 @@ name: my-agent
 
 agents:
   - name: my-agent
-    role: supervisor
-    supervises: []
+    role: inbox-analyst
 
 models:
   - name: llama
