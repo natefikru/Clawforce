@@ -29,7 +29,13 @@ routing:
       model: llama
     - condition: "low_complexity"
       model: llama
+    - condition: "medium_complexity"
+      model: llama
     - condition: "high_complexity"
+      model: llama
+    - condition: "domain_code"
+      model: llama
+    - condition: "domain_analysis"
       model: llama
     - condition: "over_budget"
       model: llama
