@@ -10,11 +10,6 @@ openclaw:
       discord:
         enabled: true
 
-models:
-  cloud: anthropic/claude-sonnet-4-5
-  provider_keys:
-    anthropic: ${ANTHROPIC_API_KEY}
-
 routing:
   health_check:
     failover_policy: queue

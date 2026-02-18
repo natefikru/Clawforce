@@ -1,5 +1,6 @@
 import { stringify as stringifyYaml } from "yaml";
-import type { ClawforceConfig } from "./types.js";
+import type { ClawforceConfig, ModelEngine } from "./types.js";
+import { getLocalModelEngine } from "./types.js";
 import { getRuntimeEngineAdapter } from "./engines/registry.js";
 
 interface ComposeService {
@@ -37,8 +38,7 @@ interface ComposeConfig {
 export function generateCompose(config: ClawforceConfig): string {
   const containerPrefix = `clawforce-${config.name}`;
   const gatewayBind = config.gateway?.bind ?? "loopback";
-  const models = config.models;
-  const credentialMode = models.credential_mode ?? "env";
+  const gatewayPort = config.gateway?.port ?? 18789;
   const gatewayEnv = [
     "HOME=/home/node",
     "TERM=xterm-256color",
@@ -47,13 +47,19 @@ export function generateCompose(config: ClawforceConfig): string {
     "NODE_ENV=production",
   ];
 
-  if (credentialMode === "auth_profile") {
+  if (config.auth_profile) {
     gatewayEnv.push("OPENCLAW_AUTH_PROFILE=${OPENCLAW_AUTH_PROFILE}");
   } else {
-    const providerKeys = Object.keys(models.provider_keys ?? {}).sort((a, b) =>
-      a.localeCompare(b)
-    );
-    for (const provider of providerKeys) {
+    // Collect provider keys from cloud models: deduplicate by provider (first part of model id)
+    const providerKeyMap = new Map<string, string>();
+    for (const m of config.models?.filter((m) => m.type === "cloud" && m.api_key) ?? []) {
+      const provider = m.id.split("/")[0];
+      if (!providerKeyMap.has(provider)) {
+        providerKeyMap.set(provider, m.api_key!);
+      }
+    }
+    const providers = [...providerKeyMap.keys()].sort((a, b) => a.localeCompare(b));
+    for (const provider of providers) {
       gatewayEnv.push(`${toProviderApiKeyEnvName(provider)}=\${${toProviderApiKeyEnvName(provider)}}`);
     }
   }
@@ -69,7 +75,7 @@ export function generateCompose(config: ClawforceConfig): string {
         container_name: `${containerPrefix}-gateway`,
         restart: "unless-stopped",
         init: true,
-        ports: ["18789:18789"],
+        ports: [`${gatewayPort}:${gatewayPort}`],
         environment: gatewayEnv,
         volumes: [
           "./config:/home/node/.openclaw",
@@ -83,20 +89,21 @@ export function generateCompose(config: ClawforceConfig): string {
           "--bind",
           gatewayBind,
           "--port",
-          "18789",
+          String(gatewayPort),
         ],
       },
     },
   };
 
-  if (config.local_model) {
-    const rt = config.local_model;
-    const engine = rt.engine ?? "sglang";
+  const localEngine: ModelEngine | undefined = getLocalModelEngine(config);
+
+  if (localEngine) {
+    const engine = localEngine.runtime ?? "sglang";
     const adapter = getRuntimeEngineAdapter(engine);
-    const runtimeLocation = rt.location ?? "container";
+    const runtimeLocation = localEngine.location ?? "container";
 
     if (runtimeLocation === "host") {
-      const hostRuntimeUrl = adapter.resolveHostRuntimeUrl(rt);
+      const hostRuntimeUrl = adapter.resolveHostRuntimeUrl(localEngine as never);
       if (hostRuntimeUrl.includes("host.docker.internal")) {
         compose.services["openclaw-gateway"].extra_hosts = [
           ...(compose.services["openclaw-gateway"].extra_hosts ?? []),
@@ -107,7 +114,7 @@ export function generateCompose(config: ClawforceConfig): string {
       const runtimeService = adapter.buildContainerService({
         containerPrefix,
         configName: config.name,
-        runtime: rt,
+        runtime: localEngine as never,
       });
       compose.services["openclaw-gateway"].depends_on = {
         [runtimeService.serviceName]: { condition: runtimeService.dependsOnCondition },
@@ -124,7 +131,7 @@ export function generateCompose(config: ClawforceConfig): string {
 
     if (runtimeLocation === "host") {
       compose.services["openclaw-gateway"].environment!.push(
-        `${adapter.hostEnvVarName}=${adapter.resolveHostRuntimeUrl(rt)}`,
+        `${adapter.hostEnvVarName}=${adapter.resolveHostRuntimeUrl(localEngine as never)}`,
       );
     }
   }
@@ -135,7 +142,7 @@ export function generateCompose(config: ClawforceConfig): string {
     const dashboardEnv = [
       "DATA_DIR=/data",
       "CONFIG_DIR=/config",
-      "OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:18789",
+      `OPENCLAW_GATEWAY_URL=ws://openclaw-gateway:${gatewayPort}`,
       "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}",
     ];
 

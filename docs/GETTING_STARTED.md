@@ -228,19 +228,23 @@ Create `clawforce.yaml`:
 ```yaml
 name: my-agent
 
-deployment:
-  agent_runtime: openclaw
-
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
-
 agents:
   - name: inbox-analyst
     role: inbox-analyst
+
+models:
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 
 gateway:
   bind: loopback
@@ -254,9 +258,9 @@ dashboard:
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
 
 compliance:
   enabled: true
@@ -267,12 +271,6 @@ openclaw:
       discord:
         enabled: true
         token: "${DISCORD_BOT_TOKEN}"
-
-local_model:
-  engine: "ollama"
-  location: "container"
-  model: "llama3.3:8b"
-  gpu: "nvidia"
 ```
 
 ### Deploy
@@ -285,7 +283,7 @@ clawforce deploy -c clawforce.yaml
 
 This generates a Docker Compose stack (OpenClaw gateway + optional Ollama sidecar + dashboard) and starts it.
 
-NOTE: `credential_mode: env` currently maps `models.provider_keys.anthropic` to `ANTHROPIC_API_KEY` in generated `.env`/Compose wiring. If your cloud model is not Anthropic, prefer `credential_mode: auth_profile` or configure provider credentials via OpenClaw passthrough and your own secret delivery path.
+NOTE: Cloud model API keys are configured inline on each cloud model entry via `api_key`. For environments that use OpenClaw auth profiles instead of environment variables, set the top-level `auth_profile` field. If your cloud model is not Anthropic, configure provider credentials via OpenClaw passthrough and your own secret delivery path.
 
 ---
 
@@ -294,39 +292,69 @@ NOTE: `credential_mode: env` currently maps `models.provider_keys.anthropic` to 
 ```yaml
 name: my-agent                         # Deployment name (used for directory, container names)
 
-deployment:
-  agent_runtime: openclaw              # Agent orchestration runtime target (defaults to openclaw)
-
-models:
-  cloud: "anthropic/claude-sonnet-4-5"    # Cloud model (required)
-  local: "sglang/qwen3-32b"              # Local model (for PII/budget fallback)
-  credential_mode: env                    # env | auth_profile
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"     # Used when credential_mode=env
-
 agents:                                # At least one agent required
   - name: inbox-analyst
     role: inbox-analyst                # inbox-analyst | research-agent | process-automator | supervisor
+    runtime: openclaw                  # Optional; defaults to "openclaw"
+
+# Models list — ONLY needed when routing rules reference specific models.
+# If no routing rules, no models section needed. OpenClaw passthrough owns the default model.
+# Routing rules reference models by name (validated at parse time).
+models:
+  - name: qwen
+    id: "sglang/qwen3-32b"
+    type: local
+    engine:                            # Engine config inline on local model entries
+      runtime: sglang                  # ollama | sglang | vllm
+      location: container              # container (managed sidecar) | host (external runtime)
+      host_url: "http://host.docker.internal:30000"  # Required/recommended for location=host
+      model: "qwen3-32b"
+      gpu: nvidia                      # nvidia | amd | none
+      quantization: "fp16"
+      port: 30000
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+  - name: gpt4o
+    id: "openai/gpt-4o"
+    type: cloud
+    api_key: "${OPENAI_API_KEY}"
+  - name: gpt4o-mini
+    id: "openai/gpt-4o-mini"
+    type: cloud
+    api_key: "${OPENAI_API_KEY}"
+
+auth_profile: "corp-prod"             # Optional top-level auth profile (replaces old credential_mode)
 
 gateway:
   bind: loopback                       # loopback (default, safe) | lan (exposes to network)
+  port: 18789                          # Optional gateway port
 
 routing:                               # Global routing config
   rules:                               # Custom routing rules (first match wins per dimension)
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"      # Must be a local model — cloud models are overridden
+      model: "llama"                   # References model by name — must be a local model
     - condition: "medium_complexity"
-      model: "openai/gpt-4o-mini"
+      model: "gpt4o-mini"
     - condition: "high_complexity"
-      model: "anthropic/claude-sonnet-4-5"
+      model: "claude"
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
     - condition: "domain_code"
-      model: "openai/gpt-4o"
+      model: "gpt4o"
     - condition: "domain_writing"
-      model: "anthropic/claude-sonnet-4-5"
+      model: "claude"
     - condition: "over_budget"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
   sensitivity:                         # Sensitivity config (PII detection + keywords)
     keywords:                          # Blocklist words that trigger PII routing
       - "password"
@@ -342,7 +370,7 @@ routing:                               # Global routing config
     - complexity                       # Prompt complexity scoring
   budget:
     daily_limit: 10.00                 # USD per day
-    fallback_model: "sglang/qwen3-32b" # Used when over budget
+    fallback_model: "qwen"             # References model by name
   policy:
     default_tier: internal
   health_check:
@@ -370,15 +398,6 @@ dashboard:
     enabled: true                      # Required when dashboard.enabled=true
     username: admin
     password: "your-secure-password"   # Min 8 characters
-
-local_model:                           # Local model runtime (managed sidecar or host endpoint)
-  engine: "sglang"                     # ollama | sglang | vllm
-  location: "container"                # container (managed sidecar) | host (external runtime)
-  host_url: "http://host.docker.internal:30000"  # Required/recommended for location=host
-  model: "qwen3-32b"
-  gpu: "nvidia"
-  quantization: "fp16"
-  port: 30000
 
 capabilities: full                     # minimal | standard | full
   # minimal: web_search only
@@ -424,7 +443,7 @@ openclaw:
           browser: { enabled: true, headless: true }
 ```
 
-NOTE: `deployment.agent_runtime` chooses the orchestration backend for agent execution. `local_model.engine` is independent and controls the local model-serving runtime used by the router and gateway.
+NOTE: The `models` list is only needed when routing rules reference specific models by name. If you have no routing rules, you can omit it entirely — the OpenClaw passthrough section owns the default model. The old `deployment` section has been removed; runtime defaults to `"openclaw"` per agent and can be overridden with an explicit `runtime` field on each agent. Engine config for local models (ollama, sglang, vllm) is now inline on each local model entry rather than in a separate `local_model` section. `auth_profile` is now a top-level field replacing the old `credential_mode` + `provider_keys` approach.
 
 ### Valid Routing Conditions
 
@@ -442,9 +461,9 @@ NOTE: `deployment.agent_runtime` chooses the orchestration backend for agent exe
 
 ### Model Reference Format
 
-Models use `provider/model-name` format:
+Routing rules reference models by **name** (the `name` field on each model entry). Model IDs use `provider/model-name` format internally:
 
-| Provider | Example | Type |
+| Provider | Example ID | Type |
 |----------|---------|------|
 | `anthropic` | `anthropic/claude-sonnet-4-5` | Cloud |
 | `openai` | `openai/gpt-4o` | Cloud |
@@ -453,9 +472,7 @@ Models use `provider/model-name` format:
 | `sglang` | `sglang/qwen3-32b` | Local |
 | `vllm` | `vllm/mistral-7b` | Local |
 
-Any model whose provider matches a registered runtime engine id (for example `ollama`, `sglang`, `vllm`) is treated as **local** for PII routing and health monitoring purposes.
-
-NOTE: `local/*` aliases are treated as local for routing and cost, but they are not health-probed unless the provider is a registered runtime engine.
+Model names in routing rules are validated at parse time against the `models` list. Any model whose `type` is `local` is treated as safe for PII routing and is health-monitored via its `engine` configuration.
 
 ---
 
@@ -533,15 +550,10 @@ The Next.js dashboard (port 3000 by default) provides 5 panels:
 
 ### Cloud-Only (No Local Models)
 
-Simplest setup. All inference goes to cloud APIs. No GPU needed.
+Simplest setup. All inference goes to cloud APIs. No GPU needed. No `models` section needed since there are no routing rules referencing specific models.
 
 ```yaml
 name: my-agent
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
 agents:
   - name: inbox-analyst
     role: inbox-analyst
@@ -569,11 +581,19 @@ Recommended for production. PII stays local, complex tasks go cloud.
 ```yaml
 name: my-agent
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+      port: 11434
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 agents:
   - name: inbox-analyst
     role: inbox-analyst
@@ -582,23 +602,17 @@ gateway:
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
     - condition: "high_complexity"
-      model: "anthropic/claude-sonnet-4-5"
+      model: "claude"
   budget:
     daily_limit: 10.00
-    fallback_model: "ollama/llama3.3:8b"
+    fallback_model: "llama"
   health_check:
     enabled: true
     failover_policy: failover-safe
-local_model:
-  engine: "ollama"
-  location: "container"
-  model: "llama3.3:8b"
-  gpu: "nvidia"
-  port: 11434
 compliance:
   enabled: true
 dashboard:
@@ -618,28 +632,30 @@ Run OpenClaw + Clawforce in Docker, but keep Ollama native on macOS for best App
 ```yaml
 name: my-agent
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: host
+      host_url: "http://host.docker.internal:11434"
+      model: "llama3.3:8b"
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 agents:
   - name: inbox-analyst
     role: inbox-analyst
-local_model:
-  engine: "ollama"
-  location: "host"
-  host_url: "http://host.docker.internal:11434"
-  model: "llama3.3:8b"
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: "llama"
     - condition: "high_complexity"
-      model: "anthropic/claude-sonnet-4-5"
+      model: "claude"
   budget:
     daily_limit: 10.00
-    fallback_model: "ollama/llama3.3:8b"
+    fallback_model: "llama"
 compliance:
   enabled: true
 dashboard:
@@ -654,23 +670,28 @@ openclaw:
 
 Notes:
 - Start your host runtime first (for example, Ollama on macOS).
-- `local_model.location: host` means Clawforce will not create a runtime sidecar container.
+- `engine.location: host` on the model entry means Clawforce will not create a runtime sidecar container.
 - The gateway still enforces the same PII routing invariants.
 
 ### Split Architecture (Production)
 
 Gateway on a cheap VPS, GPU inference on a separate server.
 
-Use host runtime mode and point the runtime endpoint at your remote inference server or load balancer:
+Use host location mode on the model entry and point the engine endpoint at your remote inference server or load balancer:
 
 ```yaml
-local_model:
-  engine: "ollama"                     # or sglang / vllm
-  location: "host"
-  host_url: "http://gpu-server.internal:11434"
+models:
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama                  # or sglang / vllm
+      location: host
+      host_url: "http://gpu-server.internal:11434"
+      model: "llama3.3:8b"
 ```
 
-Ensure your routing rules still point to local model refs (`ollama/...`, `sglang/...`, `vllm/...`) so PII invariants remain local-only.
+Ensure your routing rules reference local model names so PII invariants remain local-only.
 
 ---
 
@@ -831,15 +852,15 @@ pnpm knip --include dependencies,unlisted,unresolved
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (auto-wired for `credential_mode=env`) | — |
-| `OPENAI_API_KEY` | OpenAI API key (only if you wire it through OpenClaw/Compose manually) | — |
+| `ANTHROPIC_API_KEY` | Anthropic API key (referenced via `api_key` on cloud model entries) | — |
+| `OPENAI_API_KEY` | OpenAI API key (referenced via `api_key` on cloud model entries) | — |
 | `OLLAMA_HOST` | Ollama endpoint for health probes | `http://ollama:11434` |
 | `SGLANG_HOST` | SGLang endpoint for health probes | `http://sglang:30000` |
 | `VLLM_HOST` | vLLM endpoint for health probes | `http://vllm:8000` |
 | `CLAWFORCE_SKIP_SECURITY_AUDIT` | Skip OpenClaw security audit gate | `0` |
 | `DISCORD_BOT_TOKEN` | Discord bot token | — |
 
-NOTE: The generated Compose wiring currently auto-injects `ANTHROPIC_API_KEY` when `credential_mode=env`. Other cloud-provider keys must be injected via OpenClaw auth profiles or manual Compose/OpenClaw configuration.
+NOTE: Cloud model API keys are configured inline on each cloud model entry via `api_key` (supports `${ENV_VAR}` expansion). For environments that use OpenClaw auth profiles, set the top-level `auth_profile` field instead.
 
 ---
 

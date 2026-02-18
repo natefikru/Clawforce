@@ -4,15 +4,8 @@ agents:
   - name: "research-agent"
     role: "research-agent"
 
-deployment: {}
-
 openclaw:
   default:
     channels:
       discord:
         enabled: true
-
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"

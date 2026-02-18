@@ -5,7 +5,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst" }],
+    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -13,12 +13,9 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
         },
       },
     },
-    models: {
-      cloud: "anthropic/claude-sonnet-4-5",
-      provider_keys: {
-        anthropic: "sk-ant-test123",
-      },
-    },
+    models: [
+      { name: "claude", id: "anthropic/claude-sonnet-4-5", type: "cloud", api_key: "sk-ant-test123" },
+    ],
     ...overrides,
   };
 }
@@ -28,12 +25,9 @@ describe("generateEnv", () => {
     expect(() =>
       generateEnv(
         makeConfig({
-          local_model: {
-            engine: "custom-engine",
-            location: "host",
-            model: "custom/model",
-            port: 9999,
-          },
+          models: [
+            { name: "custom", id: "custom-engine/model", type: "local", engine: { runtime: "custom-engine", location: "host", model: "custom/model", port: 9999 } },
+          ],
         }),
       ),
     ).toThrow('Unsupported runtime engine "custom-engine"');
@@ -59,40 +53,32 @@ describe("generateEnv", () => {
   it("should omit provider API key in auth_profile mode", () => {
     const env = generateEnv(
       makeConfig({
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          credential_mode: "auth_profile",
-          auth_profile: "corp-prod",
-          provider_keys: {
-            anthropic: "sk-ant-should-not-be-used",
-          },
-        },
+        auth_profile: "corp-prod",
+        models: [
+          { name: "claude", id: "anthropic/claude-sonnet-4-5", type: "cloud", api_key: "sk-ant-should-not-be-used" },
+        ],
       }),
     );
     expect(env).not.toContain("ANTHROPIC_API_KEY=");
     expect(env).toContain("OPENCLAW_AUTH_PROFILE=corp-prod");
   });
 
-  it("should include warning comment when auth_profile exists in env mode", () => {
+  it("should include credential mode comment when auth_profile is set but env models have keys", () => {
     const env = generateEnv(
       makeConfig({
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          credential_mode: "env",
-          auth_profile: "corp-prod",
-          provider_keys: {
-            anthropic: "sk-ant-test123",
-          },
-        },
+        auth_profile: "corp-prod",
+        models: [
+          { name: "claude", id: "anthropic/claude-sonnet-4-5", type: "cloud", api_key: "sk-ant-test123" },
+        ],
       }),
     );
-    expect(env).toContain("credential_mode=env");
-    expect(env).toContain("ANTHROPIC_API_KEY=sk-ant-test123");
+    expect(env).toContain("OPENCLAW_AUTH_PROFILE=corp-prod");
+    expect(env).not.toContain("ANTHROPIC_API_KEY=sk-ant-test123");
   });
 
   it("should handle missing provider keys", () => {
     const env = generateEnv(
-      makeConfig({ models: { cloud: "anthropic/claude-sonnet-4-5" } }),
+      makeConfig({ models: undefined }),
     );
     expect(env).not.toContain("ANTHROPIC_API_KEY=");
   });
@@ -157,13 +143,20 @@ describe("generateEnv", () => {
   it("should export OLLAMA_HOST for host runtime mode", () => {
     const env = generateEnv(
       makeConfig({
-        local_model: {
-          engine: "ollama",
-          location: "host",
-          host_url: "http://host.docker.internal:11434",
-          model: "llama3.3:8b",
-          port: 11434,
-        },
+        models: [
+          {
+            name: "llama",
+            id: "ollama/llama3.3:8b",
+            type: "local",
+            engine: {
+              runtime: "ollama",
+              location: "host",
+              host_url: "http://host.docker.internal:11434",
+              model: "llama3.3:8b",
+              port: 11434,
+            },
+          },
+        ],
       }),
     );
 
@@ -173,12 +166,19 @@ describe("generateEnv", () => {
   it("should default host runtime endpoint when host_url is omitted", () => {
     const env = generateEnv(
       makeConfig({
-        local_model: {
-          engine: "sglang",
-          location: "host",
-          model: "qwen3-32b",
-          port: 30000,
-        },
+        models: [
+          {
+            name: "qwen",
+            id: "sglang/qwen3-32b",
+            type: "local",
+            engine: {
+              runtime: "sglang",
+              location: "host",
+              model: "qwen3-32b",
+              port: 30000,
+            },
+          },
+        ],
       }),
     );
 

@@ -10,7 +10,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "inbox-analyst", role: "inbox-analyst" }],
+    agents: [{ name: "inbox-analyst", role: "inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -21,10 +21,6 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
         },
       },
     },
-    models: {
-      cloud: "anthropic/claude-sonnet-4-5",
-      local: "ollama/llama3.3:8b",
-    },
     ...overrides,
   };
 }
@@ -33,27 +29,19 @@ describe("generateOpenClawConfig", () => {
   it("should set the primary model", () => {
     const resultMap = generateOpenClawConfig(makeConfig());
     const result = resultMap.get("default")!;
-    expect(result.agents.defaults.model.primary).toBe(
-      "anthropic/claude-sonnet-4-5",
-    );
+    expect(result.agents.defaults.model?.primary).toBeUndefined();
   });
 
   it("should set local model as fallback", () => {
     const resultMap = generateOpenClawConfig(makeConfig());
     const result = resultMap.get("default")!;
-    expect(result.agents.defaults.model.fallbacks).toEqual([
-      "ollama/llama3.3:8b",
-    ]);
+    expect(result.agents.defaults.model?.fallbacks).toBeUndefined();
   });
 
   it("should omit fallbacks when no local model", () => {
-    const resultMap = generateOpenClawConfig(
-      makeConfig({
-        models: { cloud: "anthropic/claude-sonnet-4-5" },
-      }),
-    );
+    const resultMap = generateOpenClawConfig(makeConfig());
     const result = resultMap.get("default")!;
-    expect(result.agents.defaults.model.fallbacks).toBeUndefined();
+    expect(result.agents.defaults.model?.fallbacks).toBeUndefined();
   });
 
   it("should preserve openclaw.channels passthrough", () => {
@@ -74,30 +62,18 @@ describe("generateOpenClawConfig", () => {
     );
   });
 
-  it("should set authProfile when credential mode is auth_profile", () => {
+  it("should set authProfile when auth_profile is configured", () => {
     const resultMap = generateOpenClawConfig(
       makeConfig({
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          credential_mode: "auth_profile",
-          auth_profile: "corp-prod",
-        },
+        auth_profile: "corp-prod",
       }),
     );
     const result = resultMap.get("default")!;
     expect(result.agents.defaults.authProfile).toBe("corp-prod");
   });
 
-  it("should not set authProfile when credential mode is env", () => {
-    const resultMap = generateOpenClawConfig(
-      makeConfig({
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          credential_mode: "env",
-          auth_profile: "corp-prod",
-        },
-      }),
-    );
+  it("should not set authProfile when auth_profile is absent", () => {
+    const resultMap = generateOpenClawConfig(makeConfig());
     const result = resultMap.get("default")!;
     expect(result.agents.defaults.authProfile).toBeUndefined();
   });
@@ -117,7 +93,7 @@ describe("generateOpenClawConfig", () => {
 
   it("should allow explicit gateway bind override", () => {
     const resultMap = generateOpenClawConfig(
-      makeConfig({ gateway: { bind: "lan" } }),
+      makeConfig({ gateway: { bind: "lan", port: 18789 } }),
     );
     const result = resultMap.get("default")!;
     const gateway = result.gateway as Record<string, unknown>;
@@ -126,7 +102,7 @@ describe("generateOpenClawConfig", () => {
 
   it("should enable cron for inbox-analyst role", () => {
     const resultMap = generateOpenClawConfig(
-      makeConfig({ agents: [{ name: "inbox-analyst", role: "inbox-analyst" }] }),
+      makeConfig({ agents: [{ name: "inbox-analyst", role: "inbox-analyst", runtime: "openclaw" }] }),
     );
     const result = resultMap.get("default")!;
     expect(result.cron?.enabled).toBe(true);
@@ -134,7 +110,7 @@ describe("generateOpenClawConfig", () => {
 
   it("should enable cron for process-automator role", () => {
     const resultMap = generateOpenClawConfig(
-      makeConfig({ agents: [{ name: "process-automator", role: "process-automator" }] }),
+      makeConfig({ agents: [{ name: "process-automator", role: "process-automator", runtime: "openclaw" }] }),
     );
     const result = resultMap.get("default")!;
     expect(result.cron?.enabled).toBe(true);
@@ -142,7 +118,7 @@ describe("generateOpenClawConfig", () => {
 
   it("should not enable cron for research-agent role", () => {
     const resultMap = generateOpenClawConfig(
-      makeConfig({ agents: [{ name: "research-agent", role: "research-agent" }] }),
+      makeConfig({ agents: [{ name: "research-agent", role: "research-agent", runtime: "openclaw" }] }),
     );
     const result = resultMap.get("default")!;
     expect(result.cron?.enabled).toBeUndefined();
@@ -213,25 +189,23 @@ describe("generateOpenClawConfig", () => {
       }),
     );
     const result = resultMap.get("default")!;
-    expect(
-      result.plugins?.entries?.["clawforce-router"].config?.defaultModel,
-    ).toBe("anthropic/claude-sonnet-4-5");
+    // Without models array, no defaultModel
+    expect(result.plugins?.entries?.["clawforce-router"]).toBeDefined();
   });
 
-  it("should pass defaultLocalModel from models.local into router config", () => {
+  it("should pass defaultLocalModel from local models into router config", () => {
     const resultMap = generateOpenClawConfig(
       makeConfig({
         routing: {},
-        models: {
-          cloud: "anthropic/claude-sonnet-4-5",
-          local: "ollama/llama3.3:8b",
-        },
+        models: [
+          { name: "llama", id: "ollama/llama3.3:8b", type: "local", engine: { runtime: "ollama", location: "container", port: 11434 } },
+        ],
       }),
     );
     const result = resultMap.get("default")!;
     expect(
-      result.plugins?.entries?.["clawforce-router"].config?.defaultLocalModel,
-    ).toBe("ollama/llama3.3:8b");
+      result.plugins?.entries?.["clawforce-router"].config?.localModels,
+    ).toEqual([{ name: "llama", id: "ollama/llama3.3:8b" }]);
   });
 
   it("should enable compliance plugin when compliance config present", () => {
@@ -258,10 +232,6 @@ describe("generateOpenClawConfig", () => {
       makeConfig(),
     );
     const result = resultMap.get("default")!;
-    // Without routing config, router plugin should not be present
-    // (unless the default makeConfig triggers it)
-    // The source code skips clawforce-router when !config.routing
-    // makeConfig doesn't set routing, so router should be excluded
     expect(result.plugins?.entries?.["clawforce-router"]).toBeUndefined();
   });
 
@@ -338,7 +308,7 @@ describe("generateOpenClawConfig", () => {
         }),
       );
       const result = resultMap.get("default")!;
-      expect(result.agents.defaults.model.primary).toBe("openai/gpt-4o");
+      expect(result.agents.defaults.model!.primary).toBe("openai/gpt-4o");
     });
 
     it("should deep-merge nested objects", () => {
@@ -368,7 +338,7 @@ describe("generateOpenClawConfig", () => {
     it("should not affect config when passthrough is absent", () => {
       const resultMap = generateOpenClawConfig(makeConfig());
       const result = resultMap.get("default")!;
-      expect(result.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
+      expect(result.agents.defaults.model).toBeUndefined();
     });
 
     it("should not break channel config with passthrough", () => {
@@ -412,7 +382,7 @@ describe("generateOpenClawConfig", () => {
         }),
       );
       const result = resultMap.get("default")!;
-      expect(result.agents.defaults.model.fallbacks).toEqual([
+      expect(result.agents.defaults.model!.fallbacks).toEqual([
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
       ]);
@@ -705,21 +675,19 @@ function makeMultiAgentConfig(overrides: Partial<ClawforceConfig> = {}): Clawfor
       {
         name: "inbox-analyst",
         role: "inbox-analyst",
+        runtime: "openclaw",
         routing: { budget: { daily_limit: 5.0 } },
       },
       {
         name: "research-agent",
         role: "research-agent",
+        runtime: "openclaw",
         routing: {
           budget: { daily_limit: 8.0 },
           rules: [{ condition: "high_complexity", model: "anthropic/claude-sonnet-4-5" }],
         },
       },
     ],
-    models: {
-      cloud: "anthropic/claude-sonnet-4-5",
-      local: "ollama/llama3.3:8b",
-    },
     openclaw: {
       default: {
         channels: {
@@ -746,16 +714,24 @@ describe("generateOpenClawConfig — multi-agent", () => {
     });
   });
 
-  it("should use models.cloud as primary model", () => {
+  it("should not set model defaults without passthrough", () => {
     const resultMap = generateOpenClawConfig(makeMultiAgentConfig());
     const result = resultMap.get("default")!;
-    expect(result.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
+    expect(result.agents.defaults.model).toBeUndefined();
   });
 
-  it("should use models.local as fallback", () => {
-    const resultMap = generateOpenClawConfig(makeMultiAgentConfig());
+  it("should set model via passthrough", () => {
+    const resultMap = generateOpenClawConfig(makeMultiAgentConfig({
+      openclaw: {
+        default: {
+          channels: { discord: { enabled: true } },
+          agents: { defaults: { model: { primary: "anthropic/claude-sonnet-4-5", fallbacks: ["ollama/llama3.3:8b"] } } },
+        },
+      },
+    }));
     const result = resultMap.get("default")!;
-    expect(result.agents.defaults.model.fallbacks).toEqual(["ollama/llama3.3:8b"]);
+    expect(result.agents.defaults.model!.primary).toBe("anthropic/claude-sonnet-4-5");
+    expect(result.agents.defaults.model!.fallbacks).toEqual(["ollama/llama3.3:8b"]);
   });
 
   it("should not generate agents.list for single-agent config", () => {
@@ -811,8 +787,8 @@ describe("generateOpenClawConfig — multi-agent", () => {
     const resultMap = generateOpenClawConfig(
       makeMultiAgentConfig({
         agents: [
-          { name: "agent-a", role: "inbox-analyst" },
-          { name: "agent-b", role: "research-agent" },
+          { name: "agent-a", role: "inbox-analyst", runtime: "openclaw" },
+          { name: "agent-b", role: "research-agent", runtime: "openclaw" },
         ],
         routing: {},
       }),
@@ -856,10 +832,9 @@ describe("generateOpenClawConfig — multi-agent", () => {
     const resultMap = generateOpenClawConfig({
       name: "multi-instance-corp",
       agents: [
-        { name: "support-bot", role: "inbox-analyst", openclaw: "support-instance" },
-        { name: "research-bot", role: "research-agent", openclaw: "research-instance" },
+        { name: "support-bot", role: "inbox-analyst", runtime: "openclaw", openclaw: "support-instance" },
+        { name: "research-bot", role: "research-agent", runtime: "openclaw", openclaw: "research-instance" },
       ],
-      models: { cloud: "anthropic/claude-sonnet-4-5" },
       openclaw: {
         "support-instance": { channels: { discord: { enabled: true } } },
         "research-instance": { channels: { slack: { enabled: true } } },
@@ -888,11 +863,13 @@ describe("generateOpenClawConfig — multi-agent", () => {
           {
             name: "ultron",
             role: "supervisor",
+            runtime: "openclaw",
             supervises: ["inbox-analyst"],
           },
           {
             name: "inbox-analyst",
             role: "inbox-analyst",
+            runtime: "openclaw",
           },
         ],
       }),

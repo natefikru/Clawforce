@@ -11,19 +11,27 @@ openclaw:
         enabled: true
 
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      port: 11434
 
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: llama
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: llama
     - condition: "high_complexity"
-      model: "anthropic/claude-sonnet-4-5"
+      model: claude
   sensitivity:
     keywords:
       - "password"

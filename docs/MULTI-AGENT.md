@@ -7,24 +7,28 @@ Clawforce supports deploying multiple specialized AI agents from a single config
 Multi-agent configs use a top-level `agents[]` array alongside shared `models`, `routing`, and `dashboard` config. The gateway remains a single process; OpenClaw handles per-agent routing via named instance bindings.
 
 **Key concepts:**
-- **`models`** — Shared model config (cloud, local, credentials) used by all agents
-- **`agents[]`** — Per-agent role, openclaw instance reference, and routing overrides
-- **`openclaw`** — Named map of OpenClaw instances with passthrough config
+- **`models`** — Named list of routing targets (only needed if routing rules reference models)
+- **`agents[]`** — Per-agent role, openclaw instance reference, runtime, and routing overrides
+- **`openclaw`** — Named map of OpenClaw instances with passthrough config (owns the default model)
 
 ## Example Config
 
 ```yaml
 name: my-workforce
 
-deployment:
-  agent_runtime: openclaw
-
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 
 routing:
   priority: [policy, sensitivity, cost, domain, complexity]
@@ -50,7 +54,7 @@ agents:
         daily_limit: 10.00
       rules:
         - condition: high_complexity
-          model: anthropic/claude-sonnet-4-5
+          model: "claude"
 
   - name: ops-supervisor
     role: supervisor
@@ -65,25 +69,27 @@ openclaw:
       discord:
         enabled: true
         token: "${DISCORD_BOT_TOKEN}"
-
-local_model:
-  engine: "ollama"
-  location: "container"
-  model: "llama3.3:8b"
-  gpu: "nvidia"
 ```
 
 ## Schema Reference
 
 ### `models` (top-level, shared by all agents)
 
+The `models` list is only needed when routing rules reference specific models by name. Each entry defines a named routing target.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `models.cloud` | string | Yes | Cloud model for all agents |
-| `models.local` | string | No | Local/fallback model |
-| `models.credential_mode` | `env` \| `auth_profile` | No | How API keys are resolved (default: `env`) |
-| `models.provider_keys` | map | No | Provider API keys (required when `credential_mode=env` and cloud model used) |
-| `models.auth_profile` | string | No | OpenClaw auth profile name (required when `credential_mode=auth_profile`) |
+| `name` | string | Yes | Unique model name (referenced in routing rules) |
+| `id` | string | Yes | Model identifier in `provider/model-name` format |
+| `type` | `local` \| `cloud` | Yes | Whether this model is local (PII-safe) or cloud |
+| `api_key` | string | No | API key for cloud models (supports `${ENV_VAR}` expansion) |
+| `engine` | object | No | Engine config for local models (runtime, location, gpu, port, etc.) |
+
+### `auth_profile` (top-level, optional)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auth_profile` | string | No | OpenClaw auth profile name (replaces old `credential_mode: auth_profile`) |
 
 ### `agents[]`
 
@@ -92,6 +98,7 @@ local_model:
 | `name` | string | Yes | Unique agent identifier (lowercase alphanumeric + hyphens, max 50 chars) |
 | `role` | enum | Yes | `inbox-analyst`, `research-agent`, `process-automator`, or `supervisor` |
 | `openclaw` | string | No | OpenClaw instance name (required when multiple openclaw instances are defined) |
+| `runtime` | string | No | Agent orchestration runtime (defaults to `"openclaw"`) |
 | `routing` | object | No | Per-agent routing overrides |
 | `skills` | array | No | Additional skill IDs |
 | `supervises` | array | No | Names of agents this agent supervises |
@@ -103,10 +110,10 @@ routing:
   budget:
     daily_limit: 5.00                     # Daily spend limit for this agent
     per_request_cap: 0.50                 # Max cost per request
-    fallback_model: "ollama/llama3.3:8b"  # Model to use when over budget
+    fallback_model: "llama"               # References model by name
   rules:                                  # Agent-specific routing rules
     - condition: high_complexity
-      model: anthropic/claude-sonnet-4-5
+      model: "claude"                     # References model by name
   sensitivity:
     keywords: ["custom-keyword"]          # Agent-specific sensitivity keywords
 ```
@@ -121,11 +128,18 @@ A single-agent config:
 name: my-agent
 
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 
 agents:
   - name: inbox-analyst
@@ -144,15 +158,19 @@ Becomes a multi-agent config by adding more entries to `agents[]`:
 ```yaml
 name: my-workforce
 
-deployment:
-  agent_runtime: openclaw
-
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: env
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"
+      gpu: nvidia
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
 
 agents:
   - name: inbox-analyst
@@ -170,7 +188,7 @@ openclaw:
 
 Key differences:
 - Add more entries to `agents[]` array
-- `models` stays top-level (shared by all agents)
+- `models` stays top-level (shared by all agents, only needed for routing targets)
 - `openclaw` uses named instances (e.g., `default`) with passthrough config
 - Per-agent routing overrides go in each agent's `routing` block
 
@@ -208,7 +226,8 @@ Each agent has independent budget tracking via the BudgetTracker Map. Agent A sp
 ## Validation Rules
 
 - Config always uses the `agents[]` array (at least one agent required)
-- Top-level `models.cloud` is required
+- `models` list is optional -- only needed when routing rules reference models by name
+- Routing rule model references are validated at parse time against the `models` list
 - Agent names must be unique (lowercase alphanumeric + hyphens)
 - Supervisor references must point to existing agents
 - An agent cannot supervise itself

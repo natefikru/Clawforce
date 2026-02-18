@@ -11,14 +11,14 @@ openclaw:
         enabled: true
 
 models:
-  cloud: "ollama/llama3.3:8b"
-  credential_mode: "env"
-
-local_model:
-  engine: "ollama"
-  location: "host"
-  host_url: "http://host.docker.internal:11434"
-  model: "llama3.3:8b"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: host
+      host_url: "http://host.docker.internal:11434"
+      model: "llama3.3:8b"
 
 gateway:
   bind: "loopback"
@@ -26,13 +26,19 @@ gateway:
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: llama
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: llama
+    - condition: "medium_complexity"
+      model: llama
     - condition: "high_complexity"
-      model: "ollama/llama3.3:8b"
+      model: llama
+    - condition: "domain_code"
+      model: llama
+    - condition: "domain_analysis"
+      model: llama
     - condition: "over_budget"
-      model: "ollama/llama3.3:8b"
+      model: llama
 
 compliance:
   enabled: true

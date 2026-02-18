@@ -11,17 +11,18 @@ openclaw:
         enabled: true
 
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  credential_mode: "env"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
-
-local_model:
-  engine: "ollama"
-  location: "host"
-  host_url: "http://host.docker.internal:11434"
-  model: "llama3.3:8b"
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: host
+      host_url: "http://host.docker.internal:11434"
+      model: "llama3.3:8b"
 
 gateway:
   bind: "loopback"
@@ -29,16 +30,16 @@ gateway:
 routing:
   rules:
     - condition: "pii_detected"
-      model: "ollama/llama3.3:8b"
+      model: llama
     - condition: "low_complexity"
-      model: "ollama/llama3.3:8b"
+      model: llama
     - condition: "high_complexity"
-      model: "anthropic/claude-sonnet-4-5"
+      model: claude
     - condition: "over_budget"
-      model: "ollama/llama3.3:8b"
+      model: llama
   budget:
     daily_limit: 10
-    fallback_model: "ollama/llama3.3:8b"
+    fallback_model: llama
   health_check:
     enabled: true
     interval_seconds: 10

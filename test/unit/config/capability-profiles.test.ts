@@ -6,7 +6,7 @@ import type { ClawforceConfig } from "../../../src/config/types.js";
 function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
   return {
     name: "test-corp",
-    agents: [{ name: "test-agent", role: "inbox-analyst" }],
+    agents: [{ name: "test-agent", role: "inbox-analyst", runtime: "openclaw" }],
     openclaw: {
       default: {
         channels: {
@@ -14,7 +14,6 @@ function makeConfig(overrides: Partial<ClawforceConfig> = {}): ClawforceConfig {
         },
       },
     },
-    models: { cloud: "anthropic/claude-sonnet-4-5" },
     ...overrides,
   };
 }
@@ -116,12 +115,12 @@ describe("capability profiles in config generation", () => {
     expect(tools.web_search).toEqual({ enabled: true });
   });
 
-  it("should preserve model config when profile is applied", () => {
+  it("should not set model in defaults when no models configured", () => {
     const results = generateOpenClawConfig(
       makeConfig({ capabilities: "standard" }),
     );
     const result = results.get("default")!;
-    expect(result.agents.defaults.model.primary).toBe("anthropic/claude-sonnet-4-5");
+    expect(result.agents.defaults.model).toBeUndefined();
   });
 
   it("should preserve channel config when profile is applied", () => {

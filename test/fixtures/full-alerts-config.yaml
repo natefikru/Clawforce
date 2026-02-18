@@ -10,12 +10,6 @@ openclaw:
       discord:
         enabled: true
 
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
-
 routing:
   rules: []
 

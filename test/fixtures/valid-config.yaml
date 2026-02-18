@@ -10,12 +10,6 @@ openclaw:
       discord:
         enabled: true
 
-models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
-
 approval:
   mode: "hybrid"
   require_approval_for:
@@ -28,8 +22,3 @@ routing:
       - "ssn"
       - "credit card"
     pii_detection: true
-
-local_model:
-  engine: "ollama"
-  location: "container"
-  model: "llama3.3:8b"

@@ -5,12 +5,6 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
   return {
     name: "connector-test",
     agents: [{ name: "test-agent", role: "research-agent" }],
-    models: {
-      cloud: "anthropic/claude-sonnet-4-5",
-      provider_keys: {
-        anthropic: "sk-ant-test123",
-      },
-    },
     ...overrides,
   };
 }

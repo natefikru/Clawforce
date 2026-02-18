@@ -1,4 +1,4 @@
-import type { ClawforceConfig } from "../types.js";
+import type { ModelEngine } from "../types.js";
 
 export interface ComposeRuntimeService {
   image: string;
@@ -34,13 +34,13 @@ export interface RuntimeContainerService {
 interface RuntimeAdapterBuildInput {
   containerPrefix: string;
   configName: string;
-  runtime: NonNullable<ClawforceConfig["local_model"]>;
+  runtime: ModelEngine;
 }
 
 export interface RuntimePreGatewayStartInput {
   configName: string;
   deployDir: string;
-  runtime: NonNullable<ClawforceConfig["local_model"]>;
+  runtime: ModelEngine;
   exec: (command: string, args: string[], options?: { cwd?: string }) => Promise<string>;
   logger: {
     step: (message: string) => void;
@@ -54,7 +54,7 @@ export interface RuntimeEngineAdapter {
   hostEnvVarName: string;
   defaultPort: number;
   healthProbePaths: string[];
-  resolveHostRuntimeUrl: (runtime: NonNullable<ClawforceConfig["local_model"]>) => string;
+  resolveHostRuntimeUrl: (runtime: ModelEngine) => string;
   buildContainerService: (input: RuntimeAdapterBuildInput) => RuntimeContainerService;
   preGatewayStart?: (input: RuntimePreGatewayStartInput) => Promise<void>;
 }

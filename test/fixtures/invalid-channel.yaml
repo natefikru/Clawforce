@@ -1,12 +1,9 @@
 name: "test"
 
 agents:
-  - name: "test-agent"
+  - name: "INVALID_AGENT_NAME"
     role: "inbox-analyst"
 
 openclaw:
   default:
     channels: {}
-
-models:
-  cloud: "anthropic/claude-sonnet-4-5"

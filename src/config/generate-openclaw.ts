@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type ClawforceConfig, resolveAgentOpenclawInstance } from "./types.js";
+import { type ClawforceConfig, resolveAgentOpenclawInstance, findModelByName, getLocalModels } from "./types.js";
 import { resolveProfile } from "./capability-profiles.js";
 import { discoverPlugins } from "../plugins/registry.js";
 
@@ -98,7 +98,7 @@ export interface OpenClawConfig {
     defaults: {
       workspace: string;
       authProfile?: string;
-      model: {
+      model?: {
         primary: string;
         fallbacks?: string[];
       };
@@ -135,10 +135,7 @@ export interface OpenClawConfig {
 export function generateOpenClawConfig(
   config: ClawforceConfig,
 ): Map<string, OpenClawConfig> {
-  const primaryModel = config.models.cloud;
-  const localModel = config.models.local;
-  const credentialMode = config.models.credential_mode;
-  const authProfile = config.models.auth_profile;
+  const authProfile = config.auth_profile;
 
   const results = new Map<string, OpenClawConfig>();
 
@@ -156,15 +153,7 @@ export function generateOpenClawConfig(
       agents: {
         defaults: {
           workspace: "/home/node/.openclaw/workspace",
-          ...(credentialMode === "auth_profile" && authProfile
-            ? { authProfile }
-            : {}),
-          model: {
-            primary: primaryModel,
-            ...(localModel
-              ? { fallbacks: [localModel] }
-              : {}),
-          },
+          ...(authProfile ? { authProfile } : {}),
         },
         list: instanceAgents.map((agent) => ({
           id: agent.name,
@@ -285,12 +274,10 @@ function buildPluginEntries(
 }
 
 function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknown> {
-  const primaryModel = config.models.cloud;
-  const localModel = config.models.local;
+  const localModels = getLocalModels(config).map((m) => ({ name: m.name, id: m.id }));
 
   const routerConfig: Record<string, unknown> = {
-    defaultModel: primaryModel,
-    ...(localModel ? { defaultLocalModel: localModel } : {}),
+    ...(localModels.length > 0 ? { localModels } : {}),
     alerts: mapRouterAlertsConfig(config),
     ...(config.routing?.policy ? { policy: normalizePolicyConfig(config.routing.policy) } : {}),
     ...(config.compliance?.frameworks
@@ -299,7 +286,10 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
   };
 
   if (config.routing?.rules) {
-    routerConfig.rules = config.routing.rules;
+    routerConfig.rules = config.routing.rules.map((rule) => ({
+      ...rule,
+      model: findModelByName(config, rule.model)?.id ?? rule.model,
+    }));
   }
   if (config.routing?.sensitivity?.keywords) {
     routerConfig.sensitivityKeywords = config.routing.sensitivity.keywords;
@@ -311,10 +301,13 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
     routerConfig.priority = config.routing.priority;
   }
   if (config.routing?.budget) {
+    const fallbackName = config.routing.budget.fallback_model;
     routerConfig.budget = {
       dailyLimit: config.routing.budget.daily_limit,
       perRequestCap: config.routing.budget.per_request_cap,
-      fallbackModel: config.routing.budget.fallback_model,
+      fallbackModel: fallbackName
+        ? (findModelByName(config, fallbackName)?.id ?? fallbackName)
+        : undefined,
     };
   }
   if (config.routing?.health_check) {
@@ -352,13 +345,16 @@ function buildRouterPluginConfig(config: ClawforceConfig): Record<string, unknow
           ? { perRequestCap: agent.routing.budget.per_request_cap }
           : {}),
         ...(agent.routing.budget.fallback_model
-          ? { fallbackModel: agent.routing.budget.fallback_model }
+          ? { fallbackModel: findModelByName(config, agent.routing.budget.fallback_model)?.id ?? agent.routing.budget.fallback_model }
           : {}),
       };
       hasAgentBudgets = true;
     }
     if (agent.routing?.rules && agent.routing.rules.length > 0) {
-      agentRules[agent.name] = agent.routing.rules;
+      agentRules[agent.name] = agent.routing.rules.map((rule) => ({
+        ...rule,
+        model: findModelByName(config, rule.model)?.id ?? rule.model,
+      }));
       hasAgentRules = true;
     }
   }

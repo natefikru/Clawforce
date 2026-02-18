@@ -11,12 +11,14 @@ openclaw:
         enabled: true
 
 models:
-  cloud: "anthropic/claude-sonnet-4-5"
-  local: "ollama/llama3.3:8b"
-  provider_keys:
-    anthropic: "${ANTHROPIC_API_KEY}"
-
-local_model:
-  engine: "ollama"
-  location: "container"
-  model: "llama3.3:8b"
+  - name: claude
+    id: "anthropic/claude-sonnet-4-5"
+    type: cloud
+    api_key: "${ANTHROPIC_API_KEY}"
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: container
+      model: "llama3.3:8b"

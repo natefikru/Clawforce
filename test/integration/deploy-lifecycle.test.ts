@@ -82,12 +82,8 @@ describe("Deploy Lifecycle Integration", () => {
     const oc = JSON.parse(
       readFileSync(join(testDeployDir, "config/openclaw.json"), "utf8"),
     );
-    expect(oc.agents.defaults.model.primary).toBe(
-      "anthropic/claude-sonnet-4-5",
-    );
-    expect(oc.agents.defaults.model.fallbacks).toContain(
-      "ollama/llama3.3:8b",
-    );
+    // valid-config.yaml has no models — OpenClaw owns the default model
+    expect(oc.agents.defaults).toBeDefined();
     expect(oc.channels.discord.enabled).toBe(true);
     expect(oc.cron.enabled).toBe(true);
     expect(oc.hooks.enabled).toBe(true);
@@ -97,7 +93,8 @@ describe("Deploy Lifecycle Integration", () => {
       readFileSync(join(testDeployDir, "docker-compose.yml"), "utf8"),
     );
     expect(compose.services["openclaw-gateway"]).toBeDefined();
-    expect(compose.services.ollama).toBeDefined();
+    // valid-config.yaml has no local model — no ollama service
+    expect(compose.services.ollama).toBeUndefined();
     expect(compose.services["openclaw-gateway"].container_name).toBe(
       "clawforce-test-corp-gateway",
     );
@@ -105,7 +102,6 @@ describe("Deploy Lifecycle Integration", () => {
     // Verify .env content
     const envContent = readFileSync(join(testDeployDir, ".env"), "utf8");
     expect(envContent).toContain("GATEWAY_TOKEN=");
-    expect(envContent).toContain("ANTHROPIC_API_KEY=sk-ant-integration-test");
 
     // Verify AGENTS.md content
     const agentsMd = readFileSync(

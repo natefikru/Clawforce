@@ -22,7 +22,7 @@ describe("agent runtime adapter registry", () => {
 
   it("uses openclaw adapter by default when deployment is omitted", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
-    const runtime = resolveAgentRuntime(config);
+    const runtime = resolveAgentRuntime(config.agents[0]);
     const adapter = getAgentRuntimeAdapter(runtime);
     const outputs = adapter.generate(config);
 
@@ -32,7 +32,7 @@ describe("agent runtime adapter registry", () => {
 
   it("produces multiple files for named openclaw instances", () => {
     const config = parseConfig(join(fixturesDir, "v2/multi-agent-supervisor.yaml"));
-    const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config));
+    const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config.agents[0]));
     const outputs = adapter.generate(config);
 
     // Should have one file per openclaw instance
@@ -44,7 +44,7 @@ describe("agent runtime adapter registry", () => {
 
   it("keeps openclaw adapter output identical to direct generator output", () => {
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
-    const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config));
+    const adapter = getAgentRuntimeAdapter(resolveAgentRuntime(config.agents[0]));
     const outputs = adapter.generate(config);
     const openclawOutput = outputs.find((entry) => entry.filename === "openclaw.json");
 
