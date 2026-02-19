@@ -1,24 +1,23 @@
-name: "runtime-e2e-local"
+name: "runtime-e2e-multi"
 
 agents:
   - name: "inbox-analyst"
     workspace: "./workspaces/inbox-analyst"
+    routing:
+      budget:
+        daily_limit: 5.00
+
+  - name: "research-agent"
+    workspace: "./workspaces/research-agent"
+    routing:
+      budget:
+        daily_limit: 8.00
 
 openclaw:
   default:
     channels:
       discord:
         enabled: true
-
-models:
-  - name: llama
-    id: "ollama/llama3.3:8b"
-    type: local
-    engine:
-      runtime: ollama
-      location: host
-      host_url: "http://host.docker.internal:11434"
-      model: "llama3.3:8b"
 
 gateway:
   bind: "loopback"
@@ -33,18 +32,22 @@ routing:
       model: llama
     - condition: "high_complexity"
       model: llama
-    - condition: "domain_code"
-      model: llama
-    - condition: "domain_analysis"
-      model: llama
-    - condition: "over_budget"
-      model: llama
+
+models:
+  - name: llama
+    id: "ollama/llama3.3:8b"
+    type: local
+    engine:
+      runtime: ollama
+      location: host
+      host_url: "http://host.docker.internal:11434"
+      model: "llama3.3:8b"
 
 compliance:
   enabled: true
 
 dashboard:
   enabled: true
-  port: 4412
+  port: 4414
   auth:
     enabled: false

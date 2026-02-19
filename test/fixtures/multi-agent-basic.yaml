@@ -26,13 +26,13 @@ dashboard:
 
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: "./workspaces/inbox-analyst"
     routing:
       budget:
         daily_limit: 5.00
 
   - name: research-agent
-    role: research-agent
+    workspace: "./workspaces/research-agent"
     routing:
       budget:
         daily_limit: 8.00

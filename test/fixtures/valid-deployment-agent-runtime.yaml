@@ -2,7 +2,7 @@ name: "minimal-agent-runtime"
 
 agents:
   - name: "research-agent"
-    role: "research-agent"
+    workspace: "./workspaces/research-agent"
 
 openclaw:
   default:

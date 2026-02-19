@@ -26,7 +26,7 @@ describe("ClawforceConfigSchema (v2)", () => {
       expect(result.data.models).toBeUndefined();
       expect(result.data.agents).toHaveLength(1);
       expect(result.data.agents[0].name).toBe("my-agent");
-      expect(result.data.agents[0].role).toBe("research-agent");
+      expect(result.data.agents[0].workspace).toBeDefined();
       expect(result.data.openclaw).toHaveProperty("default");
     });
 
@@ -36,7 +36,7 @@ describe("ClawforceConfigSchema (v2)", () => {
       if (!result.success) return;
       expect(result.data.agents).toHaveLength(3);
       const ultron = result.data.agents.find((a) => a.name === "ultron");
-      expect(ultron?.role).toBe("supervisor");
+      expect(ultron?.workspace).toBeDefined();
       expect(ultron?.supervises).toEqual(["inbox-analyst", "research-agent"]);
       expect(ultron?.openclaw).toBe("support-instance");
     });
@@ -84,7 +84,7 @@ describe("ClawforceConfigSchema (v2)", () => {
     it("should reject empty openclaw", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
-        agents: [{ name: "a", role: "inbox-analyst" }],
+        agents: [{ name: "a", workspace: "./workspaces/a" }],
         openclaw: {},
       });
       expect(result.success).toBe(false);
@@ -95,7 +95,7 @@ describe("ClawforceConfigSchema (v2)", () => {
     it("should reject missing agent openclaw ref when multiple instances exist", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
-        agents: [{ name: "a", role: "inbox-analyst" }],
+        agents: [{ name: "a", workspace: "./workspaces/a" }],
         openclaw: { one: { channels: {} }, two: { channels: {} } },
       });
       expect(result.success).toBe(false);
@@ -106,7 +106,7 @@ describe("ClawforceConfigSchema (v2)", () => {
     it("should reject invalid openclaw instance reference", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
-        agents: [{ name: "a", role: "inbox-analyst", openclaw: "nonexistent" }],
+        agents: [{ name: "a", workspace: "./workspaces/a", openclaw: "nonexistent" }],
         openclaw: { default: { channels: {} } },
       });
       expect(result.success).toBe(false);
@@ -118,8 +118,8 @@ describe("ClawforceConfigSchema (v2)", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
         agents: [
-          { name: "dup", role: "inbox-analyst" },
-          { name: "dup", role: "research-agent" },
+          { name: "dup", workspace: "./workspaces/dup" },
+          { name: "dup", workspace: "./workspaces/dup2" },
         ],
         openclaw: { default: { channels: {} } },
       });
@@ -131,18 +131,18 @@ describe("ClawforceConfigSchema (v2)", () => {
     it("should reject supervisor without supervises", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
-        agents: [{ name: "sup", role: "supervisor" }],
+        agents: [{ name: "sup", workspace: "./workspaces/sup", supervises: [] }],
         openclaw: { default: { channels: {} } },
       });
       expect(result.success).toBe(false);
       if (result.success) return;
-      expect(result.error.errors.some((e) => e.message.includes("non-empty supervises list"))).toBe(true);
+      expect(result.error.errors.some((e) => e.message.includes("empty supervises list"))).toBe(true);
     });
 
     it("should reject self-supervision", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
-        agents: [{ name: "sup", role: "supervisor", supervises: ["sup"] }],
+        agents: [{ name: "sup", workspace: "./workspaces/sup", supervises: ["sup"] }],
         openclaw: { default: { channels: {} } },
       });
       expect(result.success).toBe(false);
@@ -157,7 +157,7 @@ describe("ClawforceConfigSchema (v2)", () => {
           { name: "llama", id: "ollama/llama3.3:8b", type: "local", engine: { runtime: "ollama", location: "container", model: "llama3.3:8b" } },
           { name: "llama", id: "ollama/llama3.3:70b", type: "local", engine: { runtime: "ollama", location: "container", model: "llama3.3:70b" } },
         ],
-        agents: [{ name: "a", role: "inbox-analyst" }],
+        agents: [{ name: "a", workspace: "./workspaces/a" }],
         openclaw: { default: { channels: {} } },
       });
       expect(result.success).toBe(false);
@@ -169,7 +169,7 @@ describe("ClawforceConfigSchema (v2)", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
         models: [{ name: "claude", id: "anthropic/claude-sonnet-4-5", type: "cloud" }],
-        agents: [{ name: "a", role: "inbox-analyst" }],
+        agents: [{ name: "a", workspace: "./workspaces/a" }],
         openclaw: { default: { channels: {} } },
       });
       expect(result.success).toBe(false);
@@ -182,7 +182,7 @@ describe("ClawforceConfigSchema (v2)", () => {
         name: "test",
         auth_profile: "corp",
         models: [{ name: "claude", id: "anthropic/claude-sonnet-4-5", type: "cloud" }],
-        agents: [{ name: "a", role: "inbox-analyst" }],
+        agents: [{ name: "a", workspace: "./workspaces/a" }],
         openclaw: { default: { channels: {} } },
       });
       expect(result.success).toBe(true);
@@ -191,7 +191,7 @@ describe("ClawforceConfigSchema (v2)", () => {
     it("should allow config without models when no routing rules exist", () => {
       const result = ClawforceConfigSchema.safeParse({
         name: "test",
-        agents: [{ name: "a", role: "inbox-analyst" }],
+        agents: [{ name: "a", workspace: "./workspaces/a" }],
         openclaw: { default: { channels: {} } },
       });
       expect(result.success).toBe(true);
@@ -202,7 +202,7 @@ describe("ClawforceConfigSchema (v2)", () => {
     it("should return the only instance when agent has no explicit reference", () => {
       const config = ClawforceConfigSchema.parse({
         name: "test",
-        agents: [{ name: "a", role: "inbox-analyst" }],
+        agents: [{ name: "a", workspace: "./workspaces/a" }],
         openclaw: { default: { channels: {} } },
       });
       expect(resolveAgentOpenclawInstance(config.agents[0], config)).toBe("default");
@@ -211,7 +211,7 @@ describe("ClawforceConfigSchema (v2)", () => {
     it("should return the explicit reference when specified", () => {
       const config = ClawforceConfigSchema.parse({
         name: "test",
-        agents: [{ name: "a", role: "inbox-analyst", openclaw: "my-instance" }],
+        agents: [{ name: "a", workspace: "./workspaces/a", openclaw: "my-instance" }],
         openclaw: { "my-instance": { channels: {} } },
       });
       expect(resolveAgentOpenclawInstance(config.agents[0], config)).toBe("my-instance");

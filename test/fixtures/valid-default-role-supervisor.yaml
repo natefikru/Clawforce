@@ -2,10 +2,10 @@ name: "default-supervisor"
 
 agents:
   - name: "supervisor-agent"
-    role: "supervisor"
+    workspace: "./workspaces/supervisor-agent"
     supervises: ["worker"]
   - name: "worker"
-    role: "inbox-analyst"
+    workspace: "./workspaces/worker"
 
 openclaw:
   default:

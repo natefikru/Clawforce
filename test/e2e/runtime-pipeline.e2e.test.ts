@@ -1,7 +1,8 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { parse as parseYaml } from "yaml";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const FIXTURES = join(ROOT, "test", "fixtures", "e2e");
@@ -140,6 +141,53 @@ function recordRouteCheck(
   return result;
 }
 
+/**
+ * Validates workspace-related artifacts after a deployment:
+ * - docker-compose.yml has per-agent workspace volume mounts
+ * - config/openclaw.json has agent workspace paths in agents.list
+ * - workspace/AGENTS.md exists and contains agent names
+ */
+function validateWorkspaceArtifacts(
+  deploymentName: string,
+  expectedAgentNames: string[],
+) {
+  const deployDir = deploymentDirFromName(deploymentName);
+
+  // Validate docker-compose.yml workspace volumes
+  const composePath = join(deployDir, "docker-compose.yml");
+  expect(existsSync(composePath)).toBe(true);
+  const compose = parseYaml(readFileSync(composePath, "utf8"));
+  const volumes = compose.services["openclaw-gateway"].volumes as string[];
+  for (const agentName of expectedAgentNames) {
+    const mount = volumes.find((v: string) =>
+      v.includes(`:/home/node/.openclaw/workspace/${agentName}`),
+    );
+    expect(mount, `Missing workspace volume mount for agent '${agentName}'`).toBeDefined();
+    // Host path should be absolute
+    expect(isAbsolute(mount!.split(":")[0])).toBe(true);
+  }
+
+  // Validate openclaw.json agents.list
+  const ocPath = join(deployDir, "config", "openclaw.json");
+  expect(existsSync(ocPath)).toBe(true);
+  const oc = JSON.parse(readFileSync(ocPath, "utf8"));
+  expect(oc.agents.list).toHaveLength(expectedAgentNames.length);
+  for (let i = 0; i < expectedAgentNames.length; i++) {
+    expect(oc.agents.list[i].id).toBe(expectedAgentNames[i]);
+    expect(oc.agents.list[i].workspace).toBe(
+      `/home/node/.openclaw/workspace/${expectedAgentNames[i]}`,
+    );
+  }
+
+  // Validate AGENTS.md
+  const agentsMdPath = join(deployDir, "workspace", "AGENTS.md");
+  expect(existsSync(agentsMdPath)).toBe(true);
+  const agentsMd = readFileSync(agentsMdPath, "utf8");
+  for (const agentName of expectedAgentNames) {
+    expect(agentsMd).toContain(agentName);
+  }
+}
+
 const dockerAvailable = runCmd("docker", ["--version"], {}, 10_000).status === 0;
 
 const gatedDescribe = RUN_E2E && dockerAvailable ? describe : describe.skip;
@@ -159,6 +207,7 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
 
       try {
         runAndRecord(summary, "deploy cloud", "pnpm", ["dev", "deploy", "-c", configPath]);
+        validateWorkspaceArtifacts(deploymentName, ["inbox-analyst"]);
         runAndRecord(summary, "status cloud", "pnpm", ["dev", "status"]);
         runAndRecord(
           summary,
@@ -206,6 +255,7 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
 
       try {
         runAndRecord(summary, "deploy local", "pnpm", ["dev", "deploy", "-c", configPath]);
+        validateWorkspaceArtifacts(deploymentName, ["inbox-analyst"]);
         runAndRecord(summary, "status local", "pnpm", ["dev", "status"]);
         runAndRecord(
           summary,
@@ -261,6 +311,7 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
 
       try {
         runAndRecord(summary, "deploy hybrid", "pnpm", ["dev", "deploy", "-c", configPath]);
+        validateWorkspaceArtifacts(deploymentName, ["inbox-analyst"]);
         runAndRecord(summary, "status hybrid", "pnpm", ["dev", "status"]);
         runAndRecord(
           summary,
@@ -294,6 +345,46 @@ gatedDescribe("Runtime pipeline e2e (deploy/status/audit/stop)", () => {
         expect(low.provider).toBe("ollama");
         expect(pii.provider).toBe("ollama");
         expect(complex.provider).toBe("anthropic");
+      } finally {
+        runCmd("pnpm", ["dev", "stop"], {}, 120_000);
+        tearDownDeployment(deploymentName);
+      }
+    },
+    300_000,
+  );
+
+  it(
+    "multi-agent deployment generates correct per-agent workspace artifacts",
+    () => {
+      const configPath = join(FIXTURES, "runtime-multi-agent.yaml");
+      const deploymentName = "runtime-e2e-multi";
+      const summary = startScenario(
+        "multi-agent deployment generates correct per-agent workspace artifacts",
+        configPath,
+        deploymentName,
+      );
+      tearDownDeployment(deploymentName);
+
+      try {
+        runAndRecord(summary, "deploy multi", "pnpm", ["dev", "deploy", "-c", configPath]);
+
+        // Validate per-agent workspace artifacts for both agents
+        validateWorkspaceArtifacts(deploymentName, [
+          "inbox-analyst",
+          "research-agent",
+        ]);
+
+        // Verify compose has distinct volume mounts for each agent
+        const deployDir = deploymentDirFromName(deploymentName);
+        const compose = parseYaml(
+          readFileSync(join(deployDir, "docker-compose.yml"), "utf8"),
+        );
+        const volumes = compose.services["openclaw-gateway"].volumes as string[];
+        const agentMounts = volumes.filter((v: string) =>
+          v.includes("/home/node/.openclaw/workspace/"),
+        );
+        // Base mount + 2 agent mounts
+        expect(agentMounts.length).toBeGreaterThanOrEqual(2);
       } finally {
         runCmd("pnpm", ["dev", "stop"], {}, 120_000);
         tearDownDeployment(deploymentName);

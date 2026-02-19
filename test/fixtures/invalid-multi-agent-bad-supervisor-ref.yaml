@@ -2,7 +2,7 @@ name: "invalid-supervisor"
 
 agents:
   - name: ultron
-    role: supervisor
+    workspace: "./workspaces/ultron"
     supervises: [nonexistent-agent]
 
 openclaw:

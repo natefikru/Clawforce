@@ -93,11 +93,8 @@ describe("deployCommand", () => {
     // valid-config.yaml has no cloud models — no provider API keys in .env
   });
 
-  it("should setup workspace with SKILL.md and AGENTS.md", async () => {
+  it("should setup workspace with AGENTS.md", async () => {
     await deployCommand(join(fixturesDir, "valid-config.yaml"));
-    expect(
-      existsSync(join(deployDir, "workspace/test-agent/skills/inbox-analyst/SKILL.md")),
-    ).toBe(true);
     expect(existsSync(join(deployDir, "workspace/AGENTS.md"))).toBe(true);
   });
 

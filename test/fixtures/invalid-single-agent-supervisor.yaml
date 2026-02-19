@@ -2,7 +2,7 @@ name: "invalid-single-supervisor"
 
 agents:
   - name: "supervisor-agent"
-    role: "supervisor"
+    workspace: "./workspaces/supervisor-agent"
     supervises: []
 
 openclaw:

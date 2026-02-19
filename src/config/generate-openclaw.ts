@@ -1,13 +1,7 @@
-import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { type ClawforceConfig, resolveAgentOpenclawInstance, findModelByName, getLocalModels } from "./types.js";
 import { resolveProfile } from "./capability-profiles.js";
 import { discoverPlugins } from "../plugins/registry.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const templatesDir = join(__dirname, "..", "..", "templates");
 
 interface RouterAlertsConfig {
   enabled: boolean;
@@ -166,24 +160,7 @@ export function generateOpenClawConfig(
       },
     };
 
-    // Merge role partials for all unique roles in this instance's agents
-    const roles = [...new Set(instanceAgents.map((a) => a.role))];
-    for (const agentRole of roles) {
-      const partialPath = join(templatesDir, "roles", agentRole, "config.partial.json");
-      if (existsSync(partialPath)) {
-        const roleConfig = JSON.parse(
-          readFileSync(partialPath, "utf8"),
-        ) as Partial<OpenClawConfig>;
-        if (roleConfig.cron && !result.cron) result.cron = roleConfig.cron;
-        if (roleConfig.hooks) {
-          if (!result.hooks) {
-            result.hooks = roleConfig.hooks;
-          }
-        }
-      }
-    }
-
-    // Apply capability profile (after role partial, before passthrough)
+    // Apply capability profile (before passthrough)
     if (config.capabilities) {
       const profileConfig = resolveProfile(config.capabilities);
       mergeInto(

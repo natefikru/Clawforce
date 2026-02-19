@@ -34,7 +34,7 @@ ls -la clawforce-<name>/
 - [ ] `docker-compose.yml` exists
 - [ ] `config/openclaw.json` exists
 - [ ] `workspace/AGENTS.md` exists
-- [ ] `workspace/skills/<role>/SKILL.md` exists
+- [ ] Per-agent workspace directories are mounted (verify with `docker inspect`)
 - [ ] `data/audit.jsonl` exists
 - [ ] `.env` exists (with restricted permissions)
 

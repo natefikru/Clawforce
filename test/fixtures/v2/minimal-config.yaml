@@ -2,7 +2,7 @@ name: "minimal"
 
 agents:
   - name: my-agent
-    role: research-agent
+    workspace: "./workspaces/my-agent"
 
 openclaw:
   default:

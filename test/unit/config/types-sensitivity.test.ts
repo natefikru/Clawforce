@@ -4,7 +4,7 @@ import { ClawforceConfigSchema } from "../../../src/config/types.js";
 function baseConfig(overrides: Record<string, unknown> = {}) {
   return {
     name: "sensitivity-test",
-    agents: [{ name: "test-agent", role: "research-agent" }],
+    agents: [{ name: "test-agent", workspace: "./workspaces/test-agent" }],
     openclaw: {
       default: {
         channels: {

@@ -81,6 +81,9 @@ export function generateCompose(config: ClawforceConfig): string {
           "./config:/home/node/.openclaw",
           "./workspace:/home/node/.openclaw/workspace",
           "./data:/home/node/.openclaw/data",
+          ...config.agents.map((agent) =>
+            `${agent.workspace}:/home/node/.openclaw/workspace/${agent.name}`
+          ),
         ],
         command: [
           "node",

@@ -2,7 +2,7 @@ name: "invalid-alerts"
 
 agents:
   - name: "test-agent"
-    role: "research-agent"
+    workspace: "./workspaces/test-agent"
 
 openclaw:
   default:

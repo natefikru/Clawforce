@@ -102,7 +102,7 @@ Core Clawforce is free/open source. Premium features are paid.
 | Single agent deploy | Multi-agent orchestration (Ultron pattern) |
 | Basic routing (2 dimensions) | Full 5-dimension router |
 | JSONL compliance logs | SQLite + dashboard + RBAC |
-| 3 role templates | Full template library (10+) |
+| 3 workspace examples | Full workspace library (10+) |
 | Community support | Priority support + SLA |
 | --- | Compliance profiles (HIPAA, PCI-DSS, GDPR, CCPA, SOX) |
 | --- | Enterprise integrations (Google Workspace, Notion, Jira) |

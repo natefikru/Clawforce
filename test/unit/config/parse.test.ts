@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { parseConfig } from "../../../src/config/parse.js";
 import { generateOpenClawConfig } from "../../../src/config/generate-openclaw.js";
 import { resolveAgentRuntime } from "../../../src/config/types.js";
-import { join } from "node:path";
+import { join, isAbsolute, resolve } from "node:path";
 
 const fixturesDir = join(import.meta.dirname, "../../fixtures");
 
@@ -15,11 +15,18 @@ describe("parseConfig", () => {
     delete process.env.ANTHROPIC_API_KEY;
   });
 
+  it("should resolve workspace paths to absolute paths relative to config file", () => {
+    const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
+    const workspace = config.agents[0].workspace;
+    expect(isAbsolute(workspace)).toBe(true);
+    expect(workspace).toBe(resolve(fixturesDir, "./workspaces/test-agent"));
+  });
+
   it("should parse a valid config with all fields", () => {
     const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
 
     expect(config.name).toBe("test-corp");
-    expect(config.agents[0].role).toBe("inbox-analyst");
+    expect(config.agents[0].workspace).toBeDefined();
     expect(config.openclaw.default).toEqual({
       channels: {
         discord: { enabled: true },
@@ -36,7 +43,7 @@ describe("parseConfig", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
 
     expect(config.name).toBe("minimal");
-    expect(config.agents[0].role).toBe("research-agent");
+    expect(config.agents[0].workspace).toBeDefined();
     expect(config.openclaw.default).toEqual({
       channels: {
         discord: { enabled: true },
@@ -81,7 +88,7 @@ describe("parseConfig", () => {
     );
   });
 
-  it("should reject invalid role", () => {
+  it("should reject missing workspace", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-role.yaml")),
     ).toThrow("Config validation failed");
@@ -90,12 +97,12 @@ describe("parseConfig", () => {
   it("should reject supervisor agent without supervises list", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-single-agent-supervisor.yaml")),
-    ).toThrow("must define a non-empty supervises list");
+    ).toThrow("empty supervises list");
   });
 
   it("should parse a config with supervisor agent that has supervises list", () => {
     const config = parseConfig(join(fixturesDir, "valid-default-role-supervisor.yaml"));
-    const supervisor = config.agents.find((a) => a.role === "supervisor");
+    const supervisor = config.agents.find((a) => a.supervises?.length);
     expect(supervisor).toBeDefined();
     expect(supervisor?.supervises).toEqual(["worker"]);
   });
@@ -263,7 +270,7 @@ describe("parseConfig — multi-agent", () => {
     expect(config.name).toBe("test-workforce");
     expect(config.agents).toHaveLength(2);
     expect(config.agents[0].name).toBe("inbox-analyst");
-    expect(config.agents[0].role).toBe("inbox-analyst");
+    expect(config.agents[0].workspace).toBeDefined();
     expect(config.agents[0].routing?.budget?.daily_limit).toBe(5.0);
     expect(config.agents[1].name).toBe("research-agent");
     expect(config.agents[1].routing?.rules).toHaveLength(1);
@@ -276,7 +283,7 @@ describe("parseConfig — multi-agent", () => {
 
     expect(config.agents).toHaveLength(3);
     const ultron = config.agents.find((a) => a.name === "ultron");
-    expect(ultron?.role).toBe("supervisor");
+    expect(ultron?.workspace).toBeDefined();
     expect(ultron?.supervises).toEqual(["inbox-analyst", "research-agent"]);
   });
 
@@ -295,7 +302,7 @@ describe("parseConfig — multi-agent", () => {
   it("should reject supervisor agents without supervises", () => {
     expect(() =>
       parseConfig(join(fixturesDir, "invalid-multi-agent-supervisor-no-supervises.yaml")),
-    ).toThrow("must define a non-empty supervises list");
+    ).toThrow("empty supervises list");
   });
 
   it("should allow config without models (models is optional)", () => {
@@ -305,6 +312,6 @@ describe("parseConfig — multi-agent", () => {
 
   it("should parse single-agent configs with agents array", () => {
     const config = parseConfig(join(fixturesDir, "minimal-config.yaml"));
-    expect(config.agents[0].role).toBe("research-agent");
+    expect(config.agents[0].workspace).toBeDefined();
   });
 });

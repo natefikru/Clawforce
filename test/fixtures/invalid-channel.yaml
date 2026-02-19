@@ -2,7 +2,7 @@ name: "test"
 
 agents:
   - name: "INVALID_AGENT_NAME"
-    role: "inbox-analyst"
+    workspace: "./workspaces/INVALID_AGENT_NAME"
 
 openclaw:
   default:

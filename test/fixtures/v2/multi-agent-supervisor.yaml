@@ -2,21 +2,21 @@ name: "test-ultron"
 
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: "./workspaces/inbox-analyst"
     openclaw: support-instance
     routing:
       budget:
         daily_limit: 5.00
 
   - name: research-agent
-    role: research-agent
+    workspace: "./workspaces/research-agent"
     openclaw: research-instance
     routing:
       budget:
         daily_limit: 8.00
 
   - name: ultron
-    role: supervisor
+    workspace: "./workspaces/ultron"
     openclaw: support-instance
     supervises: [inbox-analyst, research-agent]
     routing:

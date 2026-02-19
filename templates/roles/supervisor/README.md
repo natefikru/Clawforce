@@ -1,7 +1,6 @@
-# Supervisor Role
+# Supervisor Workspace Example
 
-**Role Type**: Multi-agent Operations  
-**Complexity**: High  
+**Complexity**: High
 **Recommended for**: Teams running multiple agents that need centralized status visibility and escalation controls.
 
 ## What It Does
@@ -14,12 +13,12 @@
 ## Requirements
 
 - Multi-agent configuration with `agents[]`
-- At least one agent with `role: supervisor`
-- `supervises` list configured for each supervisor agent
+- At least one agent with a `supervises` list
+- `workspace` pointing to a directory with appropriate SOUL.md, HEARTBEAT.md, etc.
 - OpenClaw channels configured for status reporting
 
 ## Notes
 
-- `role: supervisor` is not valid in single-agent mode.
+- An agent becomes a supervisor by having a `supervises` field listing other agent names.
 - Supervisor access should remain scoped to listed supervised agents.
 - `clawforce_workforce_status` is not auto-wired into OpenClaw yet; wire custom tools via `openclaw` overrides once the runtime plugin is installed.

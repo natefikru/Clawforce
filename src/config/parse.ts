@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { ClawforceConfigSchema, type ClawforceConfig } from "./types.js";
 import { expandEnvVars } from "../utils/env-vars.js";
@@ -28,5 +29,13 @@ export function parseConfig(configPath: string): ClawforceConfig {
     throw new Error(`Config validation failed:\n${errors}`);
   }
 
-  return result.data;
+  // Resolve agent workspace paths relative to config file location
+  const configDir = dirname(resolve(configPath));
+  return {
+    ...result.data,
+    agents: result.data.agents.map((agent) => ({
+      ...agent,
+      workspace: resolve(configDir, agent.workspace),
+    })),
+  };
 }

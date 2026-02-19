@@ -1,19 +1,12 @@
 import { type ClawforceConfig } from "../config/types.js";
 
-const ROLE_DISPLAY_NAMES: Record<string, string> = {
-  "inbox-analyst": "Inbox Analyst",
-  "research-agent": "Research Agent",
-  "process-automator": "Process Automator",
-  "supervisor": "Supervisor",
-};
-
 export function generateAgentsMd(config: ClawforceConfig): string {
   const approvalMode = config.approval?.mode ?? "autonomous";
 
   let content = `# Clawforce AI Workforce
 
 This is a multi-agent deployment managed by Clawforce for ${config.name}.
-Multiple specialized AI agents work alongside the human team, each with distinct roles and responsibilities.
+Multiple specialized AI agents work alongside the human team.
 
 ## Global Rules
 
@@ -29,14 +22,11 @@ Multiple specialized AI agents work alongside the human team, each with distinct
 `;
 
   for (const agent of config.agents) {
-    const roleName = ROLE_DISPLAY_NAMES[agent.role] ?? agent.role;
-    content += `### ${agent.name} (${roleName})\n\n`;
+    content += `### ${agent.name}\n\n`;
 
     if (agent.supervises && agent.supervises.length > 0) {
       content += `**Supervises**: ${agent.supervises.join(", ")}\n\n`;
     }
-
-    content += `See \`workspace/${agent.name}/skills/${agent.role}/SKILL.md\` for detailed instructions.\n\n`;
   }
 
   content += `## Approval Mode
