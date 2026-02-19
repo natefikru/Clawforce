@@ -60,6 +60,34 @@ describe("generateCompose", () => {
     expect(volumes).toContain("./data:/home/node/.openclaw/data");
   });
 
+  it("should mount per-agent workspace volumes", () => {
+    const parsed = parseYaml(generateCompose(makeConfig()));
+    const volumes = parsed.services["openclaw-gateway"].volumes;
+    expect(volumes).toContain(
+      "./workspaces/test-agent:/home/node/.openclaw/workspace/test-agent",
+    );
+  });
+
+  it("should mount multiple agent workspace volumes", () => {
+    const parsed = parseYaml(
+      generateCompose(
+        makeConfig({
+          agents: [
+            { name: "inbox-bot", workspace: "/abs/path/inbox-bot", runtime: "openclaw" },
+            { name: "research-bot", workspace: "/abs/path/research-bot", runtime: "openclaw" },
+          ],
+        }),
+      ),
+    );
+    const volumes = parsed.services["openclaw-gateway"].volumes;
+    expect(volumes).toContain(
+      "/abs/path/inbox-bot:/home/node/.openclaw/workspace/inbox-bot",
+    );
+    expect(volumes).toContain(
+      "/abs/path/research-bot:/home/node/.openclaw/workspace/research-bot",
+    );
+  });
+
   it("should expose port 18789", () => {
     const parsed = parseYaml(generateCompose(makeConfig()));
     expect(parsed.services["openclaw-gateway"].ports).toContain("18789:18789");

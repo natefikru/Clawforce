@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { parseConfig } from "../../../src/config/parse.js";
 import { generateOpenClawConfig } from "../../../src/config/generate-openclaw.js";
 import { resolveAgentRuntime } from "../../../src/config/types.js";
-import { join } from "node:path";
+import { join, isAbsolute, resolve } from "node:path";
 
 const fixturesDir = join(import.meta.dirname, "../../fixtures");
 
@@ -13,6 +13,13 @@ describe("parseConfig", () => {
 
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it("should resolve workspace paths to absolute paths relative to config file", () => {
+    const config = parseConfig(join(fixturesDir, "valid-config.yaml"));
+    const workspace = config.agents[0].workspace;
+    expect(isAbsolute(workspace)).toBe(true);
+    expect(workspace).toBe(resolve(fixturesDir, "./workspaces/test-agent"));
   });
 
   it("should parse a valid config with all fields", () => {
