@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { existsSync, rmSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, isAbsolute } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { parseConfig } from "../../src/config/parse.js";
 import { generateOpenClawConfig } from "../../src/config/generate-openclaw.js";
@@ -92,6 +92,23 @@ describe("Deploy Lifecycle Integration", () => {
       "clawforce-test-corp-gateway",
     );
 
+    // Verify per-agent workspace volume mount in compose
+    const volumes = compose.services["openclaw-gateway"].volumes as string[];
+    const agentMount = volumes.find((v: string) =>
+      v.includes(":/home/node/.openclaw/workspace/test-agent"),
+    );
+    expect(agentMount).toBeDefined();
+    // Workspace path should be absolute (resolved by parseConfig)
+    const hostPath = agentMount!.split(":")[0];
+    expect(isAbsolute(hostPath)).toBe(true);
+
+    // Verify openclaw.json agents.list has correct workspace paths
+    expect(oc.agents.list).toHaveLength(1);
+    expect(oc.agents.list[0].id).toBe("test-agent");
+    expect(oc.agents.list[0].workspace).toBe(
+      "/home/node/.openclaw/workspace/test-agent",
+    );
+
     // Verify .env content
     const envContent = readFileSync(join(testDeployDir, ".env"), "utf8");
     expect(envContent).toContain("GATEWAY_TOKEN=");
@@ -139,6 +156,75 @@ describe("Deploy Lifecycle Integration", () => {
     } finally {
       if (existsSync(minDir)) {
         rmSync(minDir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("should generate correct workspace artifacts for multi-agent config", () => {
+    const multiDir = resolve("./test-deployment-multi-agent");
+    try {
+      const config = parseConfig(join(fixturesDir, "multi-agent-basic.yaml"));
+
+      // All workspace paths should be absolute after parsing
+      for (const agent of config.agents) {
+        expect(isAbsolute(agent.workspace)).toBe(true);
+      }
+
+      setupWorkspace(config, multiDir);
+
+      const { writeFileSync, mkdirSync } = require("node:fs");
+      mkdirSync(join(multiDir, "config"), { recursive: true });
+      const ocMap = generateOpenClawConfig(config);
+      writeFileSync(
+        join(multiDir, "config", "openclaw.json"),
+        JSON.stringify(ocMap.get("default"), null, 2),
+        "utf8",
+      );
+      const composeYaml = generateCompose(config);
+      writeFileSync(join(multiDir, "docker-compose.yml"), composeYaml, "utf8");
+
+      // Verify compose has per-agent volume mounts
+      const compose = parseYaml(
+        readFileSync(join(multiDir, "docker-compose.yml"), "utf8"),
+      );
+      const volumes = compose.services["openclaw-gateway"].volumes as string[];
+      const inboxMount = volumes.find((v: string) =>
+        v.includes(":/home/node/.openclaw/workspace/inbox-analyst"),
+      );
+      const researchMount = volumes.find((v: string) =>
+        v.includes(":/home/node/.openclaw/workspace/research-agent"),
+      );
+      expect(inboxMount).toBeDefined();
+      expect(researchMount).toBeDefined();
+
+      // Both host paths should be absolute
+      expect(isAbsolute(inboxMount!.split(":")[0])).toBe(true);
+      expect(isAbsolute(researchMount!.split(":")[0])).toBe(true);
+
+      // Verify openclaw.json agents.list matches
+      const oc = JSON.parse(
+        readFileSync(join(multiDir, "config", "openclaw.json"), "utf8"),
+      );
+      expect(oc.agents.list).toHaveLength(2);
+      expect(oc.agents.list[0].id).toBe("inbox-analyst");
+      expect(oc.agents.list[0].workspace).toBe(
+        "/home/node/.openclaw/workspace/inbox-analyst",
+      );
+      expect(oc.agents.list[1].id).toBe("research-agent");
+      expect(oc.agents.list[1].workspace).toBe(
+        "/home/node/.openclaw/workspace/research-agent",
+      );
+
+      // Verify AGENTS.md contains both agents
+      const agentsMd = readFileSync(
+        join(multiDir, "workspace/AGENTS.md"),
+        "utf8",
+      );
+      expect(agentsMd).toContain("inbox-analyst");
+      expect(agentsMd).toContain("research-agent");
+    } finally {
+      if (existsSync(multiDir)) {
+        rmSync(multiDir, { recursive: true, force: true });
       }
     }
   });
