@@ -66,7 +66,7 @@ name: my-agent
 
 agents:
   - name: my-agent
-    role: inbox-analyst
+    workspace: ./workspaces/my-agent
 
 models:
   - name: llama
@@ -230,7 +230,7 @@ Next.js dashboard with 5 panels:
 
 ### Multi-Agent Deployments
 
-Deploy multiple specialized agents from a single config, each with its own role, channels, and budget:
+Deploy multiple specialized agents from a single config, each with its own workspace, channels, and budget:
 
 ```yaml
 name: my-workforce
@@ -251,14 +251,14 @@ models:
 
 agents:
   - name: ops-supervisor
-    role: supervisor
+    workspace: ./workspaces/ops-supervisor
     supervises: [research-agent]
     routing:
       budget:
         daily_limit: 5.00
         fallback_model: "llama"
   - name: research-agent
-    role: research-agent
+    workspace: ./workspaces/research-agent
     routing:
       budget:
         daily_limit: 10.00
@@ -274,12 +274,9 @@ openclaw:
 
 Per-agent budget isolation, channel routing, and supervisor hierarchies. See [docs/MULTI-AGENT.md](docs/MULTI-AGENT.md) for the full reference.
 
-### Agent Role Templates
+### Agent Workspaces
 
-Three starter templates included:
-- **Supervisor** — Coordinates specialist agents and manages escalations
-- **Research Agent** — Takes requests via configured channels, browses web, compiles reports
-- **Process Automator** — Cron-triggered browser workflows, reports results
+Each agent points to a workspace directory containing its configuration files (SOUL.md, HEARTBEAT.md, SKILL.md, skills/, etc.). Users manage their own workspace contents. Supervisors are identified by the presence of a `supervises` field.
 
 ---
 
@@ -332,19 +329,19 @@ name: my-agent
 # Runtime defaults to "openclaw" per agent; override with an explicit runtime field.
 agents:
   - name: my-agent
-    role: supervisor             # inbox-analyst | research-agent | process-automator | supervisor
-    supervises: [helper-agent]   # Required for supervisor role; list of agent names this agent manages
-    openclaw: default            # Optional; required when multiple openclaw instances are defined
-    runtime: openclaw            # Optional; defaults to "openclaw"
-    routing:                     # Optional per-agent routing overrides
+    workspace: ./workspaces/my-agent   # Required; path to the agent's OpenClaw workspace directory
+    supervises: [helper-agent]         # Optional; list of agent names this agent manages (makes it a supervisor)
+    openclaw: default                  # Optional; required when multiple openclaw instances are defined
+    runtime: openclaw                  # Optional; defaults to "openclaw"
+    routing:                           # Optional per-agent routing overrides
       budget:
         daily_limit: 5.00
-        fallback_model: "qwen"   # references model by name
+        fallback_model: "qwen"         # references model by name
       rules:
         - condition: high_complexity
-          model: "claude"        # references model by name
+          model: "claude"              # references model by name
   - name: helper-agent
-    role: research-agent
+    workspace: ./workspaces/helper-agent
 
 # Models list — ONLY needed when routing rules reference specific models.
 # If no routing rules, no models section needed. The OpenClaw passthrough section

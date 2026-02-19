@@ -1,6 +1,6 @@
 # Multi-Agent Configuration
 
-Clawforce supports deploying multiple specialized AI agents from a single config file. Each agent has its own role, routing overrides, and budget — managed through one gateway.
+Clawforce supports deploying multiple specialized AI agents from a single config file. Each agent has its own workspace, routing overrides, and budget — managed through one gateway.
 
 ## Overview
 
@@ -8,7 +8,7 @@ Multi-agent configs use a top-level `agents[]` array alongside shared `models`, 
 
 **Key concepts:**
 - **`models`** — Named list of routing targets (only needed if routing rules reference models)
-- **`agents[]`** — Per-agent role, openclaw instance reference, runtime, and routing overrides
+- **`agents[]`** — Per-agent workspace, openclaw instance reference, runtime, and routing overrides
 - **`openclaw`** — Named map of OpenClaw instances with passthrough config (owns the default model)
 
 ## Example Config
@@ -42,13 +42,13 @@ dashboard:
 
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
     routing:
       budget:
         daily_limit: 5.00
 
   - name: research-agent
-    role: research-agent
+    workspace: ./workspaces/research-agent
     routing:
       budget:
         daily_limit: 10.00
@@ -57,7 +57,7 @@ agents:
           model: "claude"
 
   - name: ops-supervisor
-    role: supervisor
+    workspace: ./workspaces/ops-supervisor
     supervises: [inbox-analyst, research-agent]
     routing:
       budget:
@@ -96,12 +96,11 @@ The `models` list is only needed when routing rules reference specific models by
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | Unique agent identifier (lowercase alphanumeric + hyphens, max 50 chars) |
-| `role` | enum | Yes | `inbox-analyst`, `research-agent`, `process-automator`, or `supervisor` |
+| `workspace` | string | Yes | Path to the agent's OpenClaw workspace directory (relative to config file, or absolute) |
 | `openclaw` | string | No | OpenClaw instance name (required when multiple openclaw instances are defined) |
 | `runtime` | string | No | Agent orchestration runtime (defaults to `"openclaw"`) |
 | `routing` | object | No | Per-agent routing overrides |
-| `skills` | array | No | Additional skill IDs |
-| `supervises` | array | No | Names of agents this agent supervises |
+| `supervises` | array | No | Names of agents this agent supervises (presence makes it a supervisor) |
 
 ### Per-Agent Routing
 
@@ -143,7 +142,7 @@ models:
 
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
 
 openclaw:
   default:
@@ -174,9 +173,9 @@ models:
 
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
   - name: research-agent
-    role: research-agent
+    workspace: ./workspaces/research-agent
 
 openclaw:
   default:
@@ -196,20 +195,32 @@ Key differences:
 
 ### Workspace Layout
 
+Each agent's `workspace` field points to a user-managed directory. Docker Compose mounts each agent's workspace individually into the container.
+
 Single-agent:
 ```
-workspace/
-  AGENTS.md
-  skills/inbox-analyst/SKILL.md
+workspaces/
+  my-agent/
+    SOUL.md
+    SKILL.md
+    skills/
 ```
 
 Multi-agent:
 ```
-workspace/
-  AGENTS.md                                    # Lists all agents
-  inbox-analyst/skills/inbox-analyst/SKILL.md
-  research-agent/skills/research-agent/SKILL.md
-  ops-supervisor/skills/supervisor/SKILL.md
+workspaces/
+  inbox-analyst/
+    SOUL.md
+    SKILL.md
+    skills/
+  research-agent/
+    SOUL.md
+    SKILL.md
+    skills/
+  ops-supervisor/
+    SOUL.md
+    SKILL.md
+    skills/
 ```
 
 ### OpenClaw Integration

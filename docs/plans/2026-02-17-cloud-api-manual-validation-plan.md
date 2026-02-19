@@ -104,7 +104,7 @@ For each test, capture:
 - [ ] `dashboard.enabled: true`.
 - [ ] `dashboard.auth.enabled` explicitly declared.
 - [ ] `openclaw.channels` contains at least one connector configuration.
-- [ ] At least one agent/channel binding path exists through role templates or passthrough config.
+- [ ] At least one agent/channel binding path exists through agent workspace or passthrough config.
 
 ### Validation Commands
 

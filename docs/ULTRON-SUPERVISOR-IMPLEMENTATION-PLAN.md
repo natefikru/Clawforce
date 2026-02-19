@@ -4,7 +4,7 @@
 
 This plan implements `2B.2 Supervisor Agent Template (Ultron)` as a first-class Clawforce capability that:
 
-- adds an explicit `supervisor` role template,
+- identifies supervisors via the `supervises` field (no role enum needed),
 - provides a scoped workforce-status tool for supervisor agents,
 - keeps OpenClaw interoperability stable,
 - and prepares dashboard ingestion for supervisor and ops visibility.
@@ -13,8 +13,8 @@ This document is execution-oriented and explicitly follows the mandatory develop
 
 ## Current State Analysis
 
-- Roles currently supported in schema: `inbox-analyst`, `research-agent`, `process-automator`.
-- Multi-agent config already supports `supervises` validation.
+- Agents use `workspace` (path to user-managed OpenClaw workspace directory) instead of a `role` enum.
+- Multi-agent config already supports `supervises` validation. Having `supervises` makes an agent a supervisor.
 - SQLite already stores `agent_id` across compliance/routing/budget/alerts.
 - `StorageReader` already supports agent-scoped reads for recent events, routing decisions, and usage summary.
 - Dashboard activity API supports event filtering but not `agentId` filtering.
@@ -22,7 +22,7 @@ This document is execution-oriented and explicitly follows the mandatory develop
 
 ## Desired End State
 
-- `supervisor` role is available in config schema and role templates.
+- Supervisors are identified by having `supervises` in agent config (no role enum needed).
 - Supervisor has `clawforce_workforce_status` access with strict scope to `supervises`.
 - Supervisor can answer "what is the workforce doing right now?" from live data.
 - Dashboard APIs support per-agent filtering to align with supervisor status reporting.
@@ -62,7 +62,7 @@ All implementation work for this plan must follow this sequence:
 8. **Smoke Test Loop**
    - Validate real feature path end-to-end and iterate until stable.
 9. **Documentation**
-   - Update docs impacted by new role and tool usage.
+   - Update docs impacted by new supervisor and tool usage.
 10. **Open PR**
    - Mark draft ready only after all gates pass.
 
@@ -71,7 +71,7 @@ All implementation work for this plan must follow this sequence:
 - [ ] Task 1: Research & confirm file touchpoints
 - [ ] Task 2: Plan review via sub-agent
 - [ ] Task 3: Create feature branch + draft PR
-- [ ] Task 4: Phase 1 implementation (role + templates)
+- [ ] Task 4: Phase 1 implementation (supervisor via `supervises`)
 - [ ] Task 5: Phase 2 implementation (supervisor status tool)
 - [ ] Task 6: Phase 3 implementation (dashboard agent filters)
 - [ ] Task 7: Phase 4 implementation (OpenClaw compatibility hardening)
@@ -87,37 +87,31 @@ Plan review completed before implementation. The following blockers are now expl
 - Tool registration path for `clawforce_workforce_status`
 - Caller identity flow for supervisor scope enforcement
 - Agent-scoped alerts query support and DB index migration
-- Single-agent `role: supervisor` behavior
+- Supervisor behavior (triggered by `supervises` field)
 - Explicit pre-commit verification commands
 
-## Phase 1: Add First-Class Supervisor Role and Template
+## Phase 1: Enable Supervisor via `supervises` Field
 
 ### Changes Required
 
 **Files**:
 - `src/config/types.ts`
-- `templates/roles/supervisor/SKILL.md` (new)
-- `templates/roles/supervisor/config.partial.json` (new)
-- `templates/roles/supervisor/README.md` (new)
 
 ### Implementation Notes
 
-- Add `"supervisor"` to role enums (single and multi-agent schema paths).
-- Keep backward compatibility for existing configs using `process-automator`.
-- Ensure generated workspace role materialization works for supervisor role.
-- Single-agent mode rule: reject `role: supervisor` in single-agent config (supervisor requires explicit `agents[]` and `supervises` relationships).
+- Supervisors are identified by having a `supervises` field on the agent entry (no role enum needed).
+- Each agent uses a `workspace` field pointing to the user's own OpenClaw workspace directory.
+- Keep backward compatibility for existing configs.
+- Users manage their own workspace contents (SOUL.md, SKILL.md, etc.).
 
 ### Success Criteria
 
 #### Automated Verification
-- [ ] Schema accepts `role: supervisor`.
+- [ ] Schema accepts agents with `supervises` field.
 - [ ] Existing config fixtures still validate.
-- [ ] New role template files are syntactically valid.
-- [ ] Single-agent config with `role: supervisor` fails with a clear validation message.
 
 #### Manual Verification
-- [ ] `clawforce deploy` succeeds with one supervisor + worker agents.
-- [ ] Supervisor role instructions are copied into workspace as expected.
+- [ ] `clawforce deploy` succeeds with one supervisor (agent with `supervises`) + worker agents.
 
 ### Write -> Test -> Commit -> Push Unit Breakdown
 
@@ -131,8 +125,8 @@ Plan review completed before implementation. The following blockers are now expl
 **Files**:
 - `src/tools/supervisor-status.ts` (new)
 - `src/storage/reader.ts` (only if helper extensions are needed)
-- `src/config/generate-openclaw.ts` (tool wiring via role partial merge path)
-- optional tool registration config files under template role partials
+- `src/config/generate-openclaw.ts` (tool wiring for agents with `supervises`)
+- optional tool registration config files
 - `src/storage/migrations.ts` (new migration for alerts agent index)
 
 ### Tool Contract (v1)
@@ -145,10 +139,10 @@ Plan review completed before implementation. The following blockers are now expl
 ### Tool Registration and Invocation Path (Explicit)
 
 - Registration is config-driven in generated OpenClaw config.
-- In `generate-openclaw.ts`, when building `agents.list`, supervisor agents get per-agent tool enablement:
+- In `generate-openclaw.ts`, when building `agents.list`, agents with `supervises` get per-agent tool enablement:
   - `tools: { clawforce_workforce_status: { enabled: true } }`
-- Non-supervisor agents do not receive this tool by default.
-- Supervisor template `config.partial.json` documents the tool definition shape, but enforcement is generated per agent profile during config generation.
+- Non-supervisor agents (those without `supervises`) do not receive this tool by default.
+- Enforcement is generated per agent profile during config generation.
 
 ### Caller Identity and Scope Enforcement
 
@@ -230,14 +224,14 @@ Plan review completed before implementation. The following blockers are now expl
 - Validate bindings remain aligned with OpenClaw contract.
 - Validate plugin manifest schema behavior under version drift.
 - Add compatibility matrix note in docs for tested OpenClaw versions.
-- Ensure generated `agents.list` includes `tools.clawforce_workforce_status.enabled=true` for agents where `role === "supervisor"`.
+- Ensure generated `agents.list` includes `tools.clawforce_workforce_status.enabled=true` for agents that have `supervises`.
 
 ### Success Criteria
 
 #### Automated Verification
 - [ ] Generated bindings pass contract tests for supported OpenClaw version(s).
 - [ ] Manifest/schema drift fails with actionable messages.
-- [ ] Generated OpenClaw config includes supervisor-only tool wiring and excludes it for non-supervisor agents.
+- [ ] Generated OpenClaw config includes supervisor tool wiring for agents with `supervises` and excludes it for other agents.
 
 #### Manual Verification
 - [ ] End-to-end deploy against OpenClaw image starts and routes correctly.
@@ -283,7 +277,7 @@ Plan review completed before implementation. The following blockers are now expl
 
 ### Integration Tests
 
-- Config generation for multi-agent with supervisor role.
+- Config generation for multi-agent with supervisor (agent with `supervises`).
 - OpenClaw config compatibility checks.
 - Dashboard API filtering behavior (`agentId` and no-filter paths).
 - Migration path test for new alerts agent index.

@@ -119,19 +119,16 @@ defaults:
 # Agent definitions
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
     channels:
       - type: channel
         channels: ["#inbox-triage", "#action-items"]
     routing:
       budget:
         daily_limit: 5.00
-    skills:
-      - inbox-triage
-      - thread-summarizer
 
   - name: research-agent
-    role: research-agent
+    workspace: ./workspaces/research-agent
     channels:
       - type: channel
         channels: ["#research-requests"]
@@ -141,12 +138,9 @@ agents:
       rules:
         - condition: domain_research
           model: "claude"
-    skills:
-      - web-research
-      - report-generation
 
   - name: ultron
-    role: supervisor
+    workspace: ./workspaces/ultron
     channels:
       - type: channel
         channels: ["#ai-ops"]
@@ -167,20 +161,20 @@ openclaw:
 1. Extract a new `AgentConfigSchema` from the existing top-level fields:
    ```typescript
    const AgentConfigSchema = z.object({
-     name: z.string().min(1),
-     role: z.enum(["inbox-analyst", "research-agent", "process-automator", "supervisor"]),
-     channels: z.array(ChannelSchema).optional(),
-     routing: RoutingConfigSchema.optional(),
-     skills: z.array(z.string()).optional(),
+     name: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+     workspace: z.string().min(1),
+     runtime: z.enum(["openclaw"]).default("openclaw"),
+     openclaw: z.string().min(1).optional(),
+     routing: agentRoutingSchema.optional(),
      supervises: z.array(z.string()).optional(),
-     sandbox: z.object({ mode: z.enum(["off", "non-main", "all"]) }).optional(),
+     sandbox: z.object({ mode: z.enum(["off", "non-main", "all"]).default("off") }).optional(),
    });
    ```
 
-2. Add `agents` to the top-level schema alongside the existing `role` field (backward compatible):
+2. Add `agents` array to the top-level schema:
    ```typescript
-   // Either single-agent (role: ...) or multi-agent (agents: [...])
-   // Both are valid; role is shorthand for agents: [{ name: <name>, role: <role> }]
+   // agents: [...] — each agent points to a user-managed workspace directory
+   // workspace paths are resolved relative to the config file location
    ```
 
 3. Add `.superRefine()` cross-validation:

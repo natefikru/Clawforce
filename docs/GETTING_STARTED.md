@@ -230,7 +230,7 @@ name: my-agent
 
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
 
 models:
   - name: llama
@@ -294,7 +294,7 @@ name: my-agent                         # Deployment name (used for directory, co
 
 agents:                                # At least one agent required
   - name: inbox-analyst
-    role: inbox-analyst                # inbox-analyst | research-agent | process-automator | supervisor
+    workspace: ./workspaces/inbox-analyst  # Required; path to the agent's OpenClaw workspace directory
     runtime: openclaw                  # Optional; defaults to "openclaw"
 
 # Models list — ONLY needed when routing rules reference specific models.
@@ -556,7 +556,7 @@ Simplest setup. All inference goes to cloud APIs. No GPU needed. No `models` sec
 name: my-agent
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
 gateway:
   bind: loopback
 routing:
@@ -596,7 +596,7 @@ models:
     api_key: "${ANTHROPIC_API_KEY}"
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
 gateway:
   bind: loopback
 routing:
@@ -646,7 +646,7 @@ models:
     api_key: "${ANTHROPIC_API_KEY}"
 agents:
   - name: inbox-analyst
-    role: inbox-analyst
+    workspace: ./workspaces/inbox-analyst
 routing:
   rules:
     - condition: "pii_detected"
@@ -695,21 +695,15 @@ Ensure your routing rules reference local model names so PII invariants remain l
 
 ---
 
-## Agent Role Templates
+## Agent Workspaces
 
-Clawforce ships role templates that generate OpenClaw SKILL.md instructions and config fragments:
+Each agent points to a workspace directory via the `workspace` field. Users manage their own workspace contents, including:
+- `SOUL.md` — Agent identity and purpose
+- `HEARTBEAT.md` — Agent operational rhythm
+- `SKILL.md` — Agent behavior instructions
+- `skills/` — Skill definitions
 
-| Role | Description | Key Behaviors |
-|------|-------------|---------------|
-| `inbox-analyst` | Monitors channels, summarizes threads, flags action items | Channel watching, thread summarization, priority flagging |
-| `research-agent` | Takes research requests, browses web, compiles reports | Web research, report generation, citation management |
-| `process-automator` | Cron-triggered browser workflows, reports results | Scheduled tasks, browser automation, result reporting |
-| `supervisor` | Monitors supervised agents and reports workforce status | Agent oversight, escalation, workforce health summaries |
-
-Each template lives in `templates/roles/<name>/` with:
-- `SKILL.md` — Agent behavior instructions (injected into OpenClaw agent config)
-- `config.partial.json` — OpenClaw config fragment (tools, capabilities)
-- `README.md` — Setup guide
+ClawForce no longer ships built-in role templates or copies template files into agent workspaces. Supervisors are identified by the presence of a `supervises` field on the agent entry, not by a role value.
 
 ---
 

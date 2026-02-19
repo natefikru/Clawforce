@@ -17,20 +17,17 @@ Clawforce already has most of the data model needed for a supervisor agent:
 
 The missing pieces are mainly product wiring:
 
-1. Add an explicit `supervisor` role/template.
+1. Supervisors are now identified by having a `supervises` field (no separate role needed).
 2. Add a supervisor tool (`clawforce_workforce_status`) backed by `StorageReader`.
 3. Scope dashboard APIs to `agentId` for supervisor-focused ingestion and UI filtering.
 4. Add compatibility guardrails so generated config remains stable across OpenClaw versions.
 
 ## Current State Analysis
 
-### Config and roles
+### Config and agent setup
 
-- Agent roles are currently limited to:
-  - `inbox-analyst`
-  - `research-agent`
-  - `process-automator`
-- `supervises` is already present in agent schema and validated for existence/non-self supervision.
+- Agents use `workspace` (a path to the user's OpenClaw workspace directory) instead of a `role` enum.
+- `supervises` is already present in agent schema and validated for existence/non-self supervision. Having `supervises` makes an agent a supervisor.
 - OpenClaw passthrough config exists through `openclaw` in `clawforce.yaml`.
 
 Relevant files:
@@ -74,7 +71,7 @@ Relevant files:
 
 ## Desired End State
 
-Ultron is a first-class supervisor role that can:
+Ultron is a first-class supervisor capability (triggered by having `supervises`) that can:
 
 - Monitor supervised agents for activity, errors, budget health, and anomalies.
 - Answer workforce status questions from ops channels in near real-time.
@@ -83,15 +80,11 @@ Ultron is a first-class supervisor role that can:
 
 ## Proposed System Design
 
-### 1) Supervisor role template
+### 1) Supervisor workspace setup
 
-Add a new role template directory:
+Supervisors are identified by having a `supervises` field. Users manage their own workspace contents (SOUL.md, SKILL.md, etc.). The supervisor workspace should include:
 
-- `templates/roles/supervisor/SKILL.md`
-- `templates/roles/supervisor/config.partial.json`
-- `templates/roles/supervisor/README.md`
-
-Role behavior:
+Supervisor behavior:
 
 - Monitoring loop (recent events + alerts + budgets)
 - Status query handling ("what is the workforce doing now?")
@@ -118,10 +111,9 @@ Important constraint:
 
 ### 3) Config and generation changes
 
-- Extend role enum in `src/config/types.ts` with `"supervisor"`.
-- Ensure template resolution includes supervisor role in multi-agent role partial merging.
-- In `generate-openclaw`, merge tool definition from supervisor role partial into generated config.
-- Preserve backward compatibility: existing supervisors using `process-automator` continue to run.
+- Supervisors are identified by the `supervises` field on the agent config (no role enum needed).
+- In `generate-openclaw`, merge tool definition for agents with `supervises` into generated config.
+- Each agent's workspace is mounted individually into the Docker container.
 
 ### 4) Dashboard readiness
 
@@ -158,26 +150,21 @@ Implement Ultron in six phases, each with explicit verification gates and no beh
 - Introducing cross-workspace federation or multi-cluster workforce management.
 - Replacing existing router/compliance plugins.
 
-## Phase 1: Add Supervisor Role and Template
+## Phase 1: Enable Supervisor via `supervises` Field
 
 ### Changes Required
 
 **Files**:
 - `src/config/types.ts`
-- `templates/roles/supervisor/SKILL.md` (new)
-- `templates/roles/supervisor/config.partial.json` (new)
-- `templates/roles/supervisor/README.md` (new)
 
 ### Success Criteria
 
 #### Automated Verification
-- [ ] Config parser accepts `role: supervisor`.
-- [ ] Existing role configs remain valid.
-- [ ] Template directory exists and passes schema/JSON checks.
+- [ ] Config parser accepts agents with `supervises` field (making them supervisors).
+- [ ] Existing configs remain valid.
 
 #### Manual Verification
-- [ ] Generated workspace includes supervisor role skill files.
-- [ ] `clawforce deploy` works with supervisor in `agents[]`.
+- [ ] `clawforce deploy` works with a supervisor agent (one with `supervises`) in `agents[]`.
 
 ## Phase 2: Implement Supervisor Tool
 
@@ -281,7 +268,7 @@ Implement Ultron in six phases, each with explicit verification gates and no beh
 
 ### Automated
 
-- Unit tests for config parsing and role validation.
+- Unit tests for config parsing and supervisor validation.
 - Unit tests for supervisor tool query logic and auth scoping.
 - API tests for `agentId` filtering in activity endpoints.
 - Integration test for deploy + status query using OpenClaw container.
@@ -296,7 +283,7 @@ Implement Ultron in six phases, each with explicit verification gates and no beh
 
 Implement Phases 1 and 2 together first:
 
-1. Add explicit `supervisor` role and template.
+1. Supervisors identified by `supervises` field (no role enum needed).
 2. Add `clawforce_workforce_status` with strict supervised-agent scoping.
 
 This yields immediate value (status and oversight) with minimal infrastructure risk, and sets up dashboard improvements as a subsequent slice.
